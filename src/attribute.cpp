@@ -7,6 +7,7 @@
 //
 
 #include <attribute.h>
+#include <format>
 
 namespace ar {
 
@@ -41,25 +42,24 @@ namespace ar {
 
 			// FixMe: There should be no need to escape the name but we need to escape the value
 			// That is for string
-			result += "\"" + iter->first + "\": ";
 			switch(iter->second.type()) {
-				case type_null: 
-					result += "null";
+				case type_null:
+					result += std::format("\"{}\": null", iter->first);
 					break;
 				case type_bool:
-					result += (boost::get<bool>(iter->second) ? "true" : "false");
+					result += std::format("\"{}\": {}", iter->first,
+						iter->second.as_bool() ? "true" : "false");
 					break;
 				case type_integer:
 				case type_decimal: // no quotes needed
-					result += iter->second.to_string();
+					result += std::format("\"{}\": {}", iter->first, iter->second.to_string());
 					break;
 
 				// case type_string:
 				// case type_date:
 				default:
-					result += "\"" + iter->second.to_string() + "\"";
+					result += std::format("\"{}\": \"{}\"", iter->first, iter->second.to_string());
 					break;
-
 			}
 		}
 		result+= "}";
@@ -67,7 +67,7 @@ namespace ar {
 	}
 
 	std::string to_xml_string(const attribute_map& attributes, const std::string& obj_name, const string_vector& only, const string_set& exclude) noexcept {
-		std::string result {"<" + obj_name + ">"};
+		std::string result = std::format("<{}>", obj_name);
 		string_vector attrib_keys{ get_attrib_keys(attributes, only, exclude) };
 
 		for(const auto& name : attrib_keys) {
@@ -77,12 +77,13 @@ namespace ar {
 			// FixMe: There should be no need to escape the name but we need to escape the value
 			std::string value { iter->second.to_string() };
 			if (value.empty()) {
-				result += "<" + iter->first + " />";
+				result += std::format("<{} />", iter->first);
 			} else {
-				result += "<" + iter->first + ">" + iter->second.to_string() + "</" + iter->first + ">";
+				result += std::format("<{}>{}</{}>",
+					iter->first, iter->second.to_string(), iter->first);
 			}
 		}
-		result += "</" + obj_name + ">";
+		result += std::format("</{}>", obj_name);
 		return result;
 	}
 	
@@ -92,9 +93,9 @@ namespace std {
 
 	std::string to_string(const ar::attribute_map& attributes) noexcept {
 		std::string result;
-		for(const auto& iter : attributes) {
+		for(const auto& [name, value] : attributes) {
 			if (!result.empty())	result += " ,";
-			result += iter.first + ": " + iter.second.to_string();
+			result += std::format("{}: {}", name, value.to_string());
 		}
 		return result;
 	}

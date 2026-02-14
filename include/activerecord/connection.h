@@ -90,11 +90,7 @@ public:
 	* @param string sequence Optional name of a sequence to use
 	* @return size_t
 	*/
-	std::size_t insert_id(void) const
-	{
-		// fixme: 
-		return 0;
-	}
+	virtual std::size_t insert_id() const = 0;
 
 	/**
 	* Execute a raw SQL query on the database.
@@ -167,7 +163,7 @@ public:
 	* @internal
 	* @returns boolean (false by default)
 	*/
-	virtual bool accepts_limit_and_order_for_update_and_delete(void) const { return false; }
+	virtual bool accepts_limit_and_order_for_update_and_delete() const { return false; }
 
 };
 

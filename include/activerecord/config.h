@@ -13,6 +13,7 @@
 
 #include <map>
 #include <memory>
+#include <format>
 
 namespace ar {
 
@@ -72,7 +73,7 @@ public:
 		}
 
 		if (iter == connections_.end()) {
-			throw ex::config("Unable to find config \"" + con_name + "\"" );
+			throw ex::config(std::format("Unable to find config \"{}\"", con_name));
 		}
 		return iter->second;
 	}

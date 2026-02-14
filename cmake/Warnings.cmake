@@ -1,0 +1,7 @@
+function(ar_set_default_warnings target)
+  if(MSVC)
+    target_compile_options(${target} PRIVATE /W4 /permissive- /EHsc /MP)
+  else()
+    target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wsign-conversion)
+  endif()
+endfunction()

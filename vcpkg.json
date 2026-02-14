@@ -1,0 +1,34 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "activerecord",
+  "version-string": "0.1.0",
+  "description": "C++ Active Record pattern implementation with multiple database adapters",
+  "homepage": "https://github.com/yourusername/activerecord",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "sqlite3",
+      "platform": "!emscripten"
+    }
+  ],
+  "features": {
+    "postgresql": {
+      "description": "PostgreSQL adapter support",
+      "dependencies": [
+        "libpq"
+      ]
+    },
+    "mysql": {
+      "description": "MySQL/MariaDB adapter support",
+      "dependencies": [
+        "libmysql"
+      ]
+    },
+    "tests": {
+      "description": "Build with testing support",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}

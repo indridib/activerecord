@@ -16,6 +16,7 @@
 
 #include <map>
 #include <set>
+#include <format>
 
 namespace ar {
 
@@ -45,14 +46,14 @@ public:
 	*
 	* @return - The database table name.
 	*/
-	const std::string& table_name(void) const noexcept { return table_name_; }
+	const std::string& table_name() const noexcept { return table_name_; }
 
 	/**
 	* Returns the primary key name.
 	*
 	* @return - The primary key for the model.
 	*/
-	const std::string& get_primary_key(void) const noexcept { return primary_key_; }
+	const std::string& get_primary_key() const noexcept { return primary_key_; }
 
 
 
@@ -70,7 +71,7 @@ public:
 	*
 	* @return - a constant reference to the attributes.
 	*/
-	const attribute_map& attributes(void) const noexcept { return attributes_; }
+	const attribute_map& attributes() const noexcept { return attributes_; }
 
 
 
@@ -124,7 +125,7 @@ public:
 		}
 
 		if (attrib_iter == attributes_.end()) {
-			throw ex::attribute_not_found("Attribute \"" + std::string(name) + "\" not found");
+			throw ex::attribute_not_found(std::format("Attribute \"{}\" not found", name));
 		}
 		return attrib_iter->second;
 	} 
@@ -195,7 +196,7 @@ public:
 		} else {
 			// This attribute does not exist.
 			if (guard_attributes) {
-				throw ex::attribute_not_found("Attribute \"" + std::string(name) + "\" not found");
+				throw ex::attribute_not_found(std::format("Attribute \"{}\" not found", name));
 			}
 			// If not guarding we just insert the item
 			attributes_[real_name] = value;
@@ -246,7 +247,7 @@ public:
 	*
 	* @return - a set of attributes or empty if no attributes are dirty.
 	*/
-	const string_set& dirty_attributes(void) const noexcept { return dirty_; }
+	const string_set& dirty_attributes() const noexcept { return dirty_; }
 
 	/**
 	* Flags an attribute as dirty.
@@ -268,13 +269,13 @@ public:
 	*
 	* @return - true if he model has been modified
 	*/
-	bool is_dirty(void) const noexcept { return !dirty_.empty(); }
+	bool is_dirty() const noexcept { return !dirty_.empty(); }
 
 	/**
 	* Resets the dirty array, making the model clean.
 	*
 	*/
-	void reset_dirty(void) noexcept { dirty_.clear(); }
+	void reset_dirty() noexcept { dirty_.clear(); }
 
 
 
@@ -290,7 +291,7 @@ public:
 	*
 	* @return boolean - true if the model is readonly
 	*/
-	bool is_readonly(void) const noexcept { return readonly_; }
+	bool is_readonly() const noexcept { return readonly_; }
 
 	/**
 	* Flag the model as readonly or not
@@ -304,7 +305,7 @@ public:
 	*
 	* @return boolean - true if this is a new record
 	*/
-	bool is_new_record(void) const noexcept { return new_record_; }
+	bool is_new_record() const noexcept { return new_record_; }
 
 	/**
 	* Throws an exception if this model is set to readonly.
@@ -316,7 +317,7 @@ public:
 	void verify_not_readonly(const std::string_view method_name) const
 	{
 		if (readonly_) {
-			throw ex::readonly("\"" + std::string(method_name) + "\" is not allowed since model is read-only");
+			throw ex::readonly(std::format("\"{}\" is not allowed since model is read-only", method_name));
 		}
 	}
 
@@ -427,7 +428,7 @@ protected:
 			return false;
 		}
 		if (primary_key_.empty()) {
-			throw ex::activerecord("Unable to update, no primary key defined for " + table_name_);
+			throw ex::activerecord(std::format("Unable to update, no primary key defined for {}", table_name_));
 		}
 		const attribute& pk_value = get(primary_key_);
 		string_vector names;
@@ -474,6 +475,16 @@ protected:
 		sql_builder builder(connection_, table_name_);
 		builder.insert(names, values);
 		auto stmt{ connection_->query(builder.to_string(), builder.get_bind_values()) };
+
+		// Get the auto-generated primary key and set it on the model
+		std::size_t id = connection_->insert_id();
+		if (id > 0) {
+			set(primary_key_, static_cast<int64_t>(id), false);  // Don't mark as dirty
+		}
+
+		// Mark as persisted (no longer a new record)
+		new_record_ = false;
+
 		return true;
 	}
 

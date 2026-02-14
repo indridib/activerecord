@@ -9,16 +9,14 @@
 #pragma once
 
 #include <activerecord.h>
+#include <datetime.h>
 
 #include <map>
-#include <boost/variant.hpp>
-#include <ctime>
-
-
+#include <variant>
 
 namespace ar {
 
-// NOTE: PHP Active Record defines the following types: 
+// NOTE: PHP Active Record defines the following types:
 //	STRING, INTEGER, DECIMAL, DATETIME, DATE, TIME
 enum attribute_type {
 	  type_null		= 0
@@ -28,31 +26,60 @@ enum attribute_type {
 	, type_bool		= 4
 	, type_date		= 5
 };
-typedef void* attribute_ptr;
-typedef boost::variant<attribute_ptr, std::string, int64_t, double, bool /*, std::time_t*/> attribute_variant;
+
+// Variant storage for attributes - index matches attribute_type enum
+using attribute_storage = std::variant<
+	std::monostate,  // 0 = type_null
+	std::string,     // 1 = type_string
+	int64_t,         // 2 = type_integer
+	double,          // 3 = type_decimal
+	bool,            // 4 = type_bool
+	datetime         // 5 = type_date
+>;
 
 
 /**
 * a single attribute can be of a different type and can have different type of values
 */
-class attribute : public attribute_variant {
+class attribute {
 public:
-	attribute() : attribute_variant(nullptr) {}
-	attribute(bool value) : attribute_variant((bool )value) {}
-	attribute(int64_t value) : attribute_variant((int64_t )value) {}
-	attribute(int value) : attribute_variant((int64_t )value) {}
-	attribute(const std::string& value) : attribute_variant(value) {}
-	attribute(const char * value) : attribute_variant(std::string(value)) {}
-	attribute(double value) : attribute_variant((double )value) {}
-	attribute_type type() const { return static_cast<attribute_type>(which()); }
+	attribute() : data_(std::monostate{}) {}
+	attribute(bool value) : data_(value) {}
+	attribute(int64_t value) : data_(value) {}
+	attribute(int value) : data_(static_cast<int64_t>(value)) {}
+	attribute(long value) : data_(static_cast<int64_t>(value)) {}
+	attribute(const std::string& value) : data_(value) {}
+	attribute(const char* value) {
+		if (value) {
+			data_ = std::string{value};
+		} else {
+			data_ = std::monostate{};
+		}
+	}
+	attribute(double value) : data_(value) {}
+	attribute(const datetime& value) : data_(value) {}
 
-	bool is_null() const { return type() == type_null; }
+	attribute_type type() const { return static_cast<attribute_type>(data_.index()); }
 
-	std::string		as_string() const	{ return boost::get<std::string>(*this); }
-	bool			as_bool() const		{ return boost::get<bool>(*this); }
-	int64_t			as_integer() const	{ return boost::get<int64_t>(*this); }
-	double			as_real() const		{ return boost::get<double>(*this); }
-	std::time_t		as_date() const		{ return boost::get<std::time_t>(*this); }
+	bool is_null() const { return std::holds_alternative<std::monostate>(data_); }
+
+	std::string		as_string() const	{ return std::get<std::string>(data_); }
+	bool			as_bool() const		{ return std::get<bool>(data_); }
+	int64_t			as_integer() const	{ return std::get<int64_t>(data_); }
+	double			as_real() const		{ return std::get<double>(data_); }
+	datetime		as_date() const {
+		// Handle datetime, integer (timestamp from DB), and string
+		if (std::holds_alternative<datetime>(data_)) {
+			return std::get<datetime>(data_);
+		} else if (std::holds_alternative<int64_t>(data_)) {
+			// Database stored as Unix timestamp
+			return datetime{static_cast<std::time_t>(std::get<int64_t>(data_))};
+		} else if (std::holds_alternative<std::string>(data_)) {
+			// Parse from string (e.g., "2024-06-15 14:30:00")
+			return datetime::parse(std::get<std::string>(data_));
+		}
+		return datetime{};  // Return empty datetime for other types
+	}
 
 	/**
 	* Returns a numberic value of the attribute if possible
@@ -62,11 +89,15 @@ public:
 	int64_t as_numeric() const {
 		switch(type()) {
 			case type_null:		return 0;
-			case type_string:	return std::stoll(boost::get<std::string>(*this));
-			case type_integer:	return boost::get<int64_t>(*this);
-			case type_decimal:	return static_cast<int64_t>(boost::get<double>(*this));
-			case type_bool:		return (boost::get<bool>(*this) ? 1 : 0);
-			case type_date:		return static_cast<int64_t>(boost::get<std::time_t>(*this)); // fixme: config should keep date/time format
+			case type_string:	{
+				const auto& str = std::get<std::string>(data_);
+				if (str.empty())	throw std::invalid_argument("Unable to convert empty string attribute to numeric");
+				return std::stoll(str);
+			}
+			case type_integer:	return std::get<int64_t>(data_);
+			case type_decimal:	return static_cast<int64_t>(std::get<double>(data_));
+			case type_bool:		return (std::get<bool>(data_) ? 1 : 0);
+			case type_date:		return static_cast<int64_t>(std::get<datetime>(data_).timestamp());
 		}
 		throw std::invalid_argument("Unable to convert attribute to numeric");
 	}
@@ -80,14 +111,17 @@ public:
 	std::string to_string() const {
 		switch(type()) {
 			case type_null:		return "";
-			case type_string:	return boost::get<std::string>(*this);
-			case type_integer:	return std::to_string(boost::get<int64_t>(*this));
-			case type_decimal:	return std::to_string(boost::get<double>(*this));
-			case type_bool:		return std::to_string(boost::get<bool>(*this));
-			case type_date:		return std::to_string(boost::get<std::time_t>(*this)); // fixme: config should keep date/time format
+			case type_string:	return std::get<std::string>(data_);
+			case type_integer:	return std::to_string(std::get<int64_t>(data_));
+			case type_decimal:	return std::to_string(std::get<double>(data_));
+			case type_bool:		return std::to_string(std::get<bool>(data_));
+			case type_date:		return std::get<datetime>(data_).to_string();
 		}
 		throw std::invalid_argument("Unable to convert attribute to string");
 	}
+
+private:
+	attribute_storage data_;
 };
 
 typedef std::map<std::string, attribute> attribute_map;

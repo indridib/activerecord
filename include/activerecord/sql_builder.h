@@ -9,9 +9,11 @@
 #pragma once
 
 #include <activerecord.h>
-#include <model.h>
+#include <config.h>
+#include <attribute.h>
 
 #include <cassert>
+#include <format>
 
 
 namespace ar {
@@ -32,7 +34,7 @@ public:
 	// - __toString
 	// - to_s
 
-	std::string to_string(void) {
+	std::string to_string() {
 		switch(operation_) {
 			case sql_select:	return build_select();
 			case sql_insert:	return build_insert();
@@ -46,7 +48,7 @@ public:
 
 	// - bind_values
 
-	const attribute_vector& get_bind_values(void) const noexcept { return bind_values_; }
+	const attribute_vector& get_bind_values() const noexcept { return bind_values_; }
 
 	void add_order(const std::string& order) noexcept		{ order_ = order; }
 	void add_group(const std::string& group) noexcept		{ group_ = group; }
@@ -82,27 +84,27 @@ public:
 protected:
 
 
-	std::string build_select(void) const {
-		std::string sql{ "SELECT " + select_ + " FROM " + table_};
+	std::string build_select() const {
+		std::string sql = std::format("SELECT {} FROM {}", select_, table_);
 
 		if (!joins_.empty()) {
-			sql += " " + joins_;
+			sql += std::format(" {}", joins_);
 		}
 
 		if (!where_.empty()) {
-			sql += " WHERE  " + where_;
+			sql += std::format(" WHERE {}", where_);
 		}
 
 		if (!group_.empty()) {
-			sql += " GROUP BY " + group_;
+			sql += std::format(" GROUP BY {}", group_);
 		}
 
 		if (!having_.empty()) {
-			sql += " HAVING " + having_;
+			sql += std::format(" HAVING {}", having_);
 		}
 
 		if (!order_.empty()) {
-			sql += " ORDER BY " + order_;
+			sql += std::format(" ORDER BY {}", order_);
 		}
 
 		if ( (offset_ >= 0) || (limit_ >= 0) ) {
@@ -112,45 +114,55 @@ protected:
 		return sql;
 	}
 
-	std::string build_insert(void) {
-		std::string sql{ "INSERT INTO " + table_ + "("};
+	std::string build_insert() {
+		std::string columns;
 		for(auto iter = keys_.begin(); iter != keys_.end(); iter++) {
 			if (iter != keys_.begin()) {
-				sql += ", ";
+				columns += ", ";
 			}
-			sql += connection_->escape(*iter);
-		} 
-		sql += ") VALUES(?";
-		for(int i = 1; i < keys_.size(); i++) {
-			sql += ",?";
+			columns += connection_->escape(*iter);
 		}
-		sql += ")";
+
+		// Build placeholders: "?" for 1 column, "?,?" for 2, etc.
+		std::string placeholders;
+		for(size_t i = 0; i < keys_.size(); i++) {
+			if (i > 0) placeholders += ",";
+			placeholders += "?";
+		}
+
+		std::string sql = std::format("INSERT INTO {}({}) VALUES({})",
+			table_, columns, placeholders);
+
 		bind_values_ = data_;
 		return sql;
 	}
 
-	std::string build_update(void) {
-		std::string sql{ "UPDATE " + table_ + " SET "};
-
+	std::string build_update() {
+		std::string set_clause;
 		for(auto iter = keys_.begin(); iter != keys_.end(); iter++) {
 			if (iter != keys_.begin()) {
-				sql += ", ";
+				set_clause += ", ";
 			}
-			sql += connection_->escape(*iter) + " = ?";
-		} 
-		if (!where_.empty()) {
-			sql += " WHERE  " + where_;
+			set_clause += std::format("{} = ?", connection_->escape(*iter));
 		}
+
+		std::string sql = std::format("UPDATE {} SET {}", table_, set_clause);
+
+		if (!where_.empty()) {
+			sql += std::format(" WHERE {}", where_);
+		}
+
 		if (connection_->accepts_limit_and_order_for_update_and_delete()) {
 			if ( (offset_ >= 0) || (limit_ >= 0) ) {
 				connection_->limit(sql, offset_, limit_);
 			}
 		}
+
 		data_.insert(data_.end(), bind_values_.begin(), bind_values_.end());
 		bind_values_ = data_;
 		return sql;
 	}
-	std::string build_delete(void) {
+	std::string build_delete() {
 		//fixme:
 		return "";
 	}
@@ -208,7 +220,7 @@ public:
 	* Returns the record with the primary key id 'id'
 	*/
 	T find(long id) {
-		add_where(std::string(T::st_primary_key()) + " = ?", {id});
+		add_where(std::format("{} = ?", T::st_primary_key()), {id});
 		return first();
 	}
 
@@ -216,7 +228,7 @@ public:
 	* Returns multiple records with primary key id
 	*/
 	std::vector<T> find(const std::vector<long>& ids) {
-		throw ex:activerecord("not yet implemented");
+		throw ex::activerecord("not yet implemented");
 	}
 
 
