@@ -109,7 +109,5 @@ TEST(ConfigTest, GetConnectionWithEmptyNameAndNoDefault) {
 
     config::instance().set_connections(connections, "");  // Explicitly clear default
 
-    // Should get first connection when no default specified
-    auto conn = config::instance().get_connection("");  // Explicitly pass empty name
-    EXPECT_NE(nullptr, conn);
+    EXPECT_THROW(config::instance().get_connection(""), ex::config);
 }

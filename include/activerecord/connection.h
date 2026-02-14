@@ -11,7 +11,13 @@
 #include <activerecord.h>
 #include <attribute.h>
 
+#include <algorithm>
+#include <cctype>
+#include <charconv>
+#include <map>
 #include <memory>
+#include <optional>
+#include <string_view>
 
 
 namespace ar {
@@ -39,6 +45,19 @@ public:
 class connection {
 
 public:
+	struct connection_url_info {
+		std::string protocol;
+		std::optional<std::string> host;
+		std::optional<int> port;
+		std::optional<std::string> database;
+		std::optional<std::string> user;
+		std::optional<std::string> password;
+		std::optional<std::string> socket;
+		std::optional<std::string> file;
+		std::optional<std::string> charset;
+		std::map<std::string, std::string> query;
+	};
+
 	/**
 	* The quote character used for quoting column and field names.
 	*/
@@ -77,8 +96,37 @@ public:
 	* @param string connection_url A connection URL
 	* @return object the parsed URL as an object.
 	*/
-	static void parse_connection_url(const std::string& connection_url) {
-		// TODO(issue-6): pending implementation.
+	static connection_url_info parse_connection_url(std::string_view connection_url) {
+		if (connection_url.empty()) {
+			throw ex::config("Connection URL cannot be empty");
+		}
+
+		const auto sep_pos = connection_url.find("://");
+		if (sep_pos == std::string_view::npos || sep_pos == 0) {
+			throw ex::config("Invalid connection URL \"{}\": missing protocol", connection_url);
+		}
+
+		connection_url_info info{};
+		info.protocol = std::string(connection_url.substr(0, sep_pos));
+
+		std::string_view rest = connection_url.substr(sep_pos + 3);
+		const auto query_pos = rest.find('?');
+		std::string_view authority_and_path = (query_pos == std::string_view::npos) ? rest : rest.substr(0, query_pos);
+		std::string_view query_str = (query_pos == std::string_view::npos) ? std::string_view{} : rest.substr(query_pos + 1);
+
+		info.query = parse_query_params(query_str);
+		const bool should_decode = query_true(info.query, "decode");
+		if (auto iter = info.query.find("charset"); iter != info.query.end()) {
+			info.charset = iter->second;
+		}
+
+		if (info.protocol == "sqlite") {
+			parse_sqlite_connection(authority_and_path, info);
+			return info;
+		}
+
+		parse_standard_connection(authority_and_path, should_decode, info);
+		return info;
 	}
 
 	// - columns()
@@ -200,6 +248,217 @@ public:
 	* @returns boolean (false by default)
 	*/
 	virtual bool accepts_limit_and_order_for_update_and_delete() const { return false; }
+
+private:
+	static bool query_true(const std::map<std::string, std::string>& query, std::string_view key)
+	{
+		const auto iter = query.find(std::string(key));
+		if (iter == query.end()) {
+			return false;
+		}
+		std::string value = iter->second;
+		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+			return static_cast<char>(std::tolower(c));
+		});
+		return value == "1" || value == "true" || value == "yes" || value == "on";
+	}
+
+	static int parse_port(std::string_view str)
+	{
+		if (str.empty()) {
+			throw ex::config("Invalid connection URL: empty port");
+		}
+		int port{};
+		const auto* first = str.data();
+		const auto* last = str.data() + str.size();
+		auto [ptr, ec] = std::from_chars(first, last, port);
+		if (ec != std::errc{} || ptr != last || port < 0 || port > 65535) {
+			throw ex::config("Invalid connection URL: invalid port \"{}\"", str);
+		}
+		return port;
+	}
+
+	static std::string percent_decode(std::string_view value, bool plus_as_space = false)
+	{
+		std::string decoded;
+		decoded.reserve(value.size());
+
+		auto hex_val = [](char c) -> int {
+			if (c >= '0' && c <= '9') {
+				return c - '0';
+			}
+			if (c >= 'a' && c <= 'f') {
+				return 10 + (c - 'a');
+			}
+			if (c >= 'A' && c <= 'F') {
+				return 10 + (c - 'A');
+			}
+			return -1;
+		};
+
+		for (std::size_t i = 0; i < value.size(); ++i) {
+			const char c = value[i];
+			if (c == '%' && i + 2 < value.size()) {
+				const int hi = hex_val(value[i + 1]);
+				const int lo = hex_val(value[i + 2]);
+				if (hi < 0 || lo < 0) {
+					throw ex::config("Invalid connection URL: invalid percent encoding");
+				}
+				decoded += static_cast<char>((hi << 4) | lo);
+				i += 2;
+				continue;
+			}
+			if (plus_as_space && c == '+') {
+				decoded += ' ';
+				continue;
+			}
+			decoded += c;
+		}
+		return decoded;
+	}
+
+	static std::map<std::string, std::string> parse_query_params(std::string_view query)
+	{
+		std::map<std::string, std::string> out;
+		while (!query.empty()) {
+			const auto amp_pos = query.find('&');
+			const std::string_view token = (amp_pos == std::string_view::npos) ? query : query.substr(0, amp_pos);
+			query = (amp_pos == std::string_view::npos) ? std::string_view{} : query.substr(amp_pos + 1);
+			if (token.empty()) {
+				continue;
+			}
+
+			const auto eq_pos = token.find('=');
+			const std::string_view key_sv = (eq_pos == std::string_view::npos) ? token : token.substr(0, eq_pos);
+			const std::string_view val_sv = (eq_pos == std::string_view::npos) ? std::string_view{} : token.substr(eq_pos + 1);
+			const std::string key = percent_decode(key_sv, true);
+			const std::string value = percent_decode(val_sv, true);
+			if (!key.empty()) {
+				out[key] = value;
+			}
+		}
+		return out;
+	}
+
+	static void parse_sqlite_connection(std::string_view value, connection_url_info& info)
+	{
+		if (value.empty()) {
+			throw ex::config("Invalid sqlite connection URL: missing file path");
+		}
+
+		if (value.rfind("unix(", 0) == 0) {
+			if (value.back() != ')') {
+				throw ex::config("Invalid sqlite connection URL: malformed unix(...) path");
+			}
+			info.file = std::string(value.substr(5, value.size() - 6));
+			return;
+		}
+
+		if (value.rfind("windows(", 0) == 0) {
+			if (value.back() != ')') {
+				throw ex::config("Invalid sqlite connection URL: malformed windows(...) path");
+			}
+			std::string path = percent_decode(value.substr(8, value.size() - 9));
+			std::replace(path.begin(), path.end(), '*', ':');
+			info.file = std::move(path);
+			return;
+		}
+
+		info.file = std::string(value);
+	}
+
+	static void parse_standard_connection(std::string_view value, bool should_decode, connection_url_info& info)
+	{
+		if (value.empty()) {
+			throw ex::config("Invalid connection URL: missing host");
+		}
+
+		std::size_t slash_pos = std::string_view::npos;
+		const auto at_pos = value.rfind('@');
+		const std::size_t host_start = (at_pos == std::string_view::npos) ? 0 : (at_pos + 1);
+		const std::string_view host_segment = value.substr(host_start);
+
+		if (host_segment.rfind("unix(", 0) == 0) {
+			const auto close_pos = host_segment.find(')');
+			if (close_pos == std::string_view::npos) {
+				throw ex::config("Invalid connection URL: malformed unix(...) host");
+			}
+
+			const std::size_t unix_end = host_start + close_pos + 1;
+			if (unix_end < value.size()) {
+				if (value[unix_end] != '/') {
+					throw ex::config("Invalid connection URL: malformed unix(...) host");
+				}
+				slash_pos = unix_end;
+			}
+		} else {
+			slash_pos = value.find('/', host_start);
+		}
+
+		const std::string_view authority = (slash_pos == std::string_view::npos) ? value : value.substr(0, slash_pos);
+		const std::string_view db_path = (slash_pos == std::string_view::npos) ? std::string_view{} : value.substr(slash_pos + 1);
+		if (authority.empty()) {
+			throw ex::config("Invalid connection URL: missing host");
+		}
+
+		std::string_view userinfo;
+		std::string_view hostinfo = authority;
+		const auto authority_at_pos = authority.rfind('@');
+		if (authority_at_pos != std::string_view::npos) {
+			userinfo = authority.substr(0, authority_at_pos);
+			hostinfo = authority.substr(authority_at_pos + 1);
+		}
+
+		if (!userinfo.empty()) {
+			const auto colon = userinfo.find(':');
+			const std::string_view user_sv = (colon == std::string_view::npos) ? userinfo : userinfo.substr(0, colon);
+			const std::string_view pass_sv = (colon == std::string_view::npos) ? std::string_view{} : userinfo.substr(colon + 1);
+			info.user = should_decode ? percent_decode(user_sv) : std::string(user_sv);
+			if (!pass_sv.empty()) {
+				info.password = should_decode ? percent_decode(pass_sv) : std::string(pass_sv);
+			}
+		}
+
+		if (hostinfo.rfind("unix(", 0) == 0) {
+			if (hostinfo.back() != ')') {
+				throw ex::config("Invalid connection URL: malformed unix(...) host");
+			}
+			const std::string socket = std::string(hostinfo.substr(5, hostinfo.size() - 6));
+			if (socket.empty()) {
+				throw ex::config("Invalid connection URL: empty unix socket path");
+			}
+			info.socket = socket;
+			info.host = socket;
+		} else if (!hostinfo.empty() && hostinfo.front() == '[') {
+			const auto close = hostinfo.find(']');
+			if (close == std::string_view::npos) {
+				throw ex::config("Invalid connection URL: malformed IPv6 host");
+			}
+			info.host = std::string(hostinfo.substr(1, close - 1));
+			if (close + 1 < hostinfo.size()) {
+				if (hostinfo[close + 1] != ':') {
+					throw ex::config("Invalid connection URL: malformed host/port");
+				}
+				info.port = parse_port(hostinfo.substr(close + 2));
+			}
+		} else {
+			const auto colon = hostinfo.rfind(':');
+			if (colon != std::string_view::npos && hostinfo.find(':') == colon) {
+				info.host = std::string(hostinfo.substr(0, colon));
+				info.port = parse_port(hostinfo.substr(colon + 1));
+			} else {
+				info.host = std::string(hostinfo);
+			}
+		}
+
+		if (!info.host.has_value() || info.host->empty()) {
+			throw ex::config("Invalid connection URL: missing host");
+		}
+
+		if (!db_path.empty()) {
+			info.database = should_decode ? percent_decode(db_path) : std::string(db_path);
+		}
+	}
 
 };
 

@@ -197,7 +197,7 @@ protected:
 	}
 	std::string build_delete() const {
 		// TODO(issue-6): pending implementation.
-		return "";
+		throw ex::activerecord("DELETE statement generation not yet implemented");
 	}
 
 
@@ -273,6 +273,9 @@ public:
 	long count() {
 		query<T> count_query{*this};
 		count_query.select("COUNT(*)");
+		count_query.set_limit(-1);
+		count_query.set_offset(-1);
+		count_query.add_order({});
 		auto stmt{ connection_->query(count_query.to_string(), count_query.get_bind_values()) };
 		if (stmt->fetch()) {
 			attribute_map attributes;

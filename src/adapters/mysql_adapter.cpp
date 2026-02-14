@@ -14,8 +14,35 @@
 #include <algorithm>
 #include <cstring>
 #include <type_traits>
+#include <string>
 
 namespace ar {
+
+namespace {
+std::string normalize_mysql_datetime(std::string value)
+{
+	for (char& c : value) {
+		if (c == 'T') {
+			c = ' ';
+		}
+	}
+
+	const std::size_t space_pos{value.find(' ')};
+	if (space_pos != std::string::npos) {
+		std::size_t tz_pos{value.find_first_of("Zz+-", space_pos + 1)};
+		if (tz_pos != std::string::npos) {
+			value.erase(tz_pos);
+		}
+	}
+
+	const std::size_t frac_pos{value.find('.')};
+	if (frac_pos != std::string::npos) {
+		value.erase(frac_pos);
+	}
+
+	return value;
+}
+} // namespace
 
 // ============================================================================
 // mysql_statement implementation
@@ -26,28 +53,13 @@ mysql_statement::mysql_statement(MYSQL* db)
 	, db_(db)
 	, stmt_(nullptr)
 	, metadata_(nullptr)
-	, result_binds_(nullptr)
-	, lengths_(nullptr)
 	, num_fields_(0)
 	, has_result_(false)
 {}
 
 mysql_statement::~mysql_statement()
 {
-	if (result_binds_) {
-		for (int i = 0; i < num_fields_; ++i) {
-			delete[] static_cast<char*>(result_binds_[i].buffer);
-			result_binds_[i].buffer = nullptr;
-			delete result_binds_[i].is_null;
-			result_binds_[i].is_null = nullptr;
-		}
-		delete[] result_binds_;
-		result_binds_ = nullptr;
-	}
-	if (lengths_) {
-		delete[] lengths_;
-		lengths_ = nullptr;
-	}
+	// Vectors (result_binds_, lengths_, buffers_) clean themselves up via RAII
 	if (metadata_) {
 		mysql_free_result(metadata_);
 		metadata_ = nullptr;
@@ -81,6 +93,9 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		using mysql_null_flag = std::remove_pointer_t<decltype(MYSQL_BIND{}.is_null)>;
 		std::vector<mysql_null_flag> is_null(values.size(), static_cast<mysql_null_flag>(0));
 
+		// CRITICAL: Reserve capacity to prevent reallocation. We store pointers to elements
+		// of these vectors in param_binds, so the vectors must not reallocate during the loop.
+		// Reserving values.size() guarantees no reallocation even if all values are of one type.
 		std::vector<long long> int_values;
 		std::vector<double> double_values;
 		std::vector<std::string> string_values;
@@ -170,9 +185,11 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		my_bool update_max_length = 1;
 		mysql_stmt_attr_set(stmt_, STMT_ATTR_UPDATE_MAX_LENGTH, &update_max_length);
 
-		result_binds_ = new MYSQL_BIND[num_fields_];
-		lengths_ = new unsigned long[num_fields_];
-		std::memset(result_binds_, 0, sizeof(MYSQL_BIND) * num_fields_);
+		// Use RAII vectors instead of raw arrays to prevent memory leaks
+		result_binds_.resize(num_fields_);
+		lengths_.resize(num_fields_, 0UL);
+		buffers_.resize(num_fields_);
+		std::memset(result_binds_.data(), 0, sizeof(MYSQL_BIND) * num_fields_);
 
 		if (mysql_stmt_store_result(stmt_)) {
 			std::string error = "MySQL store result error: ";
@@ -181,18 +198,25 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		}
 
 		MYSQL_FIELD* fields = mysql_fetch_fields(metadata_);
-		for (int i = 0; i < num_fields_; ++i) {
-			result_binds_[i].buffer_type = MYSQL_TYPE_STRING;
-			const unsigned long preferred = (fields != nullptr) ? fields[i].max_length : 0UL;
-			result_binds_[i].buffer_length = std::max(preferred + 1UL, 256UL);
-			result_binds_[i].buffer = new char[result_binds_[i].buffer_length];
-			std::memset(result_binds_[i].buffer, 0, result_binds_[i].buffer_length);
-			result_binds_[i].length = &lengths_[i];
-			using mysql_null_flag = std::remove_pointer_t<decltype(MYSQL_BIND{}.is_null)>;
-			result_binds_[i].is_null = new mysql_null_flag(0);
+		if (!fields) {
+			throw ex::activerecord("MySQL: Failed to fetch field metadata");
 		}
 
-		if (mysql_stmt_bind_result(stmt_, result_binds_)) {
+		for (int i = 0; i < num_fields_; ++i) {
+			result_binds_[i].buffer_type = MYSQL_TYPE_STRING;
+			const unsigned long preferred = fields[i].max_length;
+			const unsigned long buffer_size = std::max(preferred + 1UL, 256UL);
+
+			// Allocate buffer in RAII vector
+			buffers_[i].data.resize(buffer_size, '\0');
+
+			result_binds_[i].buffer_length = buffer_size;
+			result_binds_[i].buffer = buffers_[i].data.data();
+			result_binds_[i].length = &lengths_[i];
+			result_binds_[i].is_null = buffers_[i].is_null.get();
+		}
+
+		if (mysql_stmt_bind_result(stmt_, result_binds_.data())) {
 			std::string error = "MySQL bind result error: ";
 			error += mysql_stmt_error(stmt_);
 			throw ex::activerecord(error);
@@ -220,25 +244,23 @@ bool mysql_statement::fetch()
 			}
 
 			unsigned long full_length = lengths_[i];
-			char* full_buffer = new char[full_length + 1];
-			std::memset(full_buffer, 0, full_length + 1);
+			// Resize buffer using RAII vector instead of raw allocation
+			buffers_[i].data.resize(full_length + 1, '\0');
 
 			MYSQL_BIND fetch_bind{};
 			fetch_bind.buffer_type = MYSQL_TYPE_STRING;
-			fetch_bind.buffer = full_buffer;
+			fetch_bind.buffer = buffers_[i].data.data();
 			fetch_bind.buffer_length = full_length + 1;
 			fetch_bind.length = &full_length;
-			fetch_bind.is_null = result_binds_[i].is_null;
+			fetch_bind.is_null = buffers_[i].is_null.get();
 
 			if (mysql_stmt_fetch_column(stmt_, &fetch_bind, static_cast<unsigned int>(i), 0) != 0) {
-				delete[] full_buffer;
 				std::string error = "MySQL fetch column error: ";
 				error += mysql_stmt_error(stmt_);
 				throw ex::activerecord(error);
 			}
 
-			delete[] static_cast<char*>(result_binds_[i].buffer);
-			result_binds_[i].buffer = full_buffer;
+			// Update bind info (buffer pointer already points to the resized vector)
 			result_binds_[i].buffer_length = full_length + 1;
 			lengths_[i] = full_length;
 		}
@@ -258,10 +280,13 @@ void mysql_statement::get_attributes(attribute_map& attributes)
 	}
 
 	MYSQL_FIELD* fields = mysql_fetch_fields(metadata_);
+	if (!fields) {
+		throw ex::activerecord("MySQL: Failed to fetch field metadata");
+	}
 
 	for (int i = 0; i < num_fields_; ++i) {
 		std::string column_name = fields[i].name;
-		attributes.emplace(column_name, field_as_attribute(metadata_, result_binds_, lengths_, i));
+		attributes.emplace(column_name, field_as_attribute(metadata_, result_binds_.data(), lengths_.data(), i));
 	}
 }
 
@@ -298,7 +323,10 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 		case MYSQL_TYPE_TIMESTAMP:
 		case MYSQL_TYPE_DATETIME:
 		case MYSQL_TYPE_DATE:
-			return value.empty() ? attribute() : attribute(datetime::parse(value));
+			return value.empty() ? attribute() : attribute(datetime::parse(normalize_mysql_datetime(value)));
+
+		case MYSQL_TYPE_TIME:
+			return value.empty() ? attribute() : attribute(datetime::parse(std::string("1970-01-01 ") + normalize_mysql_datetime(value)));
 
 		case MYSQL_TYPE_STRING:
 		case MYSQL_TYPE_VAR_STRING:

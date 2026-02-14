@@ -10,6 +10,7 @@
 
 #include <activerecord.h>
 #include <connection.h>
+#include <connection_factory.h>
 
 #include <map>
 #include <memory>
@@ -42,6 +43,7 @@ public:
 	*/
 	void set_connections(const connection_map& connections) {
 		connections_ = connections;
+		default_connection_.clear();
 	}
 
 	/**
@@ -53,6 +55,30 @@ public:
 	void set_connections(const connection_map& connections, std::string_view default_connection) {
 		connections_ = connections;
 		default_connection_ = default_connection;
+	}
+
+	/**
+	* Sets a named connection from URL.
+	*/
+	void set_connection_url(std::string_view name, std::string_view url)
+	{
+		connections_[std::string(name)] = make_connection(url);
+		if (default_connection_.empty()) {
+			default_connection_ = std::string(name);
+		}
+	}
+
+	/**
+	* Sets multiple named connections from URL map.
+	*/
+	void set_connection_urls(const std::map<std::string, std::string>& urls, std::string_view default_connection = {})
+	{
+		connection_map mapped;
+		for (const auto& [name, url] : urls) {
+			mapped[name] = make_connection(url);
+		}
+		connections_ = std::move(mapped);
+		default_connection_ = std::string(default_connection);
 	}
 
 	/**

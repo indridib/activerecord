@@ -144,16 +144,45 @@ datetime datetime::parse(const std::string& str) {
 	}
 
 	std::tm timeinfo{};
-	int year{}, month{}, day{}, hour{}, min{}, sec{};
+	int year{0}, month{0}, day{0}, hour{0}, min{0}, sec{0};
 
 	// Try parsing "YYYY-MM-DD HH:MM:SS"
 	if (std::sscanf(str.c_str(), "%d-%d-%d %d:%d:%d",
 		&year, &month, &day, &hour, &min, &sec) == 6) {
+		// Validate parsed values
+		if (year < 1970 || year > 9999) {
+			throw std::invalid_argument(std::format("Invalid year in date/time string: '{}' (year={})", str, year));
+		}
+		if (month < 1 || month > 12) {
+			throw std::invalid_argument(std::format("Invalid month in date/time string: '{}' (month={})", str, month));
+		}
+		if (day < 1 || day > 31) {
+			throw std::invalid_argument(std::format("Invalid day in date/time string: '{}' (day={})", str, day));
+		}
+		if (hour < 0 || hour > 23) {
+			throw std::invalid_argument(std::format("Invalid hour in date/time string: '{}' (hour={})", str, hour));
+		}
+		if (min < 0 || min > 59) {
+			throw std::invalid_argument(std::format("Invalid minute in date/time string: '{}' (min={})", str, min));
+		}
+		if (sec < 0 || sec > 59) {
+			throw std::invalid_argument(std::format("Invalid second in date/time string: '{}' (sec={})", str, sec));
+		}
 		return datetime{year, month, day, hour, min, sec};
 	}
 
 	// Try parsing "YYYY-MM-DD"
 	if (std::sscanf(str.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
+		// Validate parsed values
+		if (year < 1970 || year > 9999) {
+			throw std::invalid_argument(std::format("Invalid year in date string: '{}' (year={})", str, year));
+		}
+		if (month < 1 || month > 12) {
+			throw std::invalid_argument(std::format("Invalid month in date string: '{}' (month={})", str, month));
+		}
+		if (day < 1 || day > 31) {
+			throw std::invalid_argument(std::format("Invalid day in date string: '{}' (day={})", str, day));
+		}
 		return datetime{year, month, day};
 	}
 

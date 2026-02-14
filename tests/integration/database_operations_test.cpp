@@ -240,6 +240,18 @@ TEST_F(DatabaseOperationsTest, QueryCountWithWhere) {
     EXPECT_EQ(2, count);
 }
 
+TEST_F(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
+    auto conn = config::instance().get_connection();
+    for (int i = 0; i < 7; i++) {
+        conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+                   {attribute("User" + std::to_string(i)), attribute(20 + i)});
+    }
+
+    query<User> q;
+    q.limit(2).offset(3);
+    EXPECT_EQ(7, q.count());
+}
+
 TEST_F(DatabaseOperationsTest, QueryExists) {
     // Insert test data
     auto conn = config::instance().get_connection();

@@ -383,13 +383,15 @@ public:
 	}
 
 	void find(std::size_t inValue) {
-		// fixme:
-		find_by_pk(inValue);
+		// TODO(issue-6): pending implementation.
+		// Note: Use query<Model>().find(id) instead
+		throw ex::activerecord("model::find() not implemented - use query<Model>().find(id)");
 	}
 
 	void find_by_pk(std::size_t inValue) {
-		// fixme:
-		// find_by_pk(inValue);
+		// TODO(issue-6): pending implementation.
+		// Note: Use query<Model>().find(id) instead
+		throw ex::activerecord("model::find_by_pk() not implemented - use query<Model>().find(id)");
 	}
 
 	// - connection()

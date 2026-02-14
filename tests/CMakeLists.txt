@@ -32,6 +32,8 @@ include(GoogleTest)
 
 add_executable(unit_tests
   unit/attribute_test.cpp
+  unit/connection_factory_test.cpp
+  unit/connection_url_test.cpp
   unit/datetime_test.cpp
   unit/model_test.cpp
   unit/sql_builder_test.cpp

@@ -11,8 +11,76 @@
 #include <adapters/sqlite_adapter.h>
 #include <activerecord.h>
 #include <sqlite3.h>
+#include <cctype>
+#include <string>
 
 namespace ar {
+
+namespace {
+bool contains_token_ci(std::string_view text, std::string_view token)
+{
+	if (text.empty() || token.empty() || token.size() > text.size()) {
+		return false;
+	}
+	for (std::size_t i = 0; i + token.size() <= text.size(); ++i) {
+		std::size_t j = 0;
+		for (; j < token.size(); ++j) {
+			const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(text[i + j])));
+			const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(token[j])));
+			if (a != b) {
+				break;
+			}
+		}
+		if (j == token.size()) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool looks_like_datetime_column(sqlite3_stmt* stmt, int column_index)
+{
+	const char* decl_type = sqlite3_column_decltype(stmt, column_index);
+	if (decl_type != nullptr) {
+		const std::string_view dt{decl_type};
+		if (contains_token_ci(dt, "date") || contains_token_ci(dt, "time")) {
+			return true;
+		}
+	}
+
+	const char* column_name = sqlite3_column_name(stmt, column_index);
+	if (column_name == nullptr) {
+		return false;
+	}
+
+	const std::string name{column_name};
+	return name.ends_with("_at") || name.ends_with("_date") || name.ends_with("_time");
+}
+
+std::string normalize_sqlite_datetime(std::string value)
+{
+	for (char& c : value) {
+		if (c == 'T') {
+			c = ' ';
+		}
+	}
+
+	const std::size_t space_pos{value.find(' ')};
+	if (space_pos != std::string::npos) {
+		const std::size_t tz_pos{value.find_first_of("Zz+-", space_pos + 1)};
+		if (tz_pos != std::string::npos) {
+			value.erase(tz_pos);
+		}
+	}
+
+	const std::size_t frac_pos{value.find('.')};
+	if (frac_pos != std::string::npos) {
+		value.erase(frac_pos);
+	}
+
+	return value;
+}
+} // namespace
 
 // ============================================================================
 // sqlite_statement implementation
@@ -127,13 +195,17 @@ void sqlite_statement::get_attributes(attribute_map& attributes)
 
 attribute sqlite_statement::field_as_attribute(sqlite3_stmt* stmt, int column_index)
 {
-	int type = sqlite3_column_type(stmt, column_index);
+	const int type = sqlite3_column_type(stmt, column_index);
+	const bool is_datetime = looks_like_datetime_column(stmt, column_index);
 
 	switch(type) {
 		case SQLITE_NULL:
 			return attribute();
 
 		case SQLITE_INTEGER:
+			if (is_datetime) {
+				return attribute(datetime{static_cast<std::time_t>(sqlite3_column_int64(stmt, column_index))});
+			}
 			return attribute(sqlite3_column_int64(stmt, column_index));
 
 		case SQLITE_FLOAT:
@@ -141,7 +213,11 @@ attribute sqlite_statement::field_as_attribute(sqlite3_stmt* stmt, int column_in
 
 		case SQLITE_TEXT: {
 			const unsigned char* text = sqlite3_column_text(stmt, column_index);
-			return attribute(text ? reinterpret_cast<const char*>(text) : "");
+			const std::string value{text ? reinterpret_cast<const char*>(text) : ""};
+			if (is_datetime && !value.empty()) {
+				return attribute(datetime::parse(normalize_sqlite_datetime(value)));
+			}
+			return attribute(value);
 		}
 
 		case SQLITE_BLOB:

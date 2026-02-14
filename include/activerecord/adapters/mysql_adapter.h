@@ -36,13 +36,23 @@ public:
 private:
 	static attribute field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* bind, unsigned long* lengths, int column_index);
 
-	MYSQL* db_;               // Non-owning pointer to database connection
-	MYSQL_STMT* stmt_;        // Owned prepared statement (closed in destructor)
-	MYSQL_RES* metadata_;     // Result metadata
-	MYSQL_BIND* result_binds_;// Result bindings
-	unsigned long* lengths_;  // Field lengths
-	int num_fields_;          // Number of result fields
-	bool has_result_;         // Whether statement has results
+	// Helper struct for RAII management of MYSQL_BIND resources
+	struct bind_buffer {
+		std::vector<char> data;
+		using mysql_null_flag = unsigned char;
+		std::unique_ptr<mysql_null_flag> is_null;
+
+		bind_buffer() : is_null(std::make_unique<mysql_null_flag>(0)) {}
+	};
+
+	MYSQL* db_;                                  // Non-owning pointer to database connection
+	MYSQL_STMT* stmt_;                           // Owned prepared statement (closed in destructor)
+	MYSQL_RES* metadata_;                        // Result metadata
+	std::vector<MYSQL_BIND> result_binds_;       // Result bindings (RAII)
+	std::vector<unsigned long> lengths_;         // Field lengths (RAII)
+	std::vector<bind_buffer> buffers_;           // Buffers for result data (RAII)
+	int num_fields_;                             // Number of result fields
+	bool has_result_;                            // Whether statement has results
 };
 
 /**

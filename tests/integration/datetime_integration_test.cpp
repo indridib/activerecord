@@ -105,6 +105,7 @@ TEST_F(DateTimeIntegrationTest, RetrieveDateTimeFromDatabase) {
 	EXPECT_EQ("Meeting", retrieved.name());
 
 	datetime retrieved_time = retrieved.starts_at();
+	EXPECT_EQ(type_date, retrieved.get("starts_at").type());
 	EXPECT_EQ(2024, retrieved_time.year());
 	EXPECT_EQ(6, retrieved_time.month());
 	EXPECT_EQ(15, retrieved_time.day());

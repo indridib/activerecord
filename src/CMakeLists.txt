@@ -1,5 +1,6 @@
 set(ACTIVERECORD_BASE_SOURCES
   attribute.cpp
+  connection_factory.cpp
   datetime.cpp
 )
 

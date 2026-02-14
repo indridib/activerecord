@@ -19,6 +19,34 @@
 namespace ar {
 
 namespace {
+
+// RAII wrapper for PGresult to prevent resource leaks
+class pg_result_guard {
+public:
+	explicit pg_result_guard(PGresult* res) : result_(res) {}
+	~pg_result_guard() {
+		if (result_) {
+			PQclear(result_);
+		}
+	}
+
+	// Delete copy/move to enforce unique ownership
+	pg_result_guard(const pg_result_guard&) = delete;
+	pg_result_guard& operator=(const pg_result_guard&) = delete;
+	pg_result_guard(pg_result_guard&&) = delete;
+	pg_result_guard& operator=(pg_result_guard&&) = delete;
+
+	PGresult* get() const noexcept { return result_; }
+	PGresult* release() noexcept {
+		PGresult* temp = result_;
+		result_ = nullptr;
+		return temp;
+	}
+
+private:
+	PGresult* result_;
+};
+
 std::string normalize_postgres_datetime(std::string value)
 {
 	// Accept common PostgreSQL output forms:
@@ -252,6 +280,9 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 	}
 
 	// Check for errors
+	if (result_ == nullptr) {
+		throw ex::activerecord("PostgreSQL error: query returned no result");
+	}
 	ExecStatusType status = PQresultStatus(result_);
 	if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
 		std::string error = "PostgreSQL error: ";
@@ -394,21 +425,22 @@ std::size_t postgres_adapter::insert_id() const
 	if (!db_) {
 		return 0;
 	}
-	PGresult* result = PQexec(db_, "SELECT LASTVAL()");
+
+	// Use RAII wrapper for automatic cleanup
+	pg_result_guard result_guard(PQexec(db_, "SELECT LASTVAL()"));
+	PGresult* result = result_guard.get();
+
 	if (result == nullptr) {
 		return 0;
 	}
 
 	const ExecStatusType status = PQresultStatus(result);
 	if (status != PGRES_TUPLES_OK || PQntuples(result) != 1 || PQnfields(result) != 1) {
-		PQclear(result);
 		return 0;
 	}
 
 	const char* value = PQgetvalue(result, 0, 0);
-	const std::size_t id = (value != nullptr) ? static_cast<std::size_t>(std::strtoull(value, nullptr, 10)) : 0;
-	PQclear(result);
-	return id;
+	return (value != nullptr) ? static_cast<std::size_t>(std::strtoull(value, nullptr, 10)) : 0;
 }
 
 void postgres_adapter::begin_transaction()
