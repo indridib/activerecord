@@ -19,7 +19,7 @@ Striving to use latest C++ conventions as possible. We shouldn't be stuck in the
 
 **1. Clone with submodules:**
 ```bash
-git clone --recurse-submodules https://github.com/yourusername/activerecord.git
+git clone --recurse-submodules https://github.com/indridib/activerecord.git
 cd activerecord
 ```
 
@@ -152,22 +152,9 @@ You would then be able to get column map (name -> index) and then for each row a
 PHP Active Record has: STRING, INTEGER, DECIMAL, DATETIME, DATE, TIME
 Should we go structural allowing array of variant as a variant? Might solve problems with bindings, i.e. for "IN (?)"
 
-- NOTE: sizeof attribute is now 48 bytes, seems to be main reason sizeof(std::string) is 40. Should we
-allocate for std::strings or create our own string class? Skipping std::string makes attribute 16 bytes of size
-(guess 8 for other types and then type + alignment). In release version sizeof(std::string) is reduced to
-32 bytes hence sizeof(attribute) is 40 bytes. See JSON implemenation JSON for Modern C++, he was  bragging about size. 
-One possible solution would be to have a unique_ptr to a std::string. Unique_ptr only takes 8 bytes.
-
-- Better support for date time, chrono or a special class? std::strftime ?
-
-- test std::variant is it same or better -> replace. Some conserns that std::variant wasn't good enough 
-hence started with boost.
-
 - implement set_timestamps() called on update and insert. Will refresh updated_at and created_at.
 
 - Possible allowing multiple calls to add_xxx(new) in sql_builder (simply assume: "(org) AND (new)").
-
-- ✅ GoogleTest framework integrated with 70+ unit and integration tests
 
 - implement insert, delete
 

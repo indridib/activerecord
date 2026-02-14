@@ -212,4 +212,19 @@ std::size_t sqlite_adapter::insert_id() const
 	return static_cast<std::size_t>(sqlite3_last_insert_rowid(db_));
 }
 
+void sqlite_adapter::begin_transaction()
+{
+	query("BEGIN TRANSACTION");
+}
+
+void sqlite_adapter::commit()
+{
+	query("COMMIT");
+}
+
+void sqlite_adapter::rollback()
+{
+	query("ROLLBACK");
+}
+
 } // namespace ar

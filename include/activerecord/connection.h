@@ -1,7 +1,7 @@
 // ============================================================================
 // connection.h
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
 // See file LICENSE.MIT for detail
 //
@@ -106,22 +106,50 @@ public:
 	// - query_and_fetch
 	// - tables
 
-	// - transaction
-	// - commit
-	// - rollback
+	/**
+	* Begin a database transaction.
+	*/
+	virtual void begin_transaction() = 0;
+
+	/**
+	* Commit the current transaction.
+	*/
+	virtual void commit() = 0;
+
+	/**
+	* Rollback the current transaction.
+	*/
+	virtual void rollback() = 0;
 
 	/**
 	* Quote a name like table names and field names.
+	* Properly escapes any embedded quote characters to prevent SQL injection.
 	*
 	* @param str - string to quote.
 	* @return string
 	*/
-	static std::string quote_name(const std::string& str)
+	static std::string quote_name(std::string_view str)
 	{
-		if ( ((*str.begin()) == QUOTE_CHARACTER) || ((*str.rbegin()) == QUOTE_CHARACTER) )  {
-			return str;
+		// Handle already-quoted identifiers
+		if (!str.empty() && str.front() == QUOTE_CHARACTER && str.back() == QUOTE_CHARACTER) {
+			return std::string(str);
 		}
-		return QUOTE_CHARACTER + str + QUOTE_CHARACTER;
+
+		// Escape any quote characters within the identifier
+		// SQL standard: double the quote character to escape it
+		std::string escaped;
+		escaped.reserve(str.size() + 2);
+		escaped += QUOTE_CHARACTER;
+
+		for (char c : str) {
+			if (c == QUOTE_CHARACTER) {
+				escaped += QUOTE_CHARACTER;  // Double the quote to escape
+			}
+			escaped += c;
+		}
+
+		escaped += QUOTE_CHARACTER;
+		return escaped;
 	}
 
 	/**
@@ -130,7 +158,7 @@ public:
 	* @param str - the string to be quoted.
 	* @return - string with any quotes in it properly escaped.
 	*/
-	virtual std::string escape(const std::string& str) const
+	virtual std::string escape(std::string_view str) const
 	{
 		return quote_name(str);
 	}

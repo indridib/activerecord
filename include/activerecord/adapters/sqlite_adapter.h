@@ -52,6 +52,10 @@ public:
 	void limit(std::string& sql, long offset, long limit) const override;
 	std::size_t insert_id() const override;
 
+	void begin_transaction() override;
+	void commit() override;
+	void rollback() override;
+
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
 private:

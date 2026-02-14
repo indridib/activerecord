@@ -1,7 +1,7 @@
 // ============================================================================
 // attribute.cpp
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
 // See file LICENSE.MIT for detail
 //
@@ -16,16 +16,16 @@ namespace ar {
 		if (attrib_names.empty()) {
 			// use all keys
 			attrib_names.reserve(attributes.size());
-			for(const auto& attrib_iter : attributes) {
-				if (exclude.find(attrib_iter.first) == exclude.end()) {
-					attrib_names.emplace_back(attrib_iter.first);
+			for(const auto& [key, value] : attributes) {
+				if (exclude.find(key) == exclude.end()) {
+					attrib_names.emplace_back(key);
 				}
 			}
-	
+
 		}
 		return attrib_names;
 	}
-	
+
 
 
 	std::string to_json_string(const attribute_map& attributes, const string_vector& only, const string_set& exclude) noexcept {
@@ -36,29 +36,30 @@ namespace ar {
 			auto iter = attributes.find(name);
 			if (iter == attributes.end())	continue;
 
+			const auto& [key, value] = *iter;
+
 			if (result.size() > 1) {
 				result += ", ";
 			}
 
 			// FixMe: There should be no need to escape the name but we need to escape the value
 			// That is for string
-			switch(iter->second.type()) {
+			switch(value.type()) {
 				case type_null:
-					result += std::format("\"{}\": null", iter->first);
+					result += std::format("\"{}\": null", key);
 					break;
 				case type_bool:
-					result += std::format("\"{}\": {}", iter->first,
-						iter->second.as_bool() ? "true" : "false");
+					result += std::format("\"{}\": {}", key, value.as_bool() ? "true" : "false");
 					break;
 				case type_integer:
 				case type_decimal: // no quotes needed
-					result += std::format("\"{}\": {}", iter->first, iter->second.to_string());
+					result += std::format("\"{}\": {}", key, value.to_string());
 					break;
 
 				// case type_string:
 				// case type_date:
 				default:
-					result += std::format("\"{}\": \"{}\"", iter->first, iter->second.to_string());
+					result += std::format("\"{}\": \"{}\"", key, value.to_string());
 					break;
 			}
 		}
@@ -66,7 +67,7 @@ namespace ar {
 		return result;
 	}
 
-	std::string to_xml_string(const attribute_map& attributes, const std::string& obj_name, const string_vector& only, const string_set& exclude) noexcept {
+	std::string to_xml_string(const attribute_map& attributes, std::string_view obj_name, const string_vector& only, const string_set& exclude) noexcept {
 		std::string result = std::format("<{}>", obj_name);
 		string_vector attrib_keys{ get_attrib_keys(attributes, only, exclude) };
 
@@ -74,19 +75,20 @@ namespace ar {
 			auto iter = attributes.find(name);
 			if (iter == attributes.end())	continue;
 
+			const auto& [key, value] = *iter;
+
 			// FixMe: There should be no need to escape the name but we need to escape the value
-			std::string value { iter->second.to_string() };
-			if (value.empty()) {
-				result += std::format("<{} />", iter->first);
+			std::string value_str { value.to_string() };
+			if (value_str.empty()) {
+				result += std::format("<{} />", key);
 			} else {
-				result += std::format("<{}>{}</{}>",
-					iter->first, iter->second.to_string(), iter->first);
+				result += std::format("<{}>{}</{}>", key, value_str, key);
 			}
 		}
 		result += std::format("</{}>", obj_name);
 		return result;
 	}
-	
+
 } // namespace ar
 
 namespace std {

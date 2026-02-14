@@ -35,7 +35,7 @@ public:
 	* @param primary_key - name of the primary key of the table.
 	* @param con_name - name of the connection to use.
 	*/
-	model(const std::string& table_name, const std::string& primary_key = "id", const std::string& con_name = {})
+	model(std::string_view table_name, std::string_view primary_key = "id", std::string_view con_name = {})
 		: table_name_(table_name)
 		, primary_key_(primary_key)
 		, connection_(config::instance().get_connection(con_name))
@@ -46,14 +46,14 @@ public:
 	*
 	* @return - The database table name.
 	*/
-	const std::string& table_name() const noexcept { return table_name_; }
+	std::string_view table_name() const noexcept { return table_name_; }
 
 	/**
 	* Returns the primary key name.
 	*
 	* @return - The primary key for the model.
 	*/
-	const std::string& get_primary_key() const noexcept { return primary_key_; }
+	std::string_view get_primary_key() const noexcept { return primary_key_; }
 
 
 
@@ -81,9 +81,10 @@ public:
 	* @param name - attribute name.
 	* @return - true if the attribute exist.
 	*/
-	bool isset(const std::string& name) const noexcept
-	{ 
-		return attributes_.find(name) != attributes_.end() || alias_attribute_.find(name) != alias_attribute_.end();
+	bool isset(std::string_view name) const noexcept
+	{
+		std::string key(name);
+		return attributes_.find(key) != attributes_.end() || alias_attribute_.find(key) != alias_attribute_.end();
 	}
 
 	/**
@@ -92,11 +93,12 @@ public:
 	* @param name - attribute name.
 	* @return - real name of the attribute or empty if attribute can not be found.
 	*/
-	std::string get_real_attribute_name(const std::string& name) const noexcept
+	std::string get_real_attribute_name(std::string_view name) const noexcept
 	{
-		if (attributes_.find(name) != attributes_.end())
-			return name;
-		auto iter = alias_attribute_.find(name);
+		std::string key(name);
+		if (attributes_.find(key) != attributes_.end())
+			return key;
+		auto iter = alias_attribute_.find(key);
 		if (iter != alias_attribute_.end())
 			return iter->second;
 		return {};
@@ -121,7 +123,7 @@ public:
 		auto attrib_iter = attributes_.find(real_name);
 		if ( (attrib_iter == attributes_.end()) && (real_name == "id")) {
 			// try primary key name
-			attrib_iter = attributes_.find(get_primary_key());
+			attrib_iter = attributes_.find(std::string(get_primary_key()));
 		}
 
 		if (attrib_iter == attributes_.end()) {
@@ -146,12 +148,27 @@ public:
 	* but DOES NOT save it to the database.
 	*
 	* @param attribute_map attributes - attributes to update.
-	* @param bool guard_attributes - if true will throw an exception if the attribute does not already exist,
-	*								 else it will insert the attribute.
+	* @param bool allow_new_attributes - if true will allow creating new attributes,
+	*									  if false will throw an exception if the attribute does not already exist.
 	*/
-	void set_attributes(const attribute_map& attributes, bool guard_attributes = false) {
+	void set_attributes(const attribute_map& attributes, bool allow_new_attributes = true) {
 		for(const auto& attrib : attributes)
-			set(attrib.first, attrib.second, guard_attributes); 
+			set(attrib.first, attrib.second, allow_new_attributes);
+	}
+
+	/**
+	* Mass update the model with data from an attributes map (move semantics overload).
+	*
+	* Unlike update_attributes() this method only updates the model's data
+	* but DOES NOT save it to the database.
+	*
+	* @param attribute_map attributes - attributes to update (moved).
+	* @param bool allow_new_attributes - if true will allow creating new attributes,
+	*									  if false will throw an exception if the attribute does not already exist.
+	*/
+	void set_attributes(attribute_map&& attributes, bool allow_new_attributes = true) {
+		for(auto& attrib : attributes)
+			set(attrib.first, std::move(attrib.second), allow_new_attributes);
 	}
 
 
@@ -159,25 +176,25 @@ public:
 	* Mass update the model with an array of attribute data and saves to the database.
 	*
 	* @param attribute_map attributes - attributes to update.
-	* @param bool guard_attributes - if true will throw an exception if the attribute does not already exist,
-	*								 else it will insert the attribute.
+	* @param bool allow_new_attributes - if true will allow creating new attributes,
+	*									  if false will throw an exception if the attribute does not already exist.
 	* @return bool - true if successfully updated and saved otherwise false.
 	*/
-	bool update_attributes(const attribute_map& attributes, bool guard_attributes = false)
+	bool update_attributes(const attribute_map& attributes, bool allow_new_attributes = true)
 	{
-		set_attributes(attributes, guard_attributes);
+		set_attributes(attributes, allow_new_attributes);
 		return save();
 	}
 
 	/**
 	* Sets a single attribute.
-	* 
+	*
 	* @param name - attribute name.
 	* @param value - attributes value.
-	* @param bool guard_attributes - if true will throw an exception if the attribute does not already exist,
-	*								 else it will insert the attribute.
-	*/ 
-	void set(const std::string_view name, const attribute& value, bool guard_attributes = false)
+	* @param bool allow_new_attributes - if true will allow creating new attributes,
+	*									  if false will throw an exception if the attribute does not already exist.
+	*/
+	void set(const std::string_view name, const attribute& value, bool allow_new_attributes = true)
 	{
 		std::string real_name{ name };
 		auto alias_iter = alias_attribute_.find(real_name);
@@ -187,7 +204,7 @@ public:
 		auto attrib_iter = attributes_.find(real_name);
 		if ( (attrib_iter == attributes_.end()) && (real_name == "id")) {
 			// try primary key name
-			attrib_iter = attributes_.find(get_primary_key());
+			attrib_iter = attributes_.find(std::string(get_primary_key()));
 		}
 
 		if ( attrib_iter != attributes_.end() ) {
@@ -195,11 +212,46 @@ public:
 			flag_dirty(attrib_iter->first);
 		} else {
 			// This attribute does not exist.
-			if (guard_attributes) {
+			if (!allow_new_attributes) {
 				throw ex::attribute_not_found(std::format("Attribute \"{}\" not found", name));
 			}
-			// If not guarding we just insert the item
+			// If allowing new attributes we just insert the item
 			attributes_[real_name] = value;
+			flag_dirty(real_name);
+		}
+	}
+
+	/**
+	* Sets a single attribute (move semantics overload).
+	*
+	* @param name - attribute name.
+	* @param value - attributes value (moved).
+	* @param bool allow_new_attributes - if true will allow creating new attributes,
+	*									  if false will throw an exception if the attribute does not already exist.
+	*/
+	void set(const std::string_view name, attribute&& value, bool allow_new_attributes = true)
+	{
+		std::string real_name{ name };
+		auto alias_iter = alias_attribute_.find(real_name);
+		if (alias_iter != alias_attribute_.end())
+			real_name = alias_iter->second;
+
+		auto attrib_iter = attributes_.find(real_name);
+		if ( (attrib_iter == attributes_.end()) && (real_name == "id")) {
+			// try primary key name
+			attrib_iter = attributes_.find(std::string(get_primary_key()));
+		}
+
+		if ( attrib_iter != attributes_.end() ) {
+			attrib_iter->second = std::move(value);
+			flag_dirty(attrib_iter->first);
+		} else {
+			// This attribute does not exist.
+			if (!allow_new_attributes) {
+				throw ex::attribute_not_found(std::format("Attribute \"{}\" not found", name));
+			}
+			// If allowing new attributes we just insert the item
+			attributes_[real_name] = std::move(value);
 			flag_dirty(real_name);
 		}
 	}
@@ -213,7 +265,7 @@ public:
 	*/
 	bool update_attribute(const std::string_view name, const attribute& value)
 	{
-		set(name, value, true);
+		set(name, value, false);  // Don't allow new attributes for update_attribute
 		return update(false);
 	}
 
@@ -254,7 +306,7 @@ public:
 	*
 	* @param name - attribute name.
 	*/
-	void flag_dirty(const std::string& name) { dirty_.insert(name); }
+	void flag_dirty(std::string_view name) noexcept { dirty_.insert(std::string(name)); }
 
 	/**
 	* Check if a particular attribute has been modified since loading the model.
@@ -262,7 +314,7 @@ public:
 	* @param name - attribute name.
 	* @return - true if the attribute has been modified.
 	*/
-	bool attribute_is_dirty(const std::string& name) const noexcept { return dirty_.find(name) != dirty_.end(); }
+	bool attribute_is_dirty(std::string_view name) const noexcept { return dirty_.find(std::string(name)) != dirty_.end(); }
 
 	/**
 	* Returns true if the model has been modified.
@@ -385,11 +437,11 @@ public:
 	* @param exclude - if not empty names of attributes that will be excluded
 	* @return - XML representation of the model
 	*/
-	std::string to_xml_string(const std::string& obj_name = {}, const string_vector& only = {}, const string_set& exclude = {}) const { 
+	std::string to_xml_string(std::string_view obj_name = {}, const string_vector& only = {}, const string_set& exclude = {}) const {
 		if (obj_name.empty())
 			return ar::to_xml_string(attributes_, table_name_, only, exclude);
-		else 
-			return ar::to_xml_string(attributes_, obj_name, only, exclude);
+		else
+			return ar::to_xml_string(attributes_, std::string(obj_name), only, exclude);
 	}
 
 	// - to_xml()
@@ -476,10 +528,10 @@ protected:
 		builder.insert(names, values);
 		auto stmt{ connection_->query(builder.to_string(), builder.get_bind_values()) };
 
-		// Get the auto-generated primary key and set it on the model
+		// Get the auto-generated primary key and set it on the model (don't mark as dirty)
 		std::size_t id = connection_->insert_id();
 		if (id > 0) {
-			set(primary_key_, static_cast<int64_t>(id), false);  // Don't mark as dirty
+			attributes_[primary_key_] = static_cast<int64_t>(id);  // Set directly without marking dirty
 		}
 
 		// Mark as persisted (no longer a new record)

@@ -51,7 +51,7 @@ public:
 	* @param connections - a map of all the connections to set.
 	* @param string default_connection - a name of the default connection to use.
 	*/
-	void set_connections(const connection_map& connections, const std::string& default_connection) noexcept {
+	void set_connections(const connection_map& connections, std::string_view default_connection) noexcept {
 		connections_ = connections;
 		default_connection_ = default_connection;
 	}
@@ -64,10 +64,10 @@ public:
 	*					   default connection if no name is provided.
 	* @throws - exception if not found.
 	*/
-	connection_ptr get_connection(const std::string& con_name) {
+	connection_ptr get_connection(std::string_view con_name) {
 		auto iter = connections_.begin();
 		if (!con_name.empty()) {
-			iter = connections_.find(con_name);
+			iter = connections_.find(std::string(con_name));
 		} else if (!default_connection_.empty()) {
 			iter = connections_.find(default_connection_);
 		}

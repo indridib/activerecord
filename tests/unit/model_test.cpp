@@ -34,6 +34,10 @@ public:
     std::size_t insert_id() const override {
         return 0;
     }
+
+    void begin_transaction() override {}
+    void commit() override {}
+    void rollback() override {}
 };
 
 // Test model class
@@ -136,7 +140,7 @@ TEST_F(ModelTest, SetAttributesWithGuardTrue) {
     attrs["name"] = attribute("Updated");
     attrs["nonexistent"] = attribute("New");  // This should throw
 
-    EXPECT_THROW(m.set_attributes(attrs, true), ex::attribute_not_found);
+    EXPECT_THROW(m.set_attributes(attrs, false), ex::attribute_not_found);  // allow_new_attributes=false throws
 }
 
 TEST_F(ModelTest, SetAttributesWithGuardFalse) {
@@ -144,7 +148,7 @@ TEST_F(ModelTest, SetAttributesWithGuardFalse) {
     attribute_map attrs;
     attrs["new_field"] = attribute("New Value");
 
-    m.set_attributes(attrs, false);  // Should not throw
+    m.set_attributes(attrs, true);  // allow_new_attributes=true (or use default)
 
     EXPECT_EQ("New Value", m.get("new_field").as_string());
 }

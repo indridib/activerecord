@@ -49,6 +49,7 @@ public:
 	attribute(int value) : data_(static_cast<int64_t>(value)) {}
 	attribute(long value) : data_(static_cast<int64_t>(value)) {}
 	attribute(const std::string& value) : data_(value) {}
+	attribute(std::string_view value) : data_(std::string(value)) {}
 	attribute(const char* value) {
 		if (value) {
 			data_ = std::string{value};
@@ -157,7 +158,7 @@ std::string to_json_string(const attribute_map& attributes, const string_vector&
 * @param exclude - if not empty names of attributes that will be excluded.
 * @return - string XML representation of the attributes.
 */
-std::string to_xml_string(const attribute_map& attributes, const std::string& obj_name, const string_vector& only = {}, const string_set& exclude = {}) noexcept;
+std::string to_xml_string(const attribute_map& attributes, std::string_view obj_name, const string_vector& only = {}, const string_set& exclude = {}) noexcept;
 
 
 } // namespace ar

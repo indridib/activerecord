@@ -33,6 +33,10 @@ public:
     std::size_t insert_id() const override {
         return 0;
     }
+
+    void begin_transaction() override {}
+    void commit() override {}
+    void rollback() override {}
 };
 
 // ==============================================================================

@@ -26,7 +26,7 @@ class sql_builder {
 
 public:
 
-	sql_builder(config::connection_ptr con, const std::string& table)
+	sql_builder(config::connection_ptr con, std::string_view table)
 		: connection_(con)
 		, table_(table)
 	{}
@@ -34,7 +34,7 @@ public:
 	// - __toString
 	// - to_s
 
-	std::string to_string() {
+	std::string to_string() const {
 		switch(operation_) {
 			case sql_select:	return build_select();
 			case sql_insert:	return build_insert();
@@ -43,23 +43,23 @@ public:
 			default:
 				assert(false);
 		}
-		return {}; 
+		return {};
 	}
 
 	// - bind_values
 
 	const attribute_vector& get_bind_values() const noexcept { return bind_values_; }
 
-	void add_order(const std::string& order) noexcept		{ order_ = order; }
-	void add_group(const std::string& group) noexcept		{ group_ = group; }
-	void add_having(const std::string& having) noexcept		{ having_ = having; }
-	void add_select(const std::string& select) noexcept		{ operation_ = sql_select; select_ = select; }
-	void add_joins(const std::string& joins) noexcept 		{ joins_ = joins; }
+	void add_order(std::string_view order) noexcept		{ order_ = order; }
+	void add_group(std::string_view group) noexcept		{ group_ = group; }
+	void add_having(std::string_view having) noexcept		{ having_ = having; }
+	void add_select(std::string_view select) noexcept		{ operation_ = sql_select; select_ = select; }
+	void add_joins(std::string_view joins) noexcept 		{ joins_ = joins; }
 	void set_limit(long limit) noexcept						{ limit_ = limit; }
 	void set_offset(long offset) noexcept					{ offset_ = offset; }
 
-	void add_where(const std::string& str_where, const attribute_vector& values) noexcept
-	{ 
+	void add_where(std::string_view str_where, const attribute_vector& values) noexcept
+	{
 		where_ = str_where;
 		bind_values_ = values;
 	}
@@ -85,7 +85,14 @@ protected:
 
 
 	std::string build_select() const {
-		std::string sql = std::format("SELECT {} FROM {}", select_, table_);
+		// Reserve approximate size to reduce allocations
+		std::size_t estimated_size{ 15 + select_.size() + table_.size() +
+			joins_.size() + where_.size() + group_.size() +
+			having_.size() + order_.size() + 50 };  // Extra for keywords
+
+		std::string sql;
+		sql.reserve(estimated_size);
+		sql = std::format("SELECT {} FROM {}", select_, table_);
 
 		if (!joins_.empty()) {
 			sql += std::format(" {}", joins_);
@@ -114,8 +121,15 @@ protected:
 		return sql;
 	}
 
-	std::string build_insert() {
+	std::string build_insert() const {
+		// Reserve space for columns string
+		std::size_t columns_size{ 0 };
+		for(const auto& key : keys_) {
+			columns_size += key.size() + 4;  // key + quotes + ", "
+		}
+
 		std::string columns;
+		columns.reserve(columns_size);
 		for(auto iter = keys_.begin(); iter != keys_.end(); iter++) {
 			if (iter != keys_.begin()) {
 				columns += ", ";
@@ -124,7 +138,9 @@ protected:
 		}
 
 		// Build placeholders: "?" for 1 column, "?,?" for 2, etc.
+		std::size_t placeholders_size = keys_.size() * 2;  // "?," per key
 		std::string placeholders;
+		placeholders.reserve(placeholders_size);
 		for(size_t i = 0; i < keys_.size(); i++) {
 			if (i > 0) placeholders += ",";
 			placeholders += "?";
@@ -137,8 +153,15 @@ protected:
 		return sql;
 	}
 
-	std::string build_update() {
+	std::string build_update() const {
+		// Reserve space for SET clause
+		std::size_t set_size{ 0 };
+		for(const auto& key : keys_) {
+			set_size += key.size() + 8;  // key + " = ?, "
+		}
+
 		std::string set_clause;
+		set_clause.reserve(set_size);
 		for(auto iter = keys_.begin(); iter != keys_.end(); iter++) {
 			if (iter != keys_.begin()) {
 				set_clause += ", ";
@@ -162,7 +185,7 @@ protected:
 		bind_values_ = data_;
 		return sql;
 	}
-	std::string build_delete() {
+	std::string build_delete() const {
 		//fixme:
 		return "";
 	}
@@ -183,11 +206,11 @@ protected:
 
 	// for where
 	std::string where_;
-	attribute_vector bind_values_;
+	mutable attribute_vector bind_values_;  // mutable for lazy initialization in const methods
 
 	// for insert/update
 	string_vector keys_;
-	attribute_vector data_;
+	mutable attribute_vector data_;  // mutable for lazy initialization in const methods
 	std::string sequence_;
 };
 
@@ -284,14 +307,14 @@ public:
 
 
 
-	query& order(const std::string& order)		{ add_order(order); return *this; }
-	query& group(const std::string& group)		{ add_group(group); return *this; }
-	query& having(const std::string& having)	{ add_having(having); return *this; }
-	query& select(const std::string& select)	{ add_select(select); return *this; }
-	query& joins(const std::string& joins) 		{ add_joins(joins); return *this; }
+	query& order(std::string_view order)		{ add_order(order); return *this; }
+	query& group(std::string_view group)		{ add_group(group); return *this; }
+	query& having(std::string_view having)	{ add_having(having); return *this; }
+	query& select(std::string_view select)	{ add_select(select); return *this; }
+	query& joins(std::string_view joins) 		{ add_joins(joins); return *this; }
 
-	query& where(const std::string& str_where, const attribute& values)				{ add_where(str_where, {values}); return *this;}
-	query& where(const std::string& str_where, const attribute_vector& values = {}) { add_where(str_where, values); return *this;}
+	query& where(std::string_view str_where, const attribute& values)				{ add_where(str_where, {values}); return *this;}
+	query& where(std::string_view str_where, const attribute_vector& values = {}) { add_where(str_where, values); return *this;}
 
 	query& limit(long limit)					{ set_limit(limit);  return *this; }
 	query& offset(long offset)					{ set_offset(offset); return *this; }
