@@ -11,7 +11,9 @@
 #include <adapters/mysql_adapter.h>
 #include <activerecord.h>
 #include <mysql/mysql.h>
+#include <algorithm>
 #include <cstring>
+#include <type_traits>
 
 namespace ar {
 
@@ -33,6 +35,12 @@ mysql_statement::mysql_statement(MYSQL* db)
 mysql_statement::~mysql_statement()
 {
 	if (result_binds_) {
+		for (int i = 0; i < num_fields_; ++i) {
+			delete[] static_cast<char*>(result_binds_[i].buffer);
+			result_binds_[i].buffer = nullptr;
+			delete result_binds_[i].is_null;
+			result_binds_[i].is_null = nullptr;
+		}
 		delete[] result_binds_;
 		result_binds_ = nullptr;
 	}
@@ -65,16 +73,17 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		throw ex::activerecord(error);
 	}
 
-	// Bind parameters if any
+	// Bind parameters if any.
 	if (!values.empty()) {
-		MYSQL_BIND* param_binds = new MYSQL_BIND[values.size()];
-		std::memset(param_binds, 0, sizeof(MYSQL_BIND) * values.size());
+		std::vector<MYSQL_BIND> param_binds(values.size());
+		std::memset(param_binds.data(), 0, sizeof(MYSQL_BIND) * values.size());
+		std::vector<unsigned long> string_lengths(values.size(), 0U);
+		using mysql_null_flag = std::remove_pointer_t<decltype(MYSQL_BIND{}.is_null)>;
+		std::vector<mysql_null_flag> is_null(values.size(), static_cast<mysql_null_flag>(0));
 
-		// Storage for parameter data
 		std::vector<long long> int_values;
 		std::vector<double> double_values;
 		std::vector<std::string> string_values;
-
 		int_values.reserve(values.size());
 		double_values.reserve(values.size());
 		string_values.reserve(values.size());
@@ -85,66 +94,70 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 			switch(param.type()) {
 				case type_null:
 					param_binds[i].buffer_type = MYSQL_TYPE_NULL;
+					is_null[i] = true;
+					param_binds[i].is_null = &is_null[i];
 					break;
 
-				case type_string: {
-					string_values.push_back(param.as_string());
+				case type_string:
+					string_values.emplace_back(param.as_string());
 					param_binds[i].buffer_type = MYSQL_TYPE_STRING;
 					param_binds[i].buffer = const_cast<char*>(string_values.back().c_str());
-					param_binds[i].buffer_length = static_cast<unsigned long>(string_values.back().length());
+					string_lengths[i] = static_cast<unsigned long>(string_values.back().size());
+					param_binds[i].buffer_length = string_lengths[i];
+					param_binds[i].length = &string_lengths[i];
 					break;
-				}
 
-				case type_integer: {
-					int_values.push_back(param.as_integer());
+				case type_integer:
+					int_values.emplace_back(static_cast<long long>(param.as_integer()));
 					param_binds[i].buffer_type = MYSQL_TYPE_LONGLONG;
 					param_binds[i].buffer = &int_values.back();
 					break;
-				}
 
-				case type_date: {
-					// Store datetime as Unix timestamp
-					int_values.push_back(param.as_date().timestamp());
+				case type_date:
+					int_values.emplace_back(static_cast<long long>(param.as_date().timestamp()));
 					param_binds[i].buffer_type = MYSQL_TYPE_LONGLONG;
 					param_binds[i].buffer = &int_values.back();
 					break;
-				}
 
-				case type_decimal: {
-					double_values.push_back(param.as_real());
+				case type_decimal:
+					double_values.emplace_back(param.as_real());
 					param_binds[i].buffer_type = MYSQL_TYPE_DOUBLE;
 					param_binds[i].buffer = &double_values.back();
 					break;
-				}
 
-				case type_bool: {
-					int_values.push_back(param.as_bool() ? 1 : 0);
+				case type_bool:
+					int_values.emplace_back(param.as_bool() ? 1LL : 0LL);
 					param_binds[i].buffer_type = MYSQL_TYPE_TINY;
 					param_binds[i].buffer = &int_values.back();
 					break;
-				}
 
 				default:
 					param_binds[i].buffer_type = MYSQL_TYPE_NULL;
+					is_null[i] = true;
+					param_binds[i].is_null = &is_null[i];
 					break;
 			}
 		}
 
-		if (mysql_stmt_bind_param(stmt_, param_binds)) {
-			delete[] param_binds;
+		if (mysql_stmt_bind_param(stmt_, param_binds.data())) {
 			std::string error = "MySQL bind error: ";
 			error += mysql_stmt_error(stmt_);
 			throw ex::activerecord(error);
 		}
 
-		delete[] param_binds;
-	}
-
-	// Execute the statement
-	if (mysql_stmt_execute(stmt_)) {
-		std::string error = "MySQL execute error: ";
-		error += mysql_stmt_error(stmt_);
-		throw ex::activerecord(error);
+		// Execute while bound parameter storage is still alive.
+		if (mysql_stmt_execute(stmt_)) {
+			std::string error = "MySQL execute error: ";
+			error += mysql_stmt_error(stmt_);
+			throw ex::activerecord(error);
+		}
+	} else {
+		// Execute the statement
+		if (mysql_stmt_execute(stmt_)) {
+			std::string error = "MySQL execute error: ";
+			error += mysql_stmt_error(stmt_);
+			throw ex::activerecord(error);
+		}
 	}
 
 	// Prepare result bindings if this is a SELECT query
@@ -153,17 +166,30 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		has_result_ = true;
 		num_fields_ = mysql_num_fields(metadata_);
 
+		// Ask server to compute max_length for each column so we can size buffers better.
+		my_bool update_max_length = 1;
+		mysql_stmt_attr_set(stmt_, STMT_ATTR_UPDATE_MAX_LENGTH, &update_max_length);
+
 		result_binds_ = new MYSQL_BIND[num_fields_];
 		lengths_ = new unsigned long[num_fields_];
 		std::memset(result_binds_, 0, sizeof(MYSQL_BIND) * num_fields_);
 
-		// For now, fetch all columns as strings for simplicity
-		// This can be optimized later to use proper types
+		if (mysql_stmt_store_result(stmt_)) {
+			std::string error = "MySQL store result error: ";
+			error += mysql_stmt_error(stmt_);
+			throw ex::activerecord(error);
+		}
+
+		MYSQL_FIELD* fields = mysql_fetch_fields(metadata_);
 		for (int i = 0; i < num_fields_; ++i) {
 			result_binds_[i].buffer_type = MYSQL_TYPE_STRING;
-			result_binds_[i].buffer = nullptr;  // Will be allocated dynamically
-			result_binds_[i].buffer_length = 0;
+			const unsigned long preferred = (fields != nullptr) ? fields[i].max_length : 0UL;
+			result_binds_[i].buffer_length = std::max(preferred + 1UL, 256UL);
+			result_binds_[i].buffer = new char[result_binds_[i].buffer_length];
+			std::memset(result_binds_[i].buffer, 0, result_binds_[i].buffer_length);
 			result_binds_[i].length = &lengths_[i];
+			using mysql_null_flag = std::remove_pointer_t<decltype(MYSQL_BIND{}.is_null)>;
+			result_binds_[i].is_null = new mysql_null_flag(0);
 		}
 
 		if (mysql_stmt_bind_result(stmt_, result_binds_)) {
@@ -187,7 +213,35 @@ bool mysql_statement::fetch()
 	} else if (result == MYSQL_NO_DATA) {
 		return false;  // No more rows
 	} else if (result == MYSQL_DATA_TRUNCATED) {
-		// Data was truncated, but we can still use it
+		// Resize and fetch full column values for truncated fields.
+		for (int i = 0; i < num_fields_; ++i) {
+			if (lengths_[i] <= result_binds_[i].buffer_length) {
+				continue;
+			}
+
+			unsigned long full_length = lengths_[i];
+			char* full_buffer = new char[full_length + 1];
+			std::memset(full_buffer, 0, full_length + 1);
+
+			MYSQL_BIND fetch_bind{};
+			fetch_bind.buffer_type = MYSQL_TYPE_STRING;
+			fetch_bind.buffer = full_buffer;
+			fetch_bind.buffer_length = full_length + 1;
+			fetch_bind.length = &full_length;
+			fetch_bind.is_null = result_binds_[i].is_null;
+
+			if (mysql_stmt_fetch_column(stmt_, &fetch_bind, static_cast<unsigned int>(i), 0) != 0) {
+				delete[] full_buffer;
+				std::string error = "MySQL fetch column error: ";
+				error += mysql_stmt_error(stmt_);
+				throw ex::activerecord(error);
+			}
+
+			delete[] static_cast<char*>(result_binds_[i].buffer);
+			result_binds_[i].buffer = full_buffer;
+			result_binds_[i].buffer_length = full_length + 1;
+			lengths_[i] = full_length;
+		}
 		return true;
 	} else {
 		// Error occurred
@@ -217,9 +271,14 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 	MYSQL_FIELD& field = fields[column_index];
 
 	// Check for NULL value
-	if (binds[column_index].is_null_value) {
+	if (binds[column_index].is_null != nullptr && *binds[column_index].is_null) {
 		return attribute();
 	}
+
+	const char* raw_value = static_cast<const char*>(binds[column_index].buffer);
+	const std::string value = (raw_value != nullptr && lengths[column_index] > 0)
+		? std::string(raw_value, lengths[column_index])
+		: std::string{};
 
 	// Convert based on MySQL field type
 	switch(field.type) {
@@ -228,30 +287,18 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 		case MYSQL_TYPE_LONG:
 		case MYSQL_TYPE_LONGLONG:
 		case MYSQL_TYPE_INT24:
-			// Integer types
-			if (binds[column_index].buffer) {
-				long long value = *static_cast<long long*>(binds[column_index].buffer);
-				return attribute(static_cast<int64_t>(value));
-			}
-			return attribute();
+			return value.empty() ? attribute() : attribute(static_cast<int64_t>(std::stoll(value)));
 
 		case MYSQL_TYPE_FLOAT:
 		case MYSQL_TYPE_DOUBLE:
 		case MYSQL_TYPE_DECIMAL:
 		case MYSQL_TYPE_NEWDECIMAL:
-			// Floating point types
-			if (binds[column_index].buffer) {
-				double value = *static_cast<double*>(binds[column_index].buffer);
-				return attribute(value);
-			}
-			return attribute();
+			return value.empty() ? attribute() : attribute(std::stod(value));
 
 		case MYSQL_TYPE_TIMESTAMP:
 		case MYSQL_TYPE_DATETIME:
 		case MYSQL_TYPE_DATE:
-			// Date/time types - store as timestamp
-			// For now, return as integer (Unix timestamp would need conversion)
-			return attribute();
+			return value.empty() ? attribute() : attribute(datetime::parse(value));
 
 		case MYSQL_TYPE_STRING:
 		case MYSQL_TYPE_VAR_STRING:
@@ -261,12 +308,7 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 		case MYSQL_TYPE_MEDIUM_BLOB:
 		case MYSQL_TYPE_LONG_BLOB:
 		default:
-			// String/blob types - return as string
-			if (binds[column_index].buffer && lengths[column_index] > 0) {
-				std::string value(static_cast<char*>(binds[column_index].buffer), lengths[column_index]);
-				return attribute(value);
-			}
-			return attribute();
+			return attribute(value);
 	}
 }
 
@@ -331,6 +373,31 @@ std::size_t mysql_adapter::insert_id() const
 		return 0;
 	}
 	return static_cast<std::size_t>(mysql_insert_id(db_));
+}
+
+void mysql_adapter::begin_transaction()
+{
+	query("START TRANSACTION");
+}
+
+void mysql_adapter::commit()
+{
+	query("COMMIT");
+}
+
+void mysql_adapter::rollback()
+{
+	query("ROLLBACK");
+}
+
+std::string mysql_adapter::escape(std::string_view str) const
+{
+	return connection::quote_name(str);
+}
+
+std::string mysql_adapter::default_values_insert_clause() const
+{
+	return "() VALUES ()";
 }
 
 } // namespace ar

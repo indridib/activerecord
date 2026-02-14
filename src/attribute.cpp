@@ -11,6 +11,52 @@
 
 namespace ar {
 
+	namespace {
+		std::string escape_json(std::string_view value) {
+			std::string out;
+			out.reserve(value.size());
+			for (const char c : value) {
+				switch (c) {
+					case '\"': out += "\\\""; break;
+					case '\\': out += "\\\\"; break;
+					case '\b': out += "\\b"; break;
+					case '\f': out += "\\f"; break;
+					case '\n': out += "\\n"; break;
+					case '\r': out += "\\r"; break;
+					case '\t': out += "\\t"; break;
+					default:
+						if (static_cast<unsigned char>(c) < 0x20U) {
+							const unsigned char uc = static_cast<unsigned char>(c);
+							out += "\\u00";
+							constexpr char hex[] = "0123456789ABCDEF";
+							out += hex[(uc >> 4) & 0x0F];
+							out += hex[uc & 0x0F];
+						} else {
+							out += c;
+						}
+						break;
+				}
+			}
+			return out;
+		}
+
+		std::string escape_xml(std::string_view value) {
+			std::string out;
+			out.reserve(value.size());
+			for (const char c : value) {
+				switch (c) {
+					case '&': out += "&amp;"; break;
+					case '<': out += "&lt;"; break;
+					case '>': out += "&gt;"; break;
+					case '\"': out += "&quot;"; break;
+					case '\'': out += "&apos;"; break;
+					default: out += c; break;
+				}
+			}
+			return out;
+		}
+	} // namespace
+
 	string_vector get_attrib_keys(const attribute_map& attributes, const string_vector& only, const string_set& exclude) noexcept {
 		string_vector attrib_names{ only };
 		if (attrib_names.empty()) {
@@ -42,8 +88,7 @@ namespace ar {
 				result += ", ";
 			}
 
-			// FixMe: There should be no need to escape the name but we need to escape the value
-			// That is for string
+			// Attribute names are expected to be valid column names, so only values are escaped.
 			switch(value.type()) {
 				case type_null:
 					result += std::format("\"{}\": null", key);
@@ -56,10 +101,8 @@ namespace ar {
 					result += std::format("\"{}\": {}", key, value.to_string());
 					break;
 
-				// case type_string:
-				// case type_date:
 				default:
-					result += std::format("\"{}\": \"{}\"", key, value.to_string());
+					result += std::format("\"{}\": \"{}\"", key, escape_json(value.to_string()));
 					break;
 			}
 		}
@@ -77,8 +120,8 @@ namespace ar {
 
 			const auto& [key, value] = *iter;
 
-			// FixMe: There should be no need to escape the name but we need to escape the value
-			std::string value_str { value.to_string() };
+			// Attribute names are expected to be valid column names, so only values are escaped.
+			const std::string value_str{escape_xml(value.to_string())};
 			if (value_str.empty()) {
 				result += std::format("<{} />", key);
 			} else {

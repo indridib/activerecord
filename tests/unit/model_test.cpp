@@ -253,6 +253,15 @@ TEST_F(ModelTest, VerifyNotReadonlyThrowsWhenReadonly) {
     EXPECT_THROW(m.verify_not_readonly("test_method"), ex::readonly);
 }
 
+TEST_F(ModelTest, CannotModifyPrimaryKeyOnPersistedRecord) {
+    TestModel m;
+    m.new_record_ = false;
+    m.attributes_["id"] = attribute(1);  // setup persisted PK directly
+    m.reset_dirty();
+
+    EXPECT_THROW(m.set("id", attribute(2), false), ex::readonly);
+}
+
 // ==============================================================================
 // Validation Tests
 // ==============================================================================

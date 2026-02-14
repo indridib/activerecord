@@ -61,6 +61,7 @@ public:
 	void add_where(std::string_view str_where, const attribute_vector& values) noexcept
 	{
 		where_ = str_where;
+		where_bind_values_ = values;
 		bind_values_ = values;
 	}
 
@@ -118,10 +119,16 @@ protected:
 			connection_->limit(sql, offset_, limit_);
 		}
 
+		bind_values_ = where_bind_values_;
 		return sql;
 	}
 
 	std::string build_insert() const {
+		if (keys_.empty()) {
+			bind_values_.clear();
+			return std::format("INSERT INTO {} {}", table_, connection_->default_values_insert_clause());
+		}
+
 		// Reserve space for columns string
 		std::size_t columns_size{ 0 };
 		for(const auto& key : keys_) {
@@ -181,12 +188,15 @@ protected:
 			}
 		}
 
-		data_.insert(data_.end(), bind_values_.begin(), bind_values_.end());
-		bind_values_ = data_;
+		attribute_vector where_values{where_bind_values_};
+		bind_values_.clear();
+		bind_values_.reserve(data_.size() + where_values.size());
+		bind_values_.insert(bind_values_.end(), data_.begin(), data_.end());
+		bind_values_.insert(bind_values_.end(), where_values.begin(), where_values.end());
 		return sql;
 	}
 	std::string build_delete() const {
-		//fixme:
+		// TODO(issue-6): pending implementation.
 		return "";
 	}
 
@@ -206,6 +216,7 @@ protected:
 
 	// for where
 	std::string where_;
+	attribute_vector where_bind_values_;
 	mutable attribute_vector bind_values_;  // mutable for lazy initialization in const methods
 
 	// for insert/update
@@ -251,6 +262,7 @@ public:
 	* Returns multiple records with primary key id
 	*/
 	std::vector<T> find(const std::vector<long>& ids) {
+		// TODO(issue-6): pending implementation.
 		throw ex::activerecord("not yet implemented");
 	}
 
@@ -259,8 +271,9 @@ public:
 	* Returns a count number of items matching the query
 	*/
 	long count() {
-		select("COUNT(*)");
-		auto stmt{ connection_->query(to_string(), get_bind_values()) };
+		query<T> count_query{*this};
+		count_query.select("COUNT(*)");
+		auto stmt{ connection_->query(count_query.to_string(), count_query.get_bind_values()) };
 		if (stmt->fetch()) {
 			attribute_map attributes;
 			stmt->get_attributes(attributes);
@@ -298,6 +311,7 @@ public:
 	* Returns the last record found or "null if not found" (fixme: how unique_ptr?)
 	*/
 	T last() {
+		// TODO(issue-6): pending implementation.
 		// FIXME: if we have order revert it else add order on primary key DESC
 		// and return first
 		// return first();

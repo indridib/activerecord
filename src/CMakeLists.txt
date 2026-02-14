@@ -9,7 +9,7 @@ add_library(activerecord::activerecord ALIAS activerecord)
 include(${PROJECT_SOURCE_DIR}/cmake/Warnings.cmake)
 ar_set_default_warnings(activerecord)
 
-target_compile_features(activerecord PUBLIC cxx_std_17)
+target_compile_features(activerecord PUBLIC cxx_std_23)
 
 target_include_directories(activerecord
   PUBLIC

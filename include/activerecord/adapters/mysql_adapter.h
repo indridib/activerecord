@@ -58,6 +58,11 @@ public:
 	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector& values = {}) override;
 	void limit(std::string& sql, long offset, long limit) const override;
 	std::size_t insert_id() const override;
+	void begin_transaction() override;
+	void commit() override;
+	void rollback() override;
+	std::string escape(std::string_view str) const override;
+	std::string default_values_insert_clause() const override;
 
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 

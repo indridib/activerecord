@@ -13,6 +13,8 @@
 #include <string_view>
 #include <vector>
 #include <set>
+#include <format>
+#include <utility>
 
 
 #include <stdexcept>
@@ -29,25 +31,30 @@ namespace ar {
 		 **/
 		class activerecord : public std::runtime_error {
 		public:
-			activerecord(const std::string& msg) : std::runtime_error(msg) {}
+			explicit activerecord(std::string_view msg) : std::runtime_error(std::string{msg}) {}
+
+			template <typename... Args>
+			requires (sizeof...(Args) > 0)
+			activerecord(std::format_string<Args...> fmt, Args&&... args)
+				: std::runtime_error(std::format(fmt, std::forward<Args>(args)...)) {}
 		};
 
 		class config : public activerecord {
 		public:
-			config(const std::string& msg) : activerecord(msg) {}
+			using activerecord::activerecord;
 		};
 
 		class readonly : public activerecord {
 		public:
-			readonly(const std::string& msg) : activerecord(msg) {}
+			using activerecord::activerecord;
 		};
 		class item_not_found : public activerecord {
 		public:
-			item_not_found(const std::string& msg) : activerecord(msg) {}
+			using activerecord::activerecord;
 		};
 		class attribute_not_found : public activerecord {
 		public:
-			attribute_not_found(const std::string& msg) : activerecord(msg) {}
+			using activerecord::activerecord;
 		};
 
 	} // namespace ex

@@ -78,7 +78,7 @@ public:
 	* @return object the parsed URL as an object.
 	*/
 	static void parse_connection_url(const std::string& connection_url) {
-		// fixme:
+		// TODO(issue-6): pending implementation.
 	}
 
 	// - columns()
@@ -161,6 +161,14 @@ public:
 	virtual std::string escape(std::string_view str) const
 	{
 		return quote_name(str);
+	}
+
+	/**
+	* SQL fragment for inserting a row with all-default values.
+	*/
+	virtual std::string default_values_insert_clause() const
+	{
+		return "DEFAULT VALUES";
 	}
 
 

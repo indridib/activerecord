@@ -207,6 +207,16 @@ TEST(AttributeTest, AttributeMapToJsonWithExclude) {
     EXPECT_EQ(std::string::npos, json.find("password"));  // Should be excluded
 }
 
+TEST(AttributeTest, AttributeMapToJsonEscapesSpecialCharacters) {
+    attribute_map attrs;
+    attrs["name"] = attribute("A\n\"B\"\\C");
+
+    std::string json = to_json_string(attrs);
+
+    EXPECT_NE(std::string::npos, json.find("\"name\""));
+    EXPECT_NE(std::string::npos, json.find("A\\n\\\"B\\\"\\\\C"));
+}
+
 // ==============================================================================
 // XML Serialization Tests
 // ==============================================================================
@@ -235,6 +245,16 @@ TEST(AttributeTest, AttributeMapToXmlWithExclude) {
 
     EXPECT_NE(std::string::npos, xml.find("<id>1</id>"));
     EXPECT_EQ(std::string::npos, xml.find("password"));  // Should be excluded
+}
+
+TEST(AttributeTest, AttributeMapToXmlEscapesSpecialCharacters) {
+    attribute_map attrs;
+    attrs["name"] = attribute("a<&\"'b");
+
+    std::string xml = to_xml_string(attrs, "user");
+
+    EXPECT_NE(std::string::npos, xml.find("<name>"));
+    EXPECT_NE(std::string::npos, xml.find("a&lt;&amp;&quot;&apos;b"));
 }
 
 // ==============================================================================

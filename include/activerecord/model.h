@@ -16,7 +16,6 @@
 
 #include <map>
 #include <set>
-#include <format>
 
 namespace ar {
 
@@ -127,7 +126,7 @@ public:
 		}
 
 		if (attrib_iter == attributes_.end()) {
-			throw ex::attribute_not_found(std::format("Attribute \"{}\" not found", name));
+			throw ex::attribute_not_found("Attribute \"{}\" not found", name);
 		}
 		return attrib_iter->second;
 	} 
@@ -201,6 +200,11 @@ public:
 		if (alias_iter != alias_attribute_.end())
 			real_name = alias_iter->second;
 
+		// Primary key is immutable for persisted records.
+		if (!new_record_ && real_name == primary_key_) {
+			throw ex::readonly("Primary key \"{}\" cannot be modified on persisted {}", primary_key_, table_name_);
+		}
+
 		auto attrib_iter = attributes_.find(real_name);
 		if ( (attrib_iter == attributes_.end()) && (real_name == "id")) {
 			// try primary key name
@@ -213,7 +217,7 @@ public:
 		} else {
 			// This attribute does not exist.
 			if (!allow_new_attributes) {
-				throw ex::attribute_not_found(std::format("Attribute \"{}\" not found", name));
+				throw ex::attribute_not_found("Attribute \"{}\" not found", name);
 			}
 			// If allowing new attributes we just insert the item
 			attributes_[real_name] = value;
@@ -236,6 +240,11 @@ public:
 		if (alias_iter != alias_attribute_.end())
 			real_name = alias_iter->second;
 
+		// Primary key is immutable for persisted records.
+		if (!new_record_ && real_name == primary_key_) {
+			throw ex::readonly("Primary key \"{}\" cannot be modified on persisted {}", primary_key_, table_name_);
+		}
+
 		auto attrib_iter = attributes_.find(real_name);
 		if ( (attrib_iter == attributes_.end()) && (real_name == "id")) {
 			// try primary key name
@@ -248,7 +257,7 @@ public:
 		} else {
 			// This attribute does not exist.
 			if (!allow_new_attributes) {
-				throw ex::attribute_not_found(std::format("Attribute \"{}\" not found", name));
+				throw ex::attribute_not_found("Attribute \"{}\" not found", name);
 			}
 			// If allowing new attributes we just insert the item
 			attributes_[real_name] = std::move(value);
@@ -369,7 +378,7 @@ public:
 	void verify_not_readonly(const std::string_view method_name) const
 	{
 		if (readonly_) {
-			throw ex::readonly(std::format("\"{}\" is not allowed since model is read-only", method_name));
+			throw ex::readonly("\"{}\" is not allowed since model is read-only", method_name);
 		}
 	}
 
@@ -480,14 +489,22 @@ protected:
 			return false;
 		}
 		if (primary_key_.empty()) {
-			throw ex::activerecord(std::format("Unable to update, no primary key defined for {}", table_name_));
+			throw ex::activerecord("Unable to update, no primary key defined for {}", table_name_);
 		}
 		const attribute& pk_value = get(primary_key_);
 		string_vector names;
 		attribute_vector values;
 		for(const auto& attrib : dirty_attributes()) {
+			if (attrib == primary_key_) {
+				continue;
+			}
 			names.emplace_back(attrib);
 			values.emplace_back(get(attrib));
+		}
+
+		// Nothing to update after excluding primary key.
+		if (names.empty()) {
+			return true;
 		}
 
 		sql_builder builder(connection_, table_name_);

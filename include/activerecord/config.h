@@ -13,7 +13,6 @@
 
 #include <map>
 #include <memory>
-#include <format>
 
 namespace ar {
 
@@ -41,7 +40,7 @@ public:
 	*
 	* @param connections - a map of all the connections to set.
 	*/
-	void set_connections(const connection_map& connections) noexcept {
+	void set_connections(const connection_map& connections) {
 		connections_ = connections;
 	}
 
@@ -51,7 +50,7 @@ public:
 	* @param connections - a map of all the connections to set.
 	* @param string default_connection - a name of the default connection to use.
 	*/
-	void set_connections(const connection_map& connections, std::string_view default_connection) noexcept {
+	void set_connections(const connection_map& connections, std::string_view default_connection) {
 		connections_ = connections;
 		default_connection_ = default_connection;
 	}
@@ -65,7 +64,7 @@ public:
 	* @throws - exception if not found.
 	*/
 	connection_ptr get_connection(std::string_view con_name) {
-		auto iter = connections_.begin();
+		auto iter = connections_.end();
 		if (!con_name.empty()) {
 			iter = connections_.find(std::string(con_name));
 		} else if (!default_connection_.empty()) {
@@ -73,7 +72,7 @@ public:
 		}
 
 		if (iter == connections_.end()) {
-			throw ex::config(std::format("Unable to find config \"{}\"", con_name));
+			throw ex::config("Unable to find config \"{}\"", con_name);
 		}
 		return iter->second;
 	}

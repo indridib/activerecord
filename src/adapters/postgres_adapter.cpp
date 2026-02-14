@@ -11,9 +11,159 @@
 #include <adapters/postgres_adapter.h>
 #include <activerecord.h>
 #include <libpq-fe.h>
+#include <cctype>
 #include <sstream>
+#include <cstdlib>
+#include <string>
 
 namespace ar {
+
+namespace {
+std::string normalize_postgres_datetime(std::string value)
+{
+	// Accept common PostgreSQL output forms:
+	// - "YYYY-MM-DD HH:MM:SS"
+	// - "YYYY-MM-DDTHH:MM:SS"
+	// - with fractional seconds and/or timezone suffix.
+	for (char& c : value) {
+		if (c == 'T') {
+			c = ' ';
+		}
+	}
+
+	const std::size_t space_pos{value.find(' ')};
+	if (space_pos != std::string::npos) {
+		std::size_t tz_pos{value.find_first_of("Zz+-", space_pos + 1)};
+		if (tz_pos != std::string::npos) {
+			value.erase(tz_pos);
+		}
+
+		std::size_t frac_pos{value.find('.', space_pos + 1)};
+		if (frac_pos != std::string::npos) {
+			value.erase(frac_pos);
+		}
+	}
+
+	return value;
+}
+
+std::string convert_placeholders_to_postgres(std::string_view sql)
+{
+	std::string out;
+	out.reserve(sql.size() + 16);
+
+	int param_index = 1;
+	std::string dollar_tag;
+	enum class state_t {
+		normal,
+		single_quote,
+		double_quote,
+		line_comment,
+		block_comment,
+		dollar_quote
+	};
+	state_t state = state_t::normal;
+
+	auto is_tag_char = [](char c) {
+		return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+	};
+
+	for (std::size_t i = 0; i < sql.size(); ++i) {
+		const char c = sql[i];
+
+		switch (state) {
+			case state_t::normal:
+				if (c == '\'') {
+					state = state_t::single_quote;
+					out += c;
+					continue;
+				}
+				if (c == '"') {
+					state = state_t::double_quote;
+					out += c;
+					continue;
+				}
+				if (c == '-' && i + 1 < sql.size() && sql[i + 1] == '-') {
+					state = state_t::line_comment;
+					out += c;
+					out += sql[++i];
+					continue;
+				}
+				if (c == '/' && i + 1 < sql.size() && sql[i + 1] == '*') {
+					state = state_t::block_comment;
+					out += c;
+					out += sql[++i];
+					continue;
+				}
+				if (c == '$') {
+					std::size_t j = i + 1;
+					while (j < sql.size() && is_tag_char(sql[j])) {
+						++j;
+					}
+					if (j < sql.size() && sql[j] == '$') {
+						dollar_tag.assign(sql.substr(i, j - i + 1));
+						state = state_t::dollar_quote;
+						out += dollar_tag;
+						i = j;
+						continue;
+					}
+				}
+				if (c == '?') {
+					out += "$" + std::to_string(param_index++);
+					continue;
+				}
+				out += c;
+				break;
+
+			case state_t::single_quote:
+				out += c;
+				if (c == '\'' && i + 1 < sql.size() && sql[i + 1] == '\'') {
+					out += sql[++i];
+				} else if (c == '\'') {
+					state = state_t::normal;
+				}
+				break;
+
+			case state_t::double_quote:
+				out += c;
+				if (c == '"' && i + 1 < sql.size() && sql[i + 1] == '"') {
+					out += sql[++i];
+				} else if (c == '"') {
+					state = state_t::normal;
+				}
+				break;
+
+			case state_t::line_comment:
+				out += c;
+				if (c == '\n') {
+					state = state_t::normal;
+				}
+				break;
+
+			case state_t::block_comment:
+				out += c;
+				if (c == '*' && i + 1 < sql.size() && sql[i + 1] == '/') {
+					out += sql[++i];
+					state = state_t::normal;
+				}
+				break;
+
+			case state_t::dollar_quote:
+				if (!dollar_tag.empty() && i + dollar_tag.size() <= sql.size() &&
+					sql.substr(i, dollar_tag.size()) == dollar_tag) {
+					out += dollar_tag;
+					i += dollar_tag.size() - 1;
+					state = state_t::normal;
+					continue;
+				}
+				out += c;
+				break;
+		}
+	}
+
+	return out;
+}
+} // namespace
 
 // ============================================================================
 // postgres_statement implementation
@@ -43,15 +193,9 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 		result_ = PQexec(db_, command.c_str());
 	} else {
 		// Prepared statement with parameters
-		// PostgreSQL uses $1, $2, etc. for placeholders
-		// We need to convert ? to $1, $2, etc.
-		std::string pg_command = command;
-		int param_index = 1;
-		size_t pos = 0;
-		while ((pos = pg_command.find('?', pos)) != std::string::npos) {
-			pg_command.replace(pos, 1, "$" + std::to_string(param_index++));
-			pos += 2;
-		}
+		// PostgreSQL uses $1, $2, etc. for placeholders.
+		// Convert '?' while preserving literals/comments.
+		std::string pg_command = convert_placeholders_to_postgres(command);
 
 		// Convert attribute values to string arrays for PostgreSQL
 		std::vector<std::string> param_strings;
@@ -71,8 +215,12 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 					break;
 
 				case type_integer:
-				case type_date:
 					param_strings.push_back(std::to_string(param.as_integer()));
+					param_values.push_back(param_strings.back().c_str());
+					break;
+
+				case type_date:
+					param_strings.push_back(std::to_string(static_cast<long long>(param.as_date().timestamp())));
 					param_values.push_back(param_strings.back().c_str());
 					break;
 
@@ -174,9 +322,7 @@ attribute postgres_statement::field_as_attribute(PGresult* result, int row, int 
 		case 1114: // TIMESTAMPOID
 		case 1184: // TIMESTAMPTZOID
 		case 1082: // DATEOID
-			// For now, return dates as integers (could be enhanced)
-			// In production, you'd parse the timestamp string
-			return attribute();
+			return attribute(datetime::parse(normalize_postgres_datetime(std::string(value_str))));
 
 		case 25:  // TEXTOID
 		case 1043: // VARCHAROID
@@ -248,10 +394,51 @@ std::size_t postgres_adapter::insert_id() const
 	if (!db_) {
 		return 0;
 	}
-	// PostgreSQL requires using RETURNING id clause or lastval() function
-	// TODO: Implement proper RETURNING support in INSERT query generation
-	// For now, this is a placeholder that returns 0
-	return 0;
+	PGresult* result = PQexec(db_, "SELECT LASTVAL()");
+	if (result == nullptr) {
+		return 0;
+	}
+
+	const ExecStatusType status = PQresultStatus(result);
+	if (status != PGRES_TUPLES_OK || PQntuples(result) != 1 || PQnfields(result) != 1) {
+		PQclear(result);
+		return 0;
+	}
+
+	const char* value = PQgetvalue(result, 0, 0);
+	const std::size_t id = (value != nullptr) ? static_cast<std::size_t>(std::strtoull(value, nullptr, 10)) : 0;
+	PQclear(result);
+	return id;
+}
+
+void postgres_adapter::begin_transaction()
+{
+	query("BEGIN");
+}
+
+void postgres_adapter::commit()
+{
+	query("COMMIT");
+}
+
+void postgres_adapter::rollback()
+{
+	query("ROLLBACK");
+}
+
+std::string postgres_adapter::escape(std::string_view str) const
+{
+	std::string escaped;
+	escaped.reserve(str.size() + 2);
+	escaped += '"';
+	for (const char c : str) {
+		if (c == '"') {
+			escaped += '"';
+		}
+		escaped += c;
+	}
+	escaped += '"';
+	return escaped;
 }
 
 } // namespace ar
