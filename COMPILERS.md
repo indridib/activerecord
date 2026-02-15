@@ -46,15 +46,24 @@ build.bat Debug     # Debug build
 ## Why Not Other Compilers?
 
 ### Clang
-**Status:** Not officially supported
+**Status:** Supported for development/testing and sanitizer checks
 
-**Reason:** While Clang has excellent C++23 support, focusing on MSVC (Windows) + GCC (Linux/macOS) provides:
-- Simpler maintenance
-- Better static linking on Windows
-- Standard toolchain coverage
-- More predictable behavior across platforms
+**Recommended use cases:**
+- Address/Leak/UB sanitizer runs in CI or local debugging
+- Extra diagnostics during development
 
-**Will it work?** Probably, but not tested or supported.
+**Suggested configuration:**
+```bash
+cmake -B build-clang -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DAR_BUILD_TESTS=ON \
+  -DAR_SANITIZE_ADDRESS=ON \
+  -DAR_SANITIZE_LEAK=ON
+
+cmake --build build-clang
+ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-clang --output-on-failure -R AllUnitTests
+```
 
 ### MinGW
 **Status:** Deprecated

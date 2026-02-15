@@ -230,8 +230,6 @@ protected:
 };
 
 
-// FixMe: need to implement iterator begin()/end() to be able to get single 
-// result
 template <class T>
 class query : public sql_builder {
 public:

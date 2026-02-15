@@ -14,8 +14,8 @@
 // Define a User model
 class User : public ar::model {
 public:
-    static const char* st_table_name() { return "users"; }
-    static const char* st_primary_key() { return "id"; }
+    static constexpr std::string_view st_table_name() { return "users"; }
+    static constexpr std::string_view st_primary_key() { return "id"; }
 
     User() : model(st_table_name(), st_primary_key()) {}
 };
@@ -74,50 +74,77 @@ int main()
         charlie.save();
         std::cout << "Created: " << charlie.to_json_string() << "\n\n";
 
-        // 4. Query all users
-        std::cout << "All users:\n";
-        ar::query<User> all_query;
-        for (const auto& user : all_query.order("age ASC").all()) {
+        // 4. Lazy iteration - rows fetched one at a time, not loaded into memory
+        std::cout << "All users (lazy iteration):\n";
+        auto all_query = ar::query<User>().order("age ASC");
+        for (const auto& user : all_query) {
             std::cout << "  " << user["name"].as_string()
                      << " (age: " << user["age"].as_integer() << ")\n";
         }
         std::cout << "\n";
 
-        // 5. Query with WHERE clause
+        // 5. Query with WHERE clause - also lazy
         std::cout << "Users older than 30:\n";
-        ar::query<User> age_query;
-        age_query.where("age > ?", ar::attribute(30));
-        for (const auto& user : age_query.all()) {
-            std::cout << "  " << user["name"].as_string() << "\n";
+        auto age_query = ar::query<User>().where("age > ?", ar::attribute(30));
+        for (const auto& user : age_query) {
+            std::cout << "  " << user["name"].as_string()
+                     << " (age: " << user["age"].as_integer() << ")\n";
         }
         std::cout << "\n";
 
-        // 6. Update a user
-        std::cout << "Updating Alice's age...\n";
-        alice.set("age", ar::attribute(29));
-        alice.save();
-        std::cout << "Updated: " << alice.to_json_string() << "\n\n";
+        // 6. Early termination - only fetches rows until break
+        std::cout << "First 2 users (early break, fetches only what's needed):\n";
+        int count = 0;
+        auto early_query = ar::query<User>().order("age ASC");
+        for (const auto& user : early_query) {
+            std::cout << "  " << user["name"].as_string() << "\n";
+            if (++count >= 2) break;
+        }
+        std::cout << "\n";
 
         // 7. Count users
-        ar::query<User> count_query;
-        std::cout << "Total users: " << count_query.count() << "\n\n";
+        std::cout << "Total users: " << ar::query<User>().count() << "\n\n";
 
-        // 8. Find specific user
-        std::cout << "Finding user with id=2...\n";
-        ar::query<User> find_query;
-        User found = find_query.find(2);
-        std::cout << "Found: " << found.to_json_string() << "\n\n";
+        // 8. Find with std::optional - safe handling of missing records
+        std::cout << "Finding Alice...\n";
+        if (auto found = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first()) {
+            std::cout << "Found: " << found->to_json_string() << "\n";
 
-        // 9. Demonstrate dirty tracking
+            // 9. Update user
+            found->set("age", ar::attribute(29));
+            found->save();
+            std::cout << "Updated Alice's age to 29\n";
+        } else {
+            std::cout << "Alice not found\n";
+        }
+        std::cout << "\n";
+
+        // 10. first_or_throw - when absence is exceptional
+        try {
+            User admin = ar::query<User>().where("name = ?", ar::attribute("NonExistent")).first_or_throw();
+        } catch (const ar::ex::item_not_found&) {
+            std::cout << "first_or_throw correctly threw for missing record\n\n";
+        }
+
+        // 11. last() - returns the last record (reverses ORDER BY)
+        if (auto oldest = ar::query<User>().order("age ASC").last()) {
+            std::cout << "Oldest user: " << oldest->get("name").as_string()
+                     << " (age: " << oldest->get("age").as_integer() << ")\n\n";
+        }
+
+        // 12. Dirty tracking
         std::cout << "Dirty tracking demo:\n";
-        found.set("email", ar::attribute("newemail@example.com"));
-        std::cout << "  Is dirty: " << (found.is_dirty() ? "yes" : "no") << "\n";
-        found.save();
-        std::cout << "  After save, is dirty: " << (found.is_dirty() ? "yes" : "no") << "\n\n";
+        auto user = ar::query<User>().where("name = ?", ar::attribute("Bob Johnson")).first_or_throw();
+        std::cout << "  Is dirty: " << (user.is_dirty() ? "yes" : "no") << "\n";
+        user.set("email", ar::attribute("bob.new@example.com"));
+        std::cout << "  After set: " << (user.is_dirty() ? "yes" : "no") << "\n";
+        user.save();
+        std::cout << "  After save: " << (user.is_dirty() ? "yes" : "no") << "\n\n";
 
-        // 10. XML serialization
-        std::cout << "User as XML:\n";
-        std::cout << found.to_xml_string("user") << "\n\n";
+        // 13. XML serialization
+        if (auto alice_loaded = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first()) {
+            std::cout << "Alice as XML:\n" << alice_loaded->to_xml_string("user") << "\n\n";
+        }
 
         std::cout << "=== MySQL Example Complete! ===\n";
 

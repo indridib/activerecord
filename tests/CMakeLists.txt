@@ -9,6 +9,7 @@
 # ==============================================================================
 
 include(FetchContent)
+include(${PROJECT_SOURCE_DIR}/cmake/Sanitizers.cmake)
 
 # Download GoogleTest automatically
 FetchContent_Declare(
@@ -51,6 +52,9 @@ target_link_libraries(unit_tests PRIVATE
 # Apply same warning settings as main library
 if(COMMAND ar_set_default_warnings)
   ar_set_default_warnings(unit_tests)
+endif()
+if(COMMAND ar_enable_sanitizers)
+  ar_enable_sanitizers(unit_tests)
 endif()
 
 # Add a single test that runs all unit tests

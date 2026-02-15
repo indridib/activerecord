@@ -30,6 +30,9 @@ option(AR_MYSQL "Build MySQL adapter" OFF)
 option(AR_POSTGRES "Build PostgreSQL adapter" OFF)
 option(AR_MSSQL "Build MS-SQL adapter" OFF)
 option(AR_CLANG_TIDY "Enable clang-tidy integration" OFF)
+option(AR_SANITIZE_ADDRESS "Enable AddressSanitizer (Clang/GCC)" OFF)
+option(AR_SANITIZE_LEAK "Enable LeakSanitizer (Clang/GCC)" OFF)
+option(AR_SANITIZE_UNDEFINED "Enable UndefinedBehaviorSanitizer (Clang/GCC)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 

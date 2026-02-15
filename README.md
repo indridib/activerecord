@@ -11,9 +11,10 @@ Striving to use latest C++ conventions as possible. We shouldn't be stuck in the
 - C++23 compiler (officially supported):
   - **Windows:** MSVC 19.37+ (Visual Studio 2022 17.7+) - **Recommended for static linking**
   - **Linux/macOS:** GCC 14+ (or GCC 13+)
+  - **Clang:** Supported for development/testing and sanitizer runs
 - Git
 
-**Note:** The project uses MSVC on Windows for optimal static linking support and GCC on Linux/macOS. Other compilers may work but are not officially tested.
+**Note:** The project uses MSVC on Windows for static release builds. Clang is supported and recommended for sanitizer-based checks in development.
 
 ### Quick Start (vcpkg included as submodule!)
 
@@ -44,6 +45,20 @@ chmod +x build.sh && ./build.sh
 cmake -B build -DAR_BUILD_TESTS=ON
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
+```
+
+**Clang + leak checks (unit tests):**
+```bash
+cmake -B build-clang -G Ninja \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DAR_BUILD_TESTS=ON \
+  -DAR_SQLITE=ON \
+  -DAR_SANITIZE_ADDRESS=ON \
+  -DAR_SANITIZE_LEAK=ON
+
+cmake --build build-clang
+ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-clang --output-on-failure -R AllUnitTests
 ```
 
 **4. Run example:**

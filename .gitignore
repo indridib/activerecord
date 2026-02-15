@@ -1,5 +1,8 @@
 # Build outputs
 /build/
+/build-clang/
+/build-clangcl/
+/build-clang*/
 /out/
 /CMakeFiles/
 /CMakeCache.txt
