@@ -22,6 +22,12 @@
 
 namespace ar {
 
+#if defined(_MSC_VER)
+#define AR_SSCANF ::sscanf_s
+#else
+#define AR_SSCANF ::sscanf
+#endif
+
 // Thread-safe helper to convert time_t to tm structure
 static bool safe_localtime(const std::time_t* timer, std::tm* buf) {
 #ifdef _WIN32
@@ -143,11 +149,10 @@ datetime datetime::parse(const std::string& str) {
 		return datetime{};
 	}
 
-	std::tm timeinfo{};
 	int year{0}, month{0}, day{0}, hour{0}, min{0}, sec{0};
 
 	// Try parsing "YYYY-MM-DD HH:MM:SS"
-	if (std::sscanf(str.c_str(), "%d-%d-%d %d:%d:%d",
+	if (AR_SSCANF(str.c_str(), "%d-%d-%d %d:%d:%d",
 		&year, &month, &day, &hour, &min, &sec) == 6) {
 		// Validate parsed values
 		if (year < 1970 || year > 9999) {
@@ -172,7 +177,7 @@ datetime datetime::parse(const std::string& str) {
 	}
 
 	// Try parsing "YYYY-MM-DD"
-	if (std::sscanf(str.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
+	if (AR_SSCANF(str.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
 		// Validate parsed values
 		if (year < 1970 || year > 9999) {
 			throw std::invalid_argument(std::format("Invalid year in date string: '{}' (year={})", str, year));

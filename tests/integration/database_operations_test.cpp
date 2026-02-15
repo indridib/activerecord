@@ -279,7 +279,7 @@ TEST_F(DatabaseOperationsTest, QueryFind) {
     stmt->fetch();
     attribute_map attrs;
     stmt->get_attributes(attrs);
-    long user_id = attrs["id"].as_integer();
+    const auto user_id = static_cast<long>(attrs["id"].as_integer());
 
     // Find by ID
     query<User> q;
@@ -301,9 +301,102 @@ TEST_F(DatabaseOperationsTest, QueryFirst) {
     // Get first
     query<User> q;
     q.order("id ASC");
-    User first = q.first();
+    auto first = q.first();
+    ASSERT_TRUE(first.has_value());
 
-    EXPECT_EQ("First", first.get("name").as_string());
+    EXPECT_EQ("First", first->get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QueryFirstReturnsNulloptWhenEmpty) {
+    query<User> q;
+    EXPECT_FALSE(q.first().has_value());
+}
+
+TEST_F(DatabaseOperationsTest, QueryLastReturnsNulloptWhenEmpty) {
+    query<User> q;
+    EXPECT_FALSE(q.last().has_value());
+}
+
+TEST_F(DatabaseOperationsTest, QueryFirstOrThrowThrowsWhenEmpty) {
+    query<User> q;
+    EXPECT_THROW(q.first_or_throw(), ex::item_not_found);
+}
+
+TEST_F(DatabaseOperationsTest, QueryLastOrThrowThrowsWhenEmpty) {
+    query<User> q;
+    EXPECT_THROW(q.last_or_throw(), ex::item_not_found);
+}
+
+TEST_F(DatabaseOperationsTest, QueryLastUsesPrimaryKeyDescWhenNoOrder) {
+    auto conn = config::instance().get_connection();
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("First"), attribute(10)});
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("Last"), attribute(20)});
+
+    query<User> q;
+    auto last = q.last();
+    ASSERT_TRUE(last.has_value());
+    EXPECT_EQ("Last", last->get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QueryLastRespectsReversedOrder) {
+    auto conn = config::instance().get_connection();
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("A"), attribute(10)});
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("B"), attribute(20)});
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("C"), attribute(30)});
+
+    query<User> q;
+    q.order("age ASC");
+    auto last = q.last();
+    ASSERT_TRUE(last.has_value());
+    EXPECT_EQ("C", last->get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QueryFirstOrThrowAndLastOrThrowReturnRecords) {
+    auto conn = config::instance().get_connection();
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("A"), attribute(10)});
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("B"), attribute(20)});
+
+    query<User> first_query;
+    first_query.order("id ASC");
+    User first = first_query.first_or_throw();
+    EXPECT_EQ("A", first.get("name").as_string());
+
+    query<User> last_query;
+    last_query.order("id ASC");
+    User last = last_query.last_or_throw();
+    EXPECT_EQ("B", last.get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QuerySupportsRangeBasedIteration) {
+    auto conn = config::instance().get_connection();
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("A"), attribute(10)});
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("B"), attribute(20)});
+    conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+               {attribute("C"), attribute(30)});
+
+    query<User> q;
+    q.order("id ASC");
+
+    int count = 0;
+    std::string first_name;
+    for (const auto& user : q) {
+        if (count == 0) {
+            first_name = user.get("name").as_string();
+        }
+        ++count;
+    }
+
+    EXPECT_EQ(3, count);
+    EXPECT_EQ("A", first_name);
 }
 
 // ==============================================================================
@@ -344,9 +437,10 @@ TEST_F(DatabaseOperationsTest, ModelToJson) {
 
     // Load into model
     query<User> q;
-    User user = q.first();
+    auto user = q.first();
+    ASSERT_TRUE(user.has_value());
 
-    std::string json = user.to_json_string();
+    std::string json = user->to_json_string();
 
     EXPECT_NE(std::string::npos, json.find("\"name\""));
     EXPECT_NE(std::string::npos, json.find("\"John\""));
@@ -361,9 +455,10 @@ TEST_F(DatabaseOperationsTest, ModelToXml) {
 
     // Load into model
     query<User> q;
-    User user = q.first();
+    auto user = q.first();
+    ASSERT_TRUE(user.has_value());
 
-    std::string xml = user.to_xml_string();
+    std::string xml = user->to_xml_string();
 
     EXPECT_NE(std::string::npos, xml.find("<users>"));
     EXPECT_NE(std::string::npos, xml.find("</users>"));
@@ -382,17 +477,18 @@ TEST_F(DatabaseOperationsTest, DirtyTrackingAfterLoad) {
 
     // Load model
     query<User> q;
-    User user = q.first();
+    auto user = q.first();
+    ASSERT_TRUE(user.has_value());
 
     // Should not be dirty after load
-    EXPECT_FALSE(user.is_dirty());
+    EXPECT_FALSE(user->is_dirty());
 
     // Modify
-    user.set("age", attribute(26));
-    EXPECT_TRUE(user.is_dirty());
-    EXPECT_TRUE(user.attribute_is_dirty("age"));
+    user->set("age", attribute(26));
+    EXPECT_TRUE(user->is_dirty());
+    EXPECT_TRUE(user->attribute_is_dirty("age"));
 
     // Save
-    user.save();
-    EXPECT_FALSE(user.is_dirty());
+    user->save();
+    EXPECT_FALSE(user->is_dirty());
 }

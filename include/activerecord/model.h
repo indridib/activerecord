@@ -83,7 +83,8 @@ public:
 	bool isset(std::string_view name) const noexcept
 	{
 		std::string key(name);
-		return attributes_.find(key) != attributes_.end() || alias_attribute_.find(key) != alias_attribute_.end();
+		const auto& aliases = alias_attributes();
+		return attributes_.find(key) != attributes_.end() || aliases.find(key) != aliases.end();
 	}
 
 	/**
@@ -97,8 +98,9 @@ public:
 		std::string key(name);
 		if (attributes_.find(key) != attributes_.end())
 			return key;
-		auto iter = alias_attribute_.find(key);
-		if (iter != alias_attribute_.end())
+		const auto& aliases = alias_attributes();
+		auto iter = aliases.find(key);
+		if (iter != aliases.end())
 			return iter->second;
 		return {};
 	}
@@ -115,8 +117,9 @@ public:
 	*/
 	const attribute& get(const std::string_view name) const {
 		std::string real_name{ name };
-		auto alias_iter = alias_attribute_.find(real_name);
-		if (alias_iter != alias_attribute_.end())
+		const auto& aliases = alias_attributes();
+		auto alias_iter = aliases.find(real_name);
+		if (alias_iter != aliases.end())
 			real_name = alias_iter->second;
 
 		auto attrib_iter = attributes_.find(real_name);
@@ -196,8 +199,9 @@ public:
 	void set(const std::string_view name, const attribute& value, bool allow_new_attributes = true)
 	{
 		std::string real_name{ name };
-		auto alias_iter = alias_attribute_.find(real_name);
-		if (alias_iter != alias_attribute_.end())
+		const auto& aliases = alias_attributes();
+		auto alias_iter = aliases.find(real_name);
+		if (alias_iter != aliases.end())
 			real_name = alias_iter->second;
 
 		// Primary key is immutable for persisted records.
@@ -236,8 +240,9 @@ public:
 	void set(const std::string_view name, attribute&& value, bool allow_new_attributes = true)
 	{
 		std::string real_name{ name };
-		auto alias_iter = alias_attribute_.find(real_name);
-		if (alias_iter != alias_attribute_.end())
+		const auto& aliases = alias_attributes();
+		auto alias_iter = aliases.find(real_name);
+		if (alias_iter != aliases.end())
 			real_name = alias_iter->second;
 
 		// Primary key is immutable for persisted records.
@@ -511,7 +516,7 @@ protected:
 
 		sql_builder builder(connection_, table_name_);
 		builder.update(names, values);
-		builder.add_where(primary_key_ + " = ?", {pk_value});
+		builder.add_where(std::string(primary_key_) + " = ?", {pk_value});
 		auto stmt{ connection_->query(builder.to_string(), builder.get_bind_values()) };
 		return true;
 	}
@@ -550,7 +555,7 @@ protected:
 		// Get the auto-generated primary key and set it on the model (don't mark as dirty)
 		std::size_t id = connection_->insert_id();
 		if (id > 0) {
-			attributes_[primary_key_] = static_cast<int64_t>(id);  // Set directly without marking dirty
+			attributes_[std::string(primary_key_)] = static_cast<int64_t>(id);  // Set directly without marking dirty
 		}
 
 		// Mark as persisted (no longer a new record)
@@ -571,20 +576,22 @@ protected:
 	}
 
 
-	// FixMe: Some (if not most) of the variables here might be better suited as virtual functions in the class
-	// or this could be a template with constexpr. At least each std::string 40 bytes so getting rid of them
-	// will save space
+	static const std::map<std::string, std::string>& alias_attributes() noexcept
+	{
+		static const std::map<std::string, std::string> aliases{};
+		return aliases;
+	}
+
+	// Per-instance metadata kept lightweight to reduce model footprint.
 	config::connection_ptr connection_;	// a reference to the database connection to use 
-	std::string db_;					// name of the database
-	std::string table_name_;			// name of the database table
-	std::string primary_key_;			// name of primary key, default id (Note: should it be an array)
+	std::string_view table_name_;		// name of the database table (expected static lifetime)
+	std::string_view primary_key_;		// name of primary key, default id
 
 public: //###JWD
 	attribute_map attributes_;	// values as column_name => value
 	bool new_record_{ true };	// wether this is a fresh copy not from database. 
 								// Note: we could also test if the primary key is valid
 protected:
-	std::map<std::string,std::string> alias_attribute_; // mapping of alias name to column name
 	string_set dirty_;			// attributes that are dirty
 	bool readonly_{ false };	// no writing
 

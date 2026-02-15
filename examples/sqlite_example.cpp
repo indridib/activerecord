@@ -90,12 +90,15 @@ int main()
 
         // 7. Find specific user
         ar::query<User> find_query;
-        User found = find_query.where("name = ?", ar::attribute("Alice Smith")).first();
-        std::cout << "Found user: " << found.to_json_string() << "\n\n";
+        auto found = find_query.where("name = ?", ar::attribute("Alice Smith")).first();
+        if (!found.has_value()) {
+            throw ar::ex::item_not_found("Alice Smith was not found");
+        }
+        std::cout << "Found user: " << found->to_json_string() << "\n\n";
 
         // 8. Update user
-        found.set("age", ar::attribute(29));
-        found.save();
+        found->set("age", ar::attribute(29));
+        found->save();
         std::cout << "Updated Alice's age to 29\n\n";
 
         // 9. Limit and offset
@@ -109,8 +112,10 @@ int main()
         // 10. XML serialization
         std::cout << "Alice as XML:\n";
         ar::query<User> xml_query;
-        User alice_loaded = xml_query.where("name = ?", ar::attribute("Alice Smith")).first();
-        std::cout << alice_loaded.to_xml_string("user") << "\n\n";
+        auto alice_loaded = xml_query.where("name = ?", ar::attribute("Alice Smith")).first();
+        if (alice_loaded.has_value()) {
+            std::cout << alice_loaded->to_xml_string("user") << "\n\n";
+        }
 
         std::cout << "Example completed successfully!\n";
 

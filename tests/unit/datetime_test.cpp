@@ -155,7 +155,7 @@ TEST(DateTimeTest, NowReturnsCurrentTime) {
 	std::time_t current = std::time(nullptr);
 
 	// Should be within 1 second of each other
-	EXPECT_NEAR(current, now.timestamp(), 1);
+	EXPECT_NEAR(static_cast<double>(current), static_cast<double>(now.timestamp()), 1.0);
 }
 
 // ============================================================================

@@ -13,7 +13,11 @@
 #include <attribute.h>
 
 #include <cassert>
+#include <cctype>
 #include <format>
+#include <iterator>
+#include <memory>
+#include <optional>
 
 
 namespace ar {
@@ -231,20 +235,83 @@ protected:
 template <class T>
 class query : public sql_builder {
 public:
+	class iterator {
+	public:
+		using iterator_category = std::input_iterator_tag;
+		using value_type = T;
+		using difference_type = std::ptrdiff_t;
+		using pointer = const T*;
+		using reference = const T&;
+
+		iterator() = default;
+		explicit iterator(std::shared_ptr<statement> stmt)
+			: stmt_(std::move(stmt))
+		{
+			advance();
+		}
+
+		reference operator*() const noexcept { return current_; }
+		pointer operator->() const noexcept { return &current_; }
+
+		iterator& operator++() {
+			advance();
+			return *this;
+		}
+
+		iterator operator++(int) {
+			iterator tmp{ *this };
+			++(*this);
+			return tmp;
+		}
+
+		friend bool operator==(const iterator& lhs, const iterator& rhs) noexcept {
+			if (lhs.end_ && rhs.end_) {
+				return true;
+			}
+			return lhs.end_ == rhs.end_ && lhs.stmt_ == rhs.stmt_;
+		}
+
+		friend bool operator!=(const iterator& lhs, const iterator& rhs) noexcept {
+			return !(lhs == rhs);
+		}
+
+	private:
+		void advance() {
+			if (!stmt_ || !stmt_->fetch()) {
+				stmt_.reset();
+				end_ = true;
+				return;
+			}
+
+			current_ = T{};
+			stmt_->get_attributes(current_.attributes_);
+			current_.new_record_ = false;
+			end_ = false;
+		}
+
+		std::shared_ptr<statement> stmt_{};
+		T current_{};
+		bool end_{ true };
+	};
+
 	query()
 		: sql_builder(config::instance().get_connection(), T::st_table_name())
 		{};
+
+	iterator begin() {
+		return iterator{ std::shared_ptr<statement>{connection_->query(to_string(), get_bind_values())} };
+	}
+
+	iterator end() noexcept {
+		return iterator{};
+	}
 
 	/*
 	 * Returns an array of records found
 	 */
 	std::vector<T> all() { 
 		std::vector<T> result;
-		auto stmt{ connection_->query(to_string(), get_bind_values()) };
-		while(stmt->fetch()) {
-			T item;
-			stmt->get_attributes(item.attributes_);
-			item.new_record_ = false;
+		for (const auto& item : *this) {
 			result.emplace_back(item);
 		}
 		return result;
@@ -255,7 +322,11 @@ public:
 	*/
 	T find(long id) {
 		add_where(std::format("{} = ?", T::st_primary_key()), {id});
-		return first();
+		auto result = first();
+		if (!result.has_value()) {
+			throw ex::item_not_found("record not found");
+		}
+		return *result;
 	}
 
 	/*
@@ -297,28 +368,55 @@ public:
 
 
 	/*
-	* Returns the first record found or "null if not found" (fixme: how unique_ptr?)
+	* Returns the first record found or nullopt if not found.
 	*/
-	T first() {
-		auto stmt{ connection_->query(to_string(), get_bind_values()) };
+	std::optional<T> first() {
+		query<T> scoped_query{ *this };
+		scoped_query.set_limit(1);
+		auto stmt{ scoped_query.connection_->query(scoped_query.to_string(), scoped_query.get_bind_values()) };
 		if (stmt->fetch()) {
 			T item;
 			stmt->get_attributes(item.attributes_);
 			item.new_record_ = false;
 			return item;
 		}
-		throw ex::item_not_found("record not found");
+		return std::nullopt;
 	}
 
 	/*
-	* Returns the last record found or "null if not found" (fixme: how unique_ptr?)
+	* Returns the first record found or throws item_not_found if not found.
 	*/
-	T last() {
-		// TODO(issue-6): pending implementation.
-		// FIXME: if we have order revert it else add order on primary key DESC
-		// and return first
-		// return first();
-		throw ex::activerecord("not yet implemented");
+	T first_or_throw() {
+		auto result = first();
+		if (!result.has_value()) {
+			throw ex::item_not_found("record not found");
+		}
+		return *result;
+	}
+
+	/*
+	* Returns the last record found or nullopt if not found.
+	*/
+	std::optional<T> last() {
+		query<T> scoped_query{ *this };
+		if (scoped_query.order_.empty()) {
+			scoped_query.add_order(std::format("{} DESC", T::st_primary_key()));
+		} else {
+			scoped_query.add_order(reverse_order(scoped_query.order_));
+		}
+		scoped_query.set_limit(1);
+		return scoped_query.first();
+	}
+
+	/*
+	* Returns the last record found or throws item_not_found if not found.
+	*/
+	T last_or_throw() {
+		auto result = last();
+		if (!result.has_value()) {
+			throw ex::item_not_found("record not found");
+		}
+		return *result;
 	}
 
 
@@ -336,6 +434,63 @@ public:
 	query& limit(long limit)					{ set_limit(limit);  return *this; }
 	query& offset(long offset)					{ set_offset(offset); return *this; }
 
+private:
+	static std::string reverse_order(std::string_view value)
+	{
+		std::string result;
+		std::size_t pos{ 0 };
+		while (pos < value.size()) {
+			std::size_t next = value.find(',', pos);
+			std::string token = trim(value.substr(pos, next == std::string_view::npos ? value.size() - pos : next - pos));
+			if (!token.empty()) {
+				if (!result.empty()) {
+					result += ", ";
+				}
+				if (ends_with_ci(token, " asc")) {
+					token.replace(token.size() - 4, 4, " DESC");
+				} else if (ends_with_ci(token, " desc")) {
+					token.replace(token.size() - 5, 5, " ASC");
+				} else {
+					token += " DESC";
+				}
+				result += token;
+			}
+			if (next == std::string_view::npos) {
+				break;
+			}
+			pos = next + 1;
+		}
+		return result;
+	}
+
+	static std::string trim(std::string_view value)
+	{
+		std::size_t start{ 0 };
+		while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start])) != 0) {
+			++start;
+		}
+		std::size_t end{ value.size() };
+		while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1])) != 0) {
+			--end;
+		}
+		return std::string(value.substr(start, end - start));
+	}
+
+	static bool ends_with_ci(std::string_view value, std::string_view suffix)
+	{
+		if (suffix.size() > value.size()) {
+			return false;
+		}
+		const std::size_t offset = value.size() - suffix.size();
+		for (std::size_t i = 0; i < suffix.size(); ++i) {
+			const auto lhs = static_cast<unsigned char>(value[offset + i]);
+			const auto rhs = static_cast<unsigned char>(suffix[i]);
+			if (std::tolower(lhs) != std::tolower(rhs)) {
+				return false;
+			}
+		}
+		return true;
+	}
 };
 
 

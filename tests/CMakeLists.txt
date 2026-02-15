@@ -18,8 +18,8 @@ FetchContent_Declare(
   GIT_SHALLOW    TRUE
 )
 
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+# For Windows static runtime (/MT): ensure GoogleTest uses the same CRT.
+set(gtest_force_shared_crt OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(googletest)
 
@@ -36,6 +36,7 @@ add_executable(unit_tests
   unit/connection_url_test.cpp
   unit/datetime_test.cpp
   unit/model_test.cpp
+  unit/model_size_test.cpp
   unit/sql_builder_test.cpp
   unit/config_test.cpp
   unit/sql_injection_test.cpp

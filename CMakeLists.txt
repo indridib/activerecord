@@ -18,6 +18,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(MSVC)
+  # Enforce static runtime (/MT, /MTd) for all targets on Windows.
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 option(AR_BUILD_TESTS "Build tests" OFF)
 option(AR_BUILD_EXAMPLES "Build examples" ON)
 option(AR_SQLITE "Build SQLite adapter" ON)
