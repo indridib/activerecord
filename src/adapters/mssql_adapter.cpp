@@ -96,6 +96,7 @@ mssql_statement::mssql_statement(SQLHDBC dbc)
 	, stmt_(nullptr)
 	, num_columns_(0)
 	, has_data_(false)
+	, affected_rows_(0)
 {
 	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &stmt_);
 	check_odbc_error(ret, SQL_HANDLE_DBC, dbc_, "Failed to allocate statement handle");
@@ -206,6 +207,12 @@ void mssql_statement::execute(const std::string& command, const attribute_vector
 
 	num_columns_ = cols;
 	has_data_ = (num_columns_ > 0);
+	affected_rows_ = 0;
+	SQLLEN row_count = 0;
+	ret = SQLRowCount(stmt_, &row_count);
+	if ((ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO) && row_count > 0) {
+		affected_rows_ = static_cast<std::size_t>(row_count);
+	}
 }
 
 bool mssql_statement::fetch()

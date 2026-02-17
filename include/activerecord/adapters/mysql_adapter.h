@@ -32,6 +32,7 @@ public:
 	void execute(const std::string& command, const attribute_vector& values) override;
 	bool fetch() override;
 	void get_attributes(attribute_map& attributes) override;
+	std::size_t affected_rows() const noexcept override { return affected_rows_; }
 
 private:
 	static attribute field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* bind, unsigned long* lengths, int column_index);
@@ -53,6 +54,7 @@ private:
 	std::vector<bind_buffer> buffers_;           // Buffers for result data (RAII)
 	int num_fields_;                             // Number of result fields
 	bool has_result_;                            // Whether statement has results
+	std::size_t affected_rows_;                  // Rows affected by last execute
 };
 
 /**

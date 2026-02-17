@@ -56,6 +56,10 @@ namespace ar {
 		public:
 			using activerecord::activerecord;
 		};
+		class stale_record : public activerecord {
+		public:
+			using activerecord::activerecord;
+		};
 
 	} // namespace ex
 

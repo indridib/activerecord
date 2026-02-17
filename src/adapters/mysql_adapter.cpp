@@ -55,6 +55,7 @@ mysql_statement::mysql_statement(MYSQL* db)
 	, metadata_(nullptr)
 	, num_fields_(0)
 	, has_result_(false)
+	, affected_rows_(0)
 {}
 
 mysql_statement::~mysql_statement()
@@ -177,6 +178,8 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 
 	// Prepare result bindings if this is a SELECT query
 	metadata_ = mysql_stmt_result_metadata(stmt_);
+	const auto rows = mysql_stmt_affected_rows(stmt_);
+	affected_rows_ = (rows == static_cast<decltype(rows)>(-1)) ? 0 : static_cast<std::size_t>(rows);
 	if (metadata_) {
 		has_result_ = true;
 		num_fields_ = mysql_num_fields(metadata_);

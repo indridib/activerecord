@@ -200,8 +200,24 @@ protected:
 		return sql;
 	}
 	std::string build_delete() const {
-		// TODO(issue-6): pending implementation.
-		throw ex::activerecord("DELETE statement generation not yet implemented");
+		std::string sql = std::format("DELETE FROM {}", table_);
+
+		if (!where_.empty()) {
+			sql += std::format(" WHERE {}", where_);
+		}
+
+		if (!order_.empty()) {
+			sql += std::format(" ORDER BY {}", order_);
+		}
+
+		if (connection_->accepts_limit_and_order_for_update_and_delete()) {
+			if ( (offset_ >= 0) || (limit_ >= 0) ) {
+				connection_->limit(sql, offset_, limit_);
+			}
+		}
+
+		bind_values_ = where_bind_values_;
+		return sql;
 	}
 
 

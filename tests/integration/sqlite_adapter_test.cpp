@@ -74,6 +74,7 @@ TEST_F(SQLiteAdapterTest, InsertSingleRow) {
     );
 
     EXPECT_NE(nullptr, stmt);
+    EXPECT_EQ(1u, stmt->affected_rows());
 }
 
 TEST_F(SQLiteAdapterTest, InsertMultipleRows) {
@@ -240,8 +241,9 @@ TEST_F(SQLiteAdapterTest, UpdateRow) {
                   {attribute("John"), attribute(30)});
 
     // Update
-    adapter->query("UPDATE users SET age = ? WHERE name = ?",
-                  {attribute(31), attribute("John")});
+    auto update_stmt = adapter->query("UPDATE users SET age = ? WHERE name = ?",
+                                     {attribute(31), attribute("John")});
+    EXPECT_EQ(1u, update_stmt->affected_rows());
 
     // Verify
     auto stmt = adapter->query("SELECT age FROM users WHERE name = ?",
@@ -251,6 +253,15 @@ TEST_F(SQLiteAdapterTest, UpdateRow) {
     attribute_map attrs;
     stmt->get_attributes(attrs);
     EXPECT_EQ(31, attrs["age"].as_integer());
+}
+
+TEST_F(SQLiteAdapterTest, UpdateNonMatchingRowHasZeroAffectedRows) {
+    adapter->query("INSERT INTO users (name, age) VALUES (?, ?)",
+                  {attribute("John"), attribute(30)});
+
+    auto update_stmt = adapter->query("UPDATE users SET age = ? WHERE name = ?",
+                                     {attribute(31), attribute("NoMatch")});
+    EXPECT_EQ(0u, update_stmt->affected_rows());
 }
 
 // ==============================================================================
@@ -263,7 +274,8 @@ TEST_F(SQLiteAdapterTest, DeleteRow) {
     adapter->query("INSERT INTO users (name) VALUES (?)", {attribute("ToKeep")});
 
     // Delete
-    adapter->query("DELETE FROM users WHERE name = ?", {attribute("ToDelete")});
+    auto delete_stmt = adapter->query("DELETE FROM users WHERE name = ?", {attribute("ToDelete")});
+    EXPECT_EQ(1u, delete_stmt->affected_rows());
 
     // Verify count
     auto stmt = adapter->query("SELECT COUNT(*) as count FROM users", {});
@@ -272,6 +284,16 @@ TEST_F(SQLiteAdapterTest, DeleteRow) {
     attribute_map attrs;
     stmt->get_attributes(attrs);
     EXPECT_EQ(1, attrs["count"].as_integer());
+}
+
+TEST_F(SQLiteAdapterTest, SelectHasZeroAffectedRows) {
+    auto insert_stmt = adapter->query("INSERT INTO users (name, age) VALUES (?, ?)",
+                                     {attribute("Alice"), attribute(25)});
+    EXPECT_EQ(1u, insert_stmt->affected_rows());
+
+    auto select_stmt = adapter->query("SELECT * FROM users WHERE name = ?", {attribute("Alice")});
+    EXPECT_EQ(0u, select_stmt->affected_rows());
+    EXPECT_TRUE(select_stmt->fetch());
 }
 
 // ==============================================================================

@@ -358,3 +358,73 @@ TEST_F(ModelTest, ToXmlStringWithExclude) {
     EXPECT_NE(std::string::npos, xml.find("<id>1</id>"));
     EXPECT_EQ(std::string::npos, xml.find("password"));
 }
+
+// ==============================================================================
+// init_record_tracking() Tests
+// ==============================================================================
+
+TEST_F(ModelTest, InitRecordTrackingCreatesPlaceholders) {
+    TestModel m;
+    m.init_record_tracking(true, true, true);
+
+    EXPECT_TRUE(m.isset("created_at"));
+    EXPECT_TRUE(m.isset("updated_at"));
+    EXPECT_TRUE(m.isset("version"));
+
+    // All should be null placeholders
+    EXPECT_TRUE(m.get("created_at").is_null());
+    EXPECT_TRUE(m.get("updated_at").is_null());
+    EXPECT_TRUE(m.get("version").is_null());
+}
+
+TEST_F(ModelTest, InitRecordTrackingDoesNotOverwriteExisting) {
+    TestModel m;
+    m.set("created_at", attribute(datetime{2024, 1, 1}));
+    m.init_record_tracking(true, true, true);
+
+    // Should NOT overwrite the existing value
+    EXPECT_FALSE(m.get("created_at").is_null());
+    EXPECT_EQ(2024, m.get("created_at").as_date().year());
+}
+
+TEST_F(ModelTest, InitRecordTrackingDoesNotFlagDirty) {
+    TestModel m;
+    m.reset_dirty();  // Clear any dirty state from construction
+    m.init_record_tracking(true, true, true);
+
+    // Placeholders should NOT be dirty
+    EXPECT_FALSE(m.attribute_is_dirty("created_at"));
+    EXPECT_FALSE(m.attribute_is_dirty("updated_at"));
+    EXPECT_FALSE(m.attribute_is_dirty("version"));
+}
+
+TEST_F(ModelTest, NoTimestampsWhenAttributesMissing) {
+    TestModel m;
+    m.set("name", attribute("test"));
+
+    // Without init_record_tracking(), these attributes don't exist
+    EXPECT_FALSE(m.isset("created_at"));
+    EXPECT_FALSE(m.isset("updated_at"));
+    EXPECT_FALSE(m.isset("version"));
+}
+
+TEST_F(ModelTest, InitRecordTrackingIdempotent) {
+    TestModel m;
+    m.set("created_at", attribute(datetime{2024, 6, 15}));
+    m.init_record_tracking(true, true, true);  // Should not overwrite
+    m.init_record_tracking(true, true, true);  // Call again - should be safe
+
+    EXPECT_EQ(2024, m.get("created_at").as_date().year());
+    EXPECT_TRUE(m.get("updated_at").is_null());
+    EXPECT_TRUE(m.get("version").is_null());
+}
+
+TEST_F(ModelTest, InitRecordTrackingSelectiveColumns) {
+    TestModel m;
+    m.init_record_tracking(true, false, false);
+
+    EXPECT_TRUE(m.isset("created_at"));
+    EXPECT_FALSE(m.isset("updated_at"));
+    EXPECT_FALSE(m.isset("version"));
+}
+

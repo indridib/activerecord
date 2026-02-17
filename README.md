@@ -89,9 +89,9 @@ ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-clang --output-on-failure -R 
 - ✅ **MS-SQL Server** - Microsoft SQL Server via ODBC
 
 **Comprehensive Test Suite:**
-- ✅ **224 tests** with **100% pass rate** (158 unit + 66 integration)
+- ✅ **237 tests** with **100% pass rate** (163 unit + 74 integration)
 - ✅ **40+ attribute tests** - Type construction, conversions, JSON/XML serialization
-- ✅ **31 model tests** - CRUD operations, dirty tracking, readonly mode
+- ✅ **36 model tests** - CRUD operations, dirty tracking, readonly mode, record tracking
 - ✅ **6 model size tests** - Memory footprint tracking and regression detection
 - ✅ **15 SQL builder tests** - SELECT, INSERT, UPDATE with various clauses
 - ✅ **7 config tests** - Singleton pattern, connection management
@@ -195,6 +195,39 @@ for (const auto& email : active_emails) {
 | Iterator | 0.5 MB | One row at a time (99% savings!) |
 | Iterator + break | 0.05 MB | Only fetches what you use |
 
+### Auto-Timestamps & Optimistic Locking
+
+**Convention-based:** If your table has `created_at`, `updated_at`, or `version` columns, the framework auto-manages them. On new records, call `init_record_tracking(created_at, updated_at, version)` with `true` only for columns that exist in that table.
+
+```cpp
+// New record: register only the tracking columns that exist on this table
+User alice;
+alice.init_record_tracking(true, true, true);  // Registers created_at, updated_at, version
+alice.set("name", attribute("Alice"));
+alice.save();
+// created_at = now, updated_at = now, version = 1
+
+// Loaded records already have all columns from SELECT — auto-detected
+auto loaded = query<User>().where("name = ?", attribute("Alice")).first_or_throw();
+loaded.set("email", attribute("alice@example.com"));
+loaded.save();
+// updated_at = now, version = 2 (created_at unchanged)
+```
+
+**Optimistic locking** prevents stale overwrites. The UPDATE includes `WHERE version = ?` with the old version:
+```cpp
+auto copy1 = query<User>().find(1);  // version = 2
+auto copy2 = query<User>().find(1);  // version = 2
+
+copy1.set("name", attribute("First"));
+copy1.save();  // UPDATE ... SET version=3 WHERE id=1 AND version=2 → succeeds
+
+copy2.set("name", attribute("Second"));
+copy2.save();  // UPDATE ... SET version=3 WHERE id=1 AND version=2 → 0 rows affected (stale)
+```
+
+**Partial support:** Works with any combination — only `created_at`, only `version`, all three, or none. Models without these columns are completely unaffected.
+
 ### Documentation
 
 - **[COMPILERS.md](COMPILERS.md)** - Compiler support strategy (MSVC + GCC focus)
@@ -248,16 +281,13 @@ You would then be able to get column map (name -> index) and then for each row a
 PHP Active Record has: STRING, INTEGER, DECIMAL, DATETIME, DATE, TIME
 Should we go structural allowing array of variant as a variant? Might solve problems with bindings, i.e. for "IN (?)"
 
-- implement set_timestamps() called on update and insert. Will refresh updated_at and created_at.
+- ✅ **Auto-timestamps** - `created_at` set on insert, `updated_at` refreshed on insert and update (convention-based detection)
+
+- ✅ **Optimistic locking** - `version` attribute auto-incremented on update with WHERE clause check (prevents stale overwrites)
 
 - Possible allowing multiple calls to add_xxx(new) in sql_builder (simply assume: "(org) AND (new)").
 
-- implement insert, delete
-
-- if attribute version is definied make sure it's verified and updated in update()
-	set ..., version = version + 1 where id = ? and version = version
-	if that fails check if id = ? exist and if so this was an update with old data.
-	or maby we don't need to check ?
+- implement delete
 
 - Table creation, field definitions
 
@@ -287,3 +317,4 @@ Conventions
 
 Every table should have a primary key by default named id
 Foreign keys should be named following the pattern singularized_table_name_id (e.g., item_id, order_id)
+

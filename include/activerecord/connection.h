@@ -32,6 +32,7 @@ public:
 	virtual ~statement() {}
 	virtual void execute(const std::string& cmd, const attribute_vector& values) = 0;
 	virtual bool fetch() { return false; }
+	virtual std::size_t affected_rows() const noexcept { return 0; }
 
 	virtual void get_attributes(attribute_map &attributes) {}
 

@@ -39,6 +39,7 @@ public:
 	void execute(const std::string& command, const attribute_vector& values) override;
 	bool fetch() override;
 	void get_attributes(attribute_map& attributes) override;
+	std::size_t affected_rows() const noexcept override { return affected_rows_; }
 
 private:
 	static attribute field_as_attribute(SQLHSTMT stmt, int column_index);
@@ -47,6 +48,7 @@ private:
 	SQLHSTMT stmt_;     // Owned statement handle (freed in destructor)
 	int num_columns_;   // Number of columns in result
 	bool has_data_;     // Whether we have result data
+	std::size_t affected_rows_; // Rows affected by last execute
 };
 
 /**

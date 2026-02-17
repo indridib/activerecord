@@ -204,6 +204,7 @@ postgres_statement::postgres_statement(PGconn* db)
 	, current_row_(-1)
 	, num_rows_(0)
 	, num_fields_(0)
+	, affected_rows_(0)
 {}
 
 postgres_statement::~postgres_statement()
@@ -296,6 +297,10 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 	current_row_ = -1;
 	num_rows_ = PQntuples(result_);
 	num_fields_ = PQnfields(result_);
+	affected_rows_ = 0;
+	if (const char* tuples = PQcmdTuples(result_); tuples != nullptr && tuples[0] != '\0') {
+		affected_rows_ = static_cast<std::size_t>(std::strtoull(tuples, nullptr, 10));
+	}
 }
 
 bool postgres_statement::fetch()

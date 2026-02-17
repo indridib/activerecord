@@ -39,6 +39,19 @@ public:
     void rollback() override {}
 };
 
+class delete_sql_builder_for_test : public sql_builder {
+public:
+    delete_sql_builder_for_test(config::connection_ptr con, std::string_view table)
+        : sql_builder(con, table) {}
+
+    std::string build_delete_public() const { return build_delete(); }
+};
+
+class mock_delete_limit_connection : public mock_connection {
+public:
+    bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
+};
+
 // ==============================================================================
 // SELECT Statement Tests
 // ==============================================================================
@@ -267,4 +280,38 @@ TEST(SqlBuilderTest, UpdateWithWhere) {
     ASSERT_EQ(2, bind_values.size());
     EXPECT_EQ("Jane", bind_values[0].as_string());  // UPDATE value first
     EXPECT_EQ(5, bind_values[1].as_integer());       // WHERE value second
+}
+
+// ==============================================================================
+// DELETE Statement Tests
+// ==============================================================================
+
+TEST(SqlBuilderTest, DeleteWithWhereUsesBindValues) {
+    auto conn = std::make_shared<mock_connection>();
+    delete_sql_builder_for_test builder(conn, "users");
+
+    builder.add_where("id = ?", {attribute(7)});
+    std::string sql = builder.build_delete_public();
+
+    EXPECT_EQ("DELETE FROM users WHERE id = ?", sql);
+    const attribute_vector& bind_values = builder.get_bind_values();
+    ASSERT_EQ(1, bind_values.size());
+    EXPECT_EQ(7, bind_values[0].as_integer());
+}
+
+TEST(SqlBuilderTest, DeleteWithOrderLimitAndOffset) {
+    auto conn = std::make_shared<mock_delete_limit_connection>();
+    delete_sql_builder_for_test builder(conn, "users");
+
+    builder.add_where("active = ?", {attribute(true)});
+    builder.add_order("id DESC");
+    builder.set_limit(2);
+    builder.set_offset(1);
+
+    std::string sql = builder.build_delete_public();
+    EXPECT_EQ("DELETE FROM users WHERE active = ? ORDER BY id DESC LIMIT 2 OFFSET 1", sql);
+
+    const attribute_vector& bind_values = builder.get_bind_values();
+    ASSERT_EQ(1, bind_values.size());
+    EXPECT_TRUE(bind_values[0].as_bool());
 }

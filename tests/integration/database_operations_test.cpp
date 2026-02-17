@@ -13,6 +13,7 @@
 #include <model.h>
 #include <config.h>
 #include <sql_builder.h>
+#include <datetime.h>
 #include <activerecord.h>
 
 using namespace ar;
@@ -98,6 +99,21 @@ TEST_F(DatabaseOperationsTest, UpdateUser) {
     bool updated = user.save();
     EXPECT_TRUE(updated);
     EXPECT_FALSE(user.is_dirty());
+}
+
+TEST_F(DatabaseOperationsTest, DestroyDeletesPersistedRecord) {
+    auto conn = config::instance().get_connection();
+    conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
+               {attribute("DeleteMe"), attribute("delete@example.com"), attribute(22)});
+
+    auto user = query<User>().where("name = ?", attribute("DeleteMe")).first_or_throw();
+    EXPECT_FALSE(user.is_new_record());
+
+    EXPECT_TRUE(user.destroy());
+    EXPECT_TRUE(user.is_new_record());
+
+    auto deleted = query<User>().where("name = ?", attribute("DeleteMe")).first();
+    EXPECT_FALSE(deleted.has_value());
 }
 
 TEST_F(DatabaseOperationsTest, SetMultipleAttributes) {
@@ -492,3 +508,265 @@ TEST_F(DatabaseOperationsTest, DirtyTrackingAfterLoad) {
     user->save();
     EXPECT_FALSE(user->is_dirty());
 }
+
+// ==============================================================================
+// Timestamp & Version Model
+// ==============================================================================
+
+class TimestampedUser : public model {
+public:
+    static const char* st_table_name() { return "timestamped_users"; }
+    static const char* st_primary_key() { return "id"; }
+
+    TimestampedUser() : model(st_table_name(), st_primary_key()) {}
+};
+
+// A model without timestamp/version columns
+class PlainItem : public model {
+public:
+    static const char* st_table_name() { return "plain_items"; }
+    static const char* st_primary_key() { return "id"; }
+
+    PlainItem() : model(st_table_name(), st_primary_key()) {}
+};
+
+// ==============================================================================
+// Timestamp & Version Test Fixture
+// ==============================================================================
+
+class TimestampVersionTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        auto adapter = std::make_shared<sqlite_adapter>(":memory:");
+
+        config::connection_map connections;
+        connections["default"] = adapter;
+        config::instance().set_connections(connections, "default");
+
+        // Table with timestamp and version columns
+        adapter->query("CREATE TABLE timestamped_users ("
+                      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                      "name TEXT NOT NULL, "
+                      "email TEXT, "
+                      "created_at DATETIME, "
+                      "updated_at DATETIME, "
+                      "version INTEGER"
+                      ")", {});
+
+        // Table without timestamp/version columns
+        adapter->query("CREATE TABLE plain_items ("
+                      "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+                      "name TEXT NOT NULL"
+                      ")", {});
+    }
+};
+
+// ==============================================================================
+// Timestamp & Version Integration Tests
+// ==============================================================================
+
+TEST_F(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Alice"));
+
+    datetime before = datetime::now();
+    user.save();
+
+    // Reload from DB
+    auto loaded = query<TimestampedUser>().where("name = ?", attribute("Alice")).first_or_throw();
+
+    EXPECT_FALSE(loaded.get("created_at").is_null());
+    EXPECT_FALSE(loaded.get("updated_at").is_null());
+
+    // Both should be approximately "now"
+    auto created = loaded.get("created_at").as_date().timestamp();
+    auto updated = loaded.get("updated_at").as_date().timestamp();
+    auto before_ts = before.timestamp();
+
+    EXPECT_GE(created, before_ts - 2);
+    EXPECT_LE(created, before_ts + 2);
+    EXPECT_GE(updated, before_ts - 2);
+    EXPECT_LE(updated, before_ts + 2);
+}
+
+TEST_F(TimestampVersionTest, InsertSetsVersionToOne) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Bob"));
+    user.save();
+
+    auto loaded = query<TimestampedUser>().where("name = ?", attribute("Bob")).first_or_throw();
+    EXPECT_EQ(1, loaded.get("version").as_integer());
+}
+
+TEST_F(TimestampVersionTest, UpdateIncrementsVersion) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Charlie"));
+    user.save();
+
+    // Reload and update
+    auto loaded = query<TimestampedUser>().where("name = ?", attribute("Charlie")).first_or_throw();
+    EXPECT_EQ(1, loaded.get("version").as_integer());
+
+    loaded.set("email", attribute("charlie@example.com"));
+    loaded.save();
+
+    auto reloaded = query<TimestampedUser>().where("name = ?", attribute("Charlie")).first_or_throw();
+    EXPECT_EQ(2, reloaded.get("version").as_integer());
+    EXPECT_EQ("charlie@example.com", reloaded.get("email").as_string());
+}
+
+TEST_F(TimestampVersionTest, UpdateRefreshesUpdatedAtButNotCreatedAt) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Diana"));
+    user.save();
+
+    auto loaded = query<TimestampedUser>().where("name = ?", attribute("Diana")).first_or_throw();
+    auto original_created = loaded.get("created_at").as_date().timestamp();
+
+    // Update the record
+    loaded.set("email", attribute("diana@example.com"));
+    loaded.save();
+
+    auto reloaded = query<TimestampedUser>().where("name = ?", attribute("Diana")).first_or_throw();
+
+    // created_at should be unchanged
+    EXPECT_EQ(original_created, reloaded.get("created_at").as_date().timestamp());
+    // updated_at should still be valid
+    EXPECT_FALSE(reloaded.get("updated_at").is_null());
+}
+
+TEST_F(TimestampVersionTest, VersionInWhereClauseEnsuresOptimisticLocking) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Eve"));
+    user.save();
+
+    // Load two copies of the same record
+    auto copy1 = query<TimestampedUser>().where("name = ?", attribute("Eve")).first_or_throw();
+    auto copy2 = query<TimestampedUser>().where("name = ?", attribute("Eve")).first_or_throw();
+
+    EXPECT_EQ(1, copy1.get("version").as_integer());
+    EXPECT_EQ(1, copy2.get("version").as_integer());
+
+    // First save succeeds (WHERE version = 1 matches)
+    copy1.set("email", attribute("eve1@example.com"));
+    copy1.save();
+
+    // Second save fails with stale_record (WHERE version = 1 no longer matches, row has version 2)
+    copy2.set("email", attribute("eve2@example.com"));
+    EXPECT_THROW(copy2.save(), ex::stale_record);
+
+    // DB should have copy1's changes, not copy2's
+    auto final_record = query<TimestampedUser>().where("name = ?", attribute("Eve")).first_or_throw();
+    EXPECT_EQ("eve1@example.com", final_record.get("email").as_string());
+    EXPECT_EQ(2, final_record.get("version").as_integer());
+}
+
+TEST_F(TimestampVersionTest, StaleRecordRestoresInMemoryVersion) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Grace"));
+    user.save();
+
+    auto copy1 = query<TimestampedUser>().where("name = ?", attribute("Grace")).first_or_throw();
+    auto copy2 = query<TimestampedUser>().where("name = ?", attribute("Grace")).first_or_throw();
+
+    copy1.set("email", attribute("grace1@example.com"));
+    copy1.save();
+
+    copy2.set("email", attribute("grace2@example.com"));
+    EXPECT_THROW(copy2.save(), ex::stale_record);
+
+    // Version should be restored after failed optimistic-lock update.
+    EXPECT_EQ(1, copy2.get("version").as_integer());
+    EXPECT_TRUE(copy2.attribute_is_dirty("version"));
+}
+
+TEST_F(TimestampVersionTest, DestroyWithStaleVersionThrows) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Heidi"));
+    user.save();
+
+    auto copy1 = query<TimestampedUser>().where("name = ?", attribute("Heidi")).first_or_throw();
+    auto copy2 = query<TimestampedUser>().where("name = ?", attribute("Heidi")).first_or_throw();
+
+    copy1.set("email", attribute("heidi1@example.com"));
+    copy1.save();
+
+    EXPECT_THROW(copy2.destroy(), ex::stale_record);
+
+    auto still_there = query<TimestampedUser>().where("name = ?", attribute("Heidi")).first();
+    EXPECT_TRUE(still_there.has_value());
+}
+
+TEST_F(TimestampVersionTest, MultipleUpdatesIncrementVersionSequentially) {
+    TimestampedUser user;
+    user.init_record_tracking(true, true, true);
+    user.set("name", attribute("Frank"));
+    user.save();
+
+    for (int i = 0; i < 5; ++i) {
+        auto loaded = query<TimestampedUser>().where("name = ?", attribute("Frank")).first_or_throw();
+        loaded.set("email", attribute("frank" + std::to_string(i) + "@example.com"));
+        loaded.save();
+    }
+
+    auto final_record = query<TimestampedUser>().where("name = ?", attribute("Frank")).first_or_throw();
+    EXPECT_EQ(6, final_record.get("version").as_integer());  // 1 (insert) + 5 (updates)
+    EXPECT_EQ("frank4@example.com", final_record.get("email").as_string());
+}
+
+TEST_F(TimestampVersionTest, NoTimestampColumnsDoesNotCrash) {
+    PlainItem item;
+    item.set("name", attribute("Widget"));
+
+    EXPECT_NO_THROW(item.save());
+
+    auto loaded = query<PlainItem>().where("name = ?", attribute("Widget")).first_or_throw();
+    EXPECT_EQ("Widget", loaded.get("name").as_string());
+
+    // Update also works fine
+    loaded.set("name", attribute("Updated Widget"));
+    EXPECT_NO_THROW(loaded.save());
+
+    auto reloaded = query<PlainItem>().where("name = ?", attribute("Updated Widget")).first_or_throw();
+    EXPECT_EQ("Updated Widget", reloaded.get("name").as_string());
+}
+
+TEST_F(TimestampVersionTest, CreatedAtExistsButUpdatedAtDoesNot) {
+    // Create a table with only created_at (no updated_at, no version)
+    auto conn = config::instance().get_connection();
+    conn->query("CREATE TABLE partial_items ("
+               "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+               "name TEXT NOT NULL, "
+               "created_at DATETIME"
+               ")", {});
+
+    class PartialItem : public model {
+    public:
+        static const char* st_table_name() { return "partial_items"; }
+        static const char* st_primary_key() { return "id"; }
+        PartialItem() : model(st_table_name(), st_primary_key()) {}
+    };
+
+    PartialItem item;
+    item.init_record_tracking(true, false, false);
+    item.set("name", attribute("Partial"));
+    item.save();
+
+    auto loaded = query<PartialItem>().where("name = ?", attribute("Partial")).first_or_throw();
+    EXPECT_FALSE(loaded.get("created_at").is_null());
+
+    // Update should work fine without updated_at or version columns
+    loaded.set("name", attribute("Updated Partial"));
+    EXPECT_NO_THROW(loaded.save());
+
+    auto reloaded = query<PartialItem>().where("name = ?", attribute("Updated Partial")).first_or_throw();
+    EXPECT_EQ("Updated Partial", reloaded.get("name").as_string());
+}
+

@@ -304,6 +304,54 @@ public:
 		return success;
 	}
 
+	/**
+	* Delete this record from the database.
+	*
+	* Behaves like PHP ActiveRecord instance delete: deletes by primary key for
+	* persisted records. Returns true when a row was deleted, false for new
+	* records. If version tracking is active, deletion is guarded by version and
+	* stale deletes throw ex::stale_record.
+	*
+	* @return bool - true when row was deleted, false when model is a new record.
+	*/
+	bool destroy()
+	{
+		verify_not_readonly("destroy");
+
+		if (is_new_record()) {
+			return false;
+		}
+		if (primary_key_.empty()) {
+			throw ex::activerecord("Unable to delete, no primary key defined for {}", table_name_);
+		}
+
+		const attribute& pk_value = get(primary_key_);
+		const bool has_version = (attributes_.find("version") != attributes_.end()
+			&& !attributes_["version"].is_null());
+
+		std::string where = std::string(primary_key_) + " = ?";
+		attribute_vector values{pk_value};
+		if (has_version) {
+			where += " AND version = ?";
+			values.emplace_back(get("version"));
+		}
+
+		const std::string sql = std::format("DELETE FROM {} WHERE {}", table_name_, where);
+		auto stmt{ connection_->query(sql, values) };
+		if (has_version && stmt->affected_rows() == 0) {
+			throw ex::stale_record(
+				"Stale record detected for {} with {}={} (delete blocked by version)",
+				table_name_, primary_key_, pk_value.to_string());
+		}
+		if (stmt->affected_rows() == 0) {
+			return false;
+		}
+
+		new_record_ = true;
+		reset_dirty();
+		return true;
+	}
+
 
 	// -------------------------------------------
 	// Dirty handling
@@ -399,6 +447,26 @@ public:
 		throw ex::activerecord("model::find_by_pk() not implemented - use query<Model>().find(id)");
 	}
 
+	/**
+	* Initialize timestamp/version tracking placeholders for selected columns.
+	*
+	* IMPORTANT: pass true only for columns that actually exist in the table.
+	* This avoids generating INSERT/UPDATE SQL with non-existent columns.
+	*
+	* @param track_created_at - register created_at placeholder.
+	* @param track_updated_at - register updated_at placeholder.
+	* @param track_version - register version placeholder.
+	*/
+	void init_record_tracking(bool track_created_at, bool track_updated_at, bool track_version)
+	{
+		if (track_created_at && attributes_.find("created_at") == attributes_.end())
+			attributes_["created_at"] = attribute();
+		if (track_updated_at && attributes_.find("updated_at") == attributes_.end())
+			attributes_["updated_at"] = attribute();
+		if (track_version && attributes_.find("version") == attributes_.end())
+			attributes_["version"] = attribute();
+	}
+
 	// - connection()
 	// - reestablish_connection()
 	// - table()
@@ -406,7 +474,6 @@ public:
 	// - delete()
 	// - values_for_pk()
 	// - values_for()
-	// - set_timestamps() * set timestamp for update_at and create_at
 	// - set_relationship_from_eager_load()
 	// - reload()
 	// - __clone()
@@ -498,6 +565,20 @@ protected:
 		if (primary_key_.empty()) {
 			throw ex::activerecord("Unable to update, no primary key defined for {}", table_name_);
 		}
+
+		// Auto-set updated_at timestamp
+		set_timestamps_for_update();
+
+		// Optimistic locking: capture old version before incrementing
+		const bool has_version = (attributes_.find("version") != attributes_.end()
+		                          && !attributes_["version"].is_null());
+		int64_t old_version = 0;
+		if (has_version) {
+			old_version = get("version").as_integer();
+			attributes_["version"] = attribute(old_version + 1);
+			flag_dirty("version");
+		}
+
 		const attribute& pk_value = get(primary_key_);
 		string_vector names;
 		attribute_vector values;
@@ -516,8 +597,25 @@ protected:
 
 		sql_builder builder(connection_, table_name_);
 		builder.update(names, values);
-		builder.add_where(std::string(primary_key_) + " = ?", {pk_value});
+
+		// Optimistic locking: WHERE includes version check
+		if (has_version) {
+			builder.add_where(
+				std::string(primary_key_) + " = ? AND version = ?",
+				{pk_value, attribute(old_version)}
+			);
+		} else {
+			builder.add_where(std::string(primary_key_) + " = ?", {pk_value});
+		}
+
 		auto stmt{ connection_->query(builder.to_string(), builder.get_bind_values()) };
+		if (has_version && stmt->affected_rows() == 0) {
+			attributes_["version"] = attribute(old_version);
+			flag_dirty("version");
+			throw ex::stale_record(
+				"Stale record detected for {} with {}={} (version={})",
+				table_name_, primary_key_, pk_value.to_string(), old_version);
+		}
 		return true;
 	}
 
@@ -538,6 +636,11 @@ protected:
 		if (inValidate && !validate()) {
 			return false;
 		}
+
+		// Auto-set timestamps and version before building SQL
+		set_timestamps_for_create();
+		set_version_for_create();
+
 		string_vector names;
 		attribute_vector values;
 		for(const auto& attrib : dirty_attributes()) {
@@ -575,6 +678,46 @@ protected:
 		return true;
 	}
 
+	/**
+	* Sets created_at and updated_at timestamps if those attributes exist.
+	* Called automatically during insert().
+	*/
+	void set_timestamps_for_create()
+	{
+		datetime now = datetime::now();
+		if (attributes_.find("created_at") != attributes_.end()) {
+			attributes_["created_at"] = attribute(now);
+			flag_dirty("created_at");
+		}
+		if (attributes_.find("updated_at") != attributes_.end()) {
+			attributes_["updated_at"] = attribute(now);
+			flag_dirty("updated_at");
+		}
+	}
+
+	/**
+	* Sets updated_at timestamp if the attribute exists.
+	* Called automatically during update(). Does NOT touch created_at.
+	*/
+	void set_timestamps_for_update()
+	{
+		if (attributes_.find("updated_at") != attributes_.end()) {
+			attributes_["updated_at"] = attribute(datetime::now());
+			flag_dirty("updated_at");
+		}
+	}
+
+	/**
+	* Initializes the version attribute to 1 if it exists.
+	* Called automatically during insert().
+	*/
+	void set_version_for_create()
+	{
+		if (attributes_.find("version") != attributes_.end()) {
+			attributes_["version"] = attribute(static_cast<int64_t>(1));
+			flag_dirty("version");
+		}
+	}
 
 	static const std::map<std::string, std::string>& alias_attributes() noexcept
 	{

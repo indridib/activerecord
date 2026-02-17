@@ -92,6 +92,7 @@ sqlite_statement::sqlite_statement(sqlite3* db)
 	, stmt_(nullptr)
 	, first_step_result_(SQLITE_OK)
 	, used_first_result_(false)
+	, affected_rows_(0)
 {}
 
 sqlite_statement::~sqlite_statement()
@@ -160,6 +161,9 @@ void sqlite_statement::execute(const std::string& command, const attribute_vecto
 	// This ensures DDL/DML statements execute, and SELECT statements get their first row
 	first_step_result_ = sqlite3_step(stmt_);
 	used_first_result_ = false;
+	affected_rows_ = (sqlite3_stmt_readonly(stmt_) != 0)
+		? 0
+		: static_cast<std::size_t>(sqlite3_changes(db_));
 
 	if (first_step_result_ != SQLITE_ROW && first_step_result_ != SQLITE_DONE) {
 		std::string error = "SQLite execute error: ";

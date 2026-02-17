@@ -30,6 +30,7 @@ public:
 	void execute(const std::string& command, const attribute_vector& values) override;
 	bool fetch() override;
 	void get_attributes(attribute_map& attributes) override;
+	std::size_t affected_rows() const noexcept override { return affected_rows_; }
 
 private:
 	static attribute field_as_attribute(sqlite3_stmt* stmt, int column_index);
@@ -38,6 +39,7 @@ private:
 	sqlite3_stmt* stmt_;    // Owned prepared statement (finalized in destructor)
 	int first_step_result_; // Result from first sqlite3_step() call
 	bool used_first_result_;// Whether first result has been consumed by fetch()
+	std::size_t affected_rows_;
 };
 
 /**
