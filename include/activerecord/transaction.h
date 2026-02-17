@@ -30,15 +30,12 @@ namespace ar {
  *   } // Auto-rollback if commit() wasn't called
  */
 class transaction {
-public:
+  public:
 	/**
 	 * Begin a transaction on the default connection.
 	 * @throws ex::activerecord if no default connection is configured
 	 */
-	transaction()
-		: connection_(config::instance().get_connection())
-		, committed_(false)
-	{
+	transaction() : connection_(config::instance().get_connection()) {
 		if (!connection_) {
 			throw ex::activerecord("No database connection configured");
 		}
@@ -50,10 +47,7 @@ public:
 	 * @param conn The connection to use for the transaction
 	 * @throws ex::activerecord if connection is null
 	 */
-	explicit transaction(config::connection_ptr conn)
-		: connection_(conn)
-		, committed_(false)
-	{
+	explicit transaction(config::connection_ptr conn) : connection_(conn) {
 		if (!connection_) {
 			throw ex::activerecord("Connection cannot be null");
 		}
@@ -64,8 +58,7 @@ public:
 	 * Destructor - automatically rolls back if not committed.
 	 * Exceptions during rollback are suppressed to prevent double-throws.
 	 */
-	~transaction() noexcept
-	{
+	~transaction() noexcept {
 		if (!committed_ && connection_) {
 			try {
 				connection_->rollback();
@@ -86,8 +79,7 @@ public:
 	 * Prevents automatic rollback in destructor.
 	 * Safe to call multiple times (subsequent calls are no-ops).
 	 */
-	void commit()
-	{
+	void commit() {
 		if (!committed_ && connection_) {
 			connection_->commit();
 			committed_ = true;
@@ -98,17 +90,16 @@ public:
 	 * Explicitly roll back the transaction.
 	 * Safe to call multiple times (subsequent calls are no-ops).
 	 */
-	void rollback()
-	{
+	void rollback() {
 		if (!committed_ && connection_) {
 			connection_->rollback();
-			committed_ = true;  // Prevent double-rollback in destructor
+			committed_ = true; // Prevent double-rollback in destructor
 		}
 	}
 
-private:
+  private:
 	config::connection_ptr connection_;
-	bool committed_;
+	bool committed_{ false };
 };
 
 } // namespace ar

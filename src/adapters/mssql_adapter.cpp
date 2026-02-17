@@ -8,19 +8,18 @@
 // Implementation of MS-SQL Server adapter using ODBC
 // ============================================================================
 
-#include <adapters/mssql_adapter.h>
 #include <activerecord.h>
+#include <adapters/mssql_adapter.h>
 
 #ifdef _WIN32
-  #include <windows.h>
+#include <windows.h>
 #endif
+#include <cctype>
+#include <cstring>
 #include <sql.h>
 #include <sqlext.h>
-
 #include <sstream>
-#include <cstring>
 #include <string>
-#include <cctype>
 
 namespace ar {
 
@@ -32,10 +31,9 @@ static void check_odbc_error(SQLRETURN ret, SQLSMALLINT handle_type, SQLHANDLE h
 		SQLINTEGER native_error;
 		SQLSMALLINT text_length;
 
-		SQLGetDiagRec(handle_type, handle, 1, sql_state, &native_error,
-		             message, sizeof(message), &text_length);
+		SQLGetDiagRec(handle_type, handle, 1, sql_state, &native_error, message, sizeof(message), &text_length);
 
-		std::string error = context + ": ";
+		std::string error{ context + ": " };
 		error += reinterpret_cast<char*>(message);
 		error += " (SQLSTATE: " + std::string(reinterpret_cast<char*>(sql_state)) + ")";
 
@@ -44,22 +42,21 @@ static void check_odbc_error(SQLRETURN ret, SQLSMALLINT handle_type, SQLHANDLE h
 }
 
 namespace {
-std::string normalize_mssql_datetime(std::string value)
-{
+std::string normalize_mssql_datetime(std::string value) {
 	for (char& c : value) {
 		if (c == 'T') {
 			c = ' ';
 		}
 	}
 
-	const std::size_t space_pos{value.find(' ')};
+	const std::size_t space_pos{ value.find(' ') };
 	if (space_pos != std::string::npos) {
-		std::size_t tz_pos{value.find_first_of("Zz+-", space_pos + 1)};
+		std::size_t tz_pos{ value.find_first_of("Zz+-", space_pos + 1) };
 		if (tz_pos != std::string::npos) {
 			value.erase(tz_pos);
 		}
 
-		std::size_t frac_pos{value.find('.', space_pos + 1)};
+		std::size_t frac_pos{ value.find('.', space_pos + 1) };
 		if (frac_pos != std::string::npos) {
 			value.erase(frac_pos);
 		}
@@ -68,9 +65,8 @@ std::string normalize_mssql_datetime(std::string value)
 	return value;
 }
 
-bool contains_order_by(std::string_view sql)
-{
-	for (std::size_t i{0}; i + 8 <= sql.size(); ++i) {
+bool contains_order_by(std::string_view sql) {
+	for (std::size_t i{ 0 }; i + 8 <= sql.size(); ++i) {
 		if (std::tolower(static_cast<unsigned char>(sql[i])) == 'o' &&
 			std::tolower(static_cast<unsigned char>(sql[i + 1])) == 'r' &&
 			std::tolower(static_cast<unsigned char>(sql[i + 2])) == 'd' &&
@@ -91,27 +87,19 @@ bool contains_order_by(std::string_view sql)
 // ============================================================================
 
 mssql_statement::mssql_statement(SQLHDBC dbc)
-	: statement()
-	, dbc_(dbc)
-	, stmt_(nullptr)
-	, num_columns_(0)
-	, has_data_(false)
-	, affected_rows_(0)
-{
-	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &stmt_);
+	: statement(), dbc_(dbc), stmt_(nullptr), num_columns_(0), has_data_(false), affected_rows_(0) {
+	SQLRETURN ret{ SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &stmt_) };
 	check_odbc_error(ret, SQL_HANDLE_DBC, dbc_, "Failed to allocate statement handle");
 }
 
-mssql_statement::~mssql_statement()
-{
+mssql_statement::~mssql_statement() {
 	if (stmt_) {
 		SQLFreeHandle(SQL_HANDLE_STMT, stmt_);
 		stmt_ = nullptr;
 	}
 }
 
-void mssql_statement::execute(const std::string& command, const attribute_vector& values)
-{
+void mssql_statement::execute(const std::string& command, const attribute_vector& values) {
 	SQLRETURN ret;
 
 	// Prepare the statement
@@ -127,65 +115,57 @@ void mssql_statement::execute(const std::string& command, const attribute_vector
 		std::vector<std::string> string_values(values.size());
 
 		for (size_t i = 0; i < values.size(); ++i) {
-			SQLUSMALLINT param_number = static_cast<SQLUSMALLINT>(i + 1);
+			SQLUSMALLINT param_number{ static_cast<SQLUSMALLINT>(i + 1) };
 			const attribute& param = values[i];
 
-			switch(param.type()) {
-				case type_null:
-					indicators[i] = SQL_NULL_DATA;
-					ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT,
-					                      SQL_C_SLONG, SQL_INTEGER,
-					                      0, 0, nullptr, 0, &indicators[i]);
-					break;
+			switch (param.type()) {
+			case type_null:
+				indicators[i] = SQL_NULL_DATA;
+				ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, nullptr, 0,
+									   &indicators[i]);
+				break;
 
-				case type_string:
-					string_values[i] = param.as_string();
-					indicators[i] = SQL_NTS;
-					ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT,
-					                      SQL_C_CHAR, SQL_VARCHAR,
-					                      string_values[i].length(), 0,
-					                      (SQLPOINTER)string_values[i].c_str(),
-					                      string_values[i].length(), &indicators[i]);
-					break;
+			case type_string:
+				string_values[i] = param.as_string();
+				indicators[i] = SQL_NTS;
+				ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_VARCHAR,
+									   string_values[i].length(), 0, (SQLPOINTER)string_values[i].c_str(),
+									   string_values[i].length(), &indicators[i]);
+				break;
 
-				case type_integer:
-					int_values[i] = param.as_integer();
-					indicators[i] = 0;
-					ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT,
-					                      SQL_C_SBIGINT, SQL_BIGINT,
-					                      0, 0, &int_values[i], 0, &indicators[i]);
-					break;
+			case type_integer:
+				int_values[i] = param.as_integer();
+				indicators[i] = 0;
+				ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT, SQL_C_SBIGINT, SQL_BIGINT, 0, 0,
+									   &int_values[i], 0, &indicators[i]);
+				break;
 
-				case type_date:
-					int_values[i] = static_cast<SQLBIGINT>(param.as_date().timestamp());
-					indicators[i] = 0;
-					ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT,
-					                      SQL_C_SBIGINT, SQL_BIGINT,
-					                      0, 0, &int_values[i], 0, &indicators[i]);
-					break;
+			case type_date:
+				int_values[i] = static_cast<SQLBIGINT>(param.as_date().timestamp());
+				indicators[i] = 0;
+				ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT, SQL_C_SBIGINT, SQL_BIGINT, 0, 0,
+									   &int_values[i], 0, &indicators[i]);
+				break;
 
-				case type_decimal:
-					double_values[i] = param.as_real();
-					indicators[i] = 0;
-					ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT,
-					                      SQL_C_DOUBLE, SQL_DOUBLE,
-					                      0, 0, &double_values[i], 0, &indicators[i]);
-					break;
+			case type_decimal:
+				double_values[i] = param.as_real();
+				indicators[i] = 0;
+				ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT, SQL_C_DOUBLE, SQL_DOUBLE, 0, 0,
+									   &double_values[i], 0, &indicators[i]);
+				break;
 
-				case type_bool:
-					int_values[i] = param.as_bool() ? 1 : 0;
-					indicators[i] = 0;
-					ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT,
-					                      SQL_C_BIT, SQL_BIT,
-					                      0, 0, &int_values[i], 0, &indicators[i]);
-					break;
+			case type_bool:
+				int_values[i] = param.as_bool() ? 1 : 0;
+				indicators[i] = 0;
+				ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT, SQL_C_BIT, SQL_BIT, 0, 0, &int_values[i],
+									   0, &indicators[i]);
+				break;
 
-				default:
-					indicators[i] = SQL_NULL_DATA;
-					ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT,
-					                      SQL_C_SLONG, SQL_INTEGER,
-					                      0, 0, nullptr, 0, &indicators[i]);
-					break;
+			default:
+				indicators[i] = SQL_NULL_DATA;
+				ret = SQLBindParameter(stmt_, param_number, SQL_PARAM_INPUT, SQL_C_SLONG, SQL_INTEGER, 0, 0, nullptr, 0,
+									   &indicators[i]);
+				break;
 			}
 
 			check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLBindParameter failed");
@@ -208,20 +188,19 @@ void mssql_statement::execute(const std::string& command, const attribute_vector
 	num_columns_ = cols;
 	has_data_ = (num_columns_ > 0);
 	affected_rows_ = 0;
-	SQLLEN row_count = 0;
+	SQLLEN row_count{ 0 };
 	ret = SQLRowCount(stmt_, &row_count);
 	if ((ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO) && row_count > 0) {
 		affected_rows_ = static_cast<std::size_t>(row_count);
 	}
 }
 
-bool mssql_statement::fetch()
-{
+bool mssql_statement::fetch() {
 	if (!has_data_) {
 		return false;
 	}
 
-	SQLRETURN ret = SQLFetch(stmt_);
+	SQLRETURN ret{ SQLFetch(stmt_) };
 
 	if (ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO) {
 		return true;
@@ -233,8 +212,7 @@ bool mssql_statement::fetch()
 	}
 }
 
-void mssql_statement::get_attributes(attribute_map& attributes)
-{
+void mssql_statement::get_attributes(attribute_map& attributes) {
 	if (!has_data_ || num_columns_ == 0) {
 		return;
 	}
@@ -243,28 +221,26 @@ void mssql_statement::get_attributes(attribute_map& attributes)
 		// Get column name
 		SQLCHAR column_name[256];
 		SQLSMALLINT name_length;
-		SQLRETURN ret = SQLDescribeCol(stmt_, i, column_name, sizeof(column_name),
-		                              &name_length, nullptr, nullptr, nullptr, nullptr);
+		SQLRETURN ret = SQLDescribeCol(stmt_, i, column_name, sizeof(column_name), &name_length, nullptr, nullptr,
+									   nullptr, nullptr);
 		check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLDescribeCol failed");
 
-		std::string col_name = reinterpret_cast<char*>(column_name);
+		std::string col_name{ reinterpret_cast<char*>(column_name) };
 		attributes.emplace(col_name, field_as_attribute(stmt_, i));
 	}
 }
 
-attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, int column_index)
-{
+attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, int column_index) {
 	// Get column type
 	SQLSMALLINT data_type;
-	SQLRETURN ret = SQLDescribeCol(stmt, column_index, nullptr, 0, nullptr,
-	                              &data_type, nullptr, nullptr, nullptr);
+	SQLRETURN ret = SQLDescribeCol(stmt, column_index, nullptr, 0, nullptr, &data_type, nullptr, nullptr, nullptr);
 
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
 		return attribute();
 	}
 
 	// Read text data in chunks to avoid fixed-size truncation.
-	SQLLEN indicator = 0;
+	SQLLEN indicator{ 0 };
 	std::string value_str;
 	value_str.reserve(128);
 	constexpr SQLLEN chunk_size = 2048;
@@ -290,38 +266,38 @@ attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, int column_index)
 	}
 
 	// Convert based on SQL type
-	switch(data_type) {
-		case SQL_BIT:
-			return attribute(!value_str.empty() && (value_str[0] == '1' || value_str[0] == 't' || value_str[0] == 'T'));
+	switch (data_type) {
+	case SQL_BIT:
+		return attribute(!value_str.empty() && (value_str[0] == '1' || value_str[0] == 't' || value_str[0] == 'T'));
 
-		case SQL_TINYINT:
-		case SQL_SMALLINT:
-		case SQL_INTEGER:
-		case SQL_BIGINT:
-			return attribute(std::stoll(value_str));
+	case SQL_TINYINT:
+	case SQL_SMALLINT:
+	case SQL_INTEGER:
+	case SQL_BIGINT:
+		return attribute(std::stoll(value_str));
 
-		case SQL_REAL:
-		case SQL_FLOAT:
-		case SQL_DOUBLE:
-		case SQL_DECIMAL:
-		case SQL_NUMERIC:
-			return attribute(std::stod(value_str));
+	case SQL_REAL:
+	case SQL_FLOAT:
+	case SQL_DOUBLE:
+	case SQL_DECIMAL:
+	case SQL_NUMERIC:
+		return attribute(std::stod(value_str));
 
-		case SQL_TYPE_DATE:
-		case SQL_TYPE_TIMESTAMP:
-			return attribute(datetime::parse(normalize_mssql_datetime(value_str)));
+	case SQL_TYPE_DATE:
+	case SQL_TYPE_TIMESTAMP:
+		return attribute(datetime::parse(normalize_mssql_datetime(value_str)));
 
-		case SQL_TYPE_TIME:
-			return attribute(datetime::parse(std::string("1970-01-01 ") + normalize_mssql_datetime(value_str)));
+	case SQL_TYPE_TIME:
+		return attribute(datetime::parse(std::string("1970-01-01 ") + normalize_mssql_datetime(value_str)));
 
-		case SQL_CHAR:
-		case SQL_VARCHAR:
-		case SQL_LONGVARCHAR:
-		case SQL_WCHAR:
-		case SQL_WVARCHAR:
-		case SQL_WLONGVARCHAR:
-		default:
-			return attribute(value_str);
+	case SQL_CHAR:
+	case SQL_VARCHAR:
+	case SQL_LONGVARCHAR:
+	case SQL_WCHAR:
+	case SQL_WVARCHAR:
+	case SQL_WLONGVARCHAR:
+	default:
+		return attribute(value_str);
 	}
 }
 
@@ -330,41 +306,29 @@ attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, int column_index)
 // ============================================================================
 
 mssql_adapter::mssql_adapter(const std::string& dsn, const std::string& user, const std::string& password)
-	: connection()
-	, env_(nullptr)
-	, dbc_(nullptr)
-{
+	: connection(), env_(nullptr), dbc_(nullptr) {
 	std::ostringstream connstr;
 	connstr << "DSN=" << dsn << ";UID=" << user << ";PWD=" << password << ";";
 	connect(connstr.str());
 }
 
-mssql_adapter::mssql_adapter(const std::string& connection_string)
-	: connection()
-	, env_(nullptr)
-	, dbc_(nullptr)
-{
+mssql_adapter::mssql_adapter(const std::string& connection_string) : connection(), env_(nullptr), dbc_(nullptr) {
 	connect(connection_string);
 }
 
-mssql_adapter::mssql_adapter(const std::string& server, const std::string& database,
-                             const std::string& user, const std::string& password,
-                             unsigned int port)
-	: connection()
-	, env_(nullptr)
-	, dbc_(nullptr)
-{
+mssql_adapter::mssql_adapter(const std::string& server, const std::string& database, const std::string& user,
+							 const std::string& password, unsigned int port)
+	: connection(), env_(nullptr), dbc_(nullptr) {
 	std::ostringstream connstr;
 	connstr << "DRIVER={ODBC Driver 17 for SQL Server};"
-	       << "SERVER=" << server << "," << port << ";"
-	       << "DATABASE=" << database << ";"
-	       << "UID=" << user << ";"
-	       << "PWD=" << password << ";";
+			<< "SERVER=" << server << "," << port << ";"
+			<< "DATABASE=" << database << ";"
+			<< "UID=" << user << ";"
+			<< "PWD=" << password << ";";
 	connect(connstr.str());
 }
 
-void mssql_adapter::connect(const std::string& connection_string)
-{
+void mssql_adapter::connect(const std::string& connection_string) {
 	SQLRETURN ret;
 
 	// Allocate environment handle
@@ -383,10 +347,8 @@ void mssql_adapter::connect(const std::string& connection_string)
 	SQLCHAR out_conn_str[1024];
 	SQLSMALLINT out_conn_str_len;
 
-	ret = SQLDriverConnect(dbc_, nullptr,
-	                      (SQLCHAR*)connection_string.c_str(), SQL_NTS,
-	                      out_conn_str, sizeof(out_conn_str),
-	                      &out_conn_str_len, SQL_DRIVER_NOPROMPT);
+	ret = SQLDriverConnect(dbc_, nullptr, (SQLCHAR*)connection_string.c_str(), SQL_NTS, out_conn_str,
+						   sizeof(out_conn_str), &out_conn_str_len, SQL_DRIVER_NOPROMPT);
 
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
 		try {
@@ -401,8 +363,7 @@ void mssql_adapter::connect(const std::string& connection_string)
 	}
 }
 
-mssql_adapter::~mssql_adapter()
-{
+mssql_adapter::~mssql_adapter() {
 	if (dbc_) {
 		SQLDisconnect(dbc_);
 		SQLFreeHandle(SQL_HANDLE_DBC, dbc_);
@@ -414,15 +375,13 @@ mssql_adapter::~mssql_adapter()
 	}
 }
 
-std::unique_ptr<statement> mssql_adapter::query(const std::string& sql, const attribute_vector& values)
-{
-	auto stmt = std::make_unique<mssql_statement>(dbc_);
+std::unique_ptr<statement> mssql_adapter::query(const std::string& sql, const attribute_vector& values) {
+	auto stmt{ std::make_unique<mssql_statement>(dbc_) };
 	stmt->execute(sql, values);
 	return stmt;
 }
 
-void mssql_adapter::limit(std::string& sql, long offset, long limit) const
-{
+void mssql_adapter::limit(std::string& sql, long offset, long limit) const {
 	// SQL Server 2012+ uses OFFSET ... ROWS FETCH NEXT ... ROWS ONLY
 	// This requires an ORDER BY clause
 	if (offset >= 0 || limit >= 0) {
@@ -441,13 +400,12 @@ void mssql_adapter::limit(std::string& sql, long offset, long limit) const
 	}
 }
 
-std::size_t mssql_adapter::insert_id() const
-{
+std::size_t mssql_adapter::insert_id() const {
 	if (!dbc_) {
 		return 0;
 	}
-	SQLHSTMT stmt{nullptr};
-	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &stmt);
+	SQLHSTMT stmt{ nullptr };
+	SQLRETURN ret{ SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &stmt) };
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
 		return 0;
 	}
@@ -459,8 +417,8 @@ std::size_t mssql_adapter::insert_id() const
 		return 0;
 	}
 
-	SQLBIGINT id{0};
-	SQLLEN indicator{0};
+	SQLBIGINT id{ 0 };
+	SQLLEN indicator{ 0 };
 	ret = SQLBindCol(stmt, 1, SQL_C_SBIGINT, &id, 0, &indicator);
 	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
 		SQLFreeHandle(SQL_HANDLE_STMT, stmt);
@@ -475,23 +433,19 @@ std::size_t mssql_adapter::insert_id() const
 	return 0;
 }
 
-void mssql_adapter::begin_transaction()
-{
+void mssql_adapter::begin_transaction() {
 	query("BEGIN TRANSACTION");
 }
 
-void mssql_adapter::commit()
-{
+void mssql_adapter::commit() {
 	query("COMMIT TRANSACTION");
 }
 
-void mssql_adapter::rollback()
-{
+void mssql_adapter::rollback() {
 	query("ROLLBACK TRANSACTION");
 }
 
-std::string mssql_adapter::escape(std::string_view str) const
-{
+std::string mssql_adapter::escape(std::string_view str) const {
 	std::string escaped;
 	escaped.reserve(str.size() + 2);
 	escaped += '[';

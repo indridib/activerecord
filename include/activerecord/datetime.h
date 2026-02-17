@@ -25,7 +25,7 @@ namespace ar {
  * - Parsing from common date/time formats
  */
 class datetime {
-public:
+  public:
 	// Constructors
 	datetime() : timestamp_(0) {}
 	datetime(std::time_t t) : timestamp_(t) {}
@@ -36,9 +36,9 @@ public:
 	std::time_t timestamp() const { return timestamp_; }
 
 	// Formatting
-	std::string to_string() const;           // Format as "YYYY-MM-DD HH:MM:SS"
-	std::string to_date_string() const;      // Format as "YYYY-MM-DD"
-	std::string to_time_string() const;      // Format as "HH:MM:SS"
+	std::string to_string() const;		// Format as "YYYY-MM-DD HH:MM:SS"
+	std::string to_date_string() const; // Format as "YYYY-MM-DD"
+	std::string to_time_string() const; // Format as "HH:MM:SS"
 
 	// Components
 	int year() const;
@@ -49,8 +49,8 @@ public:
 	int second() const;
 
 	// Static helpers
-	static datetime now();                   // Current date/time
-	static datetime parse(const std::string& str);  // Parse from string
+	static datetime now();						   // Current date/time
+	static datetime parse(const std::string& str); // Parse from string
 
 	// Comparison operators
 	bool operator==(const datetime& other) const { return timestamp_ == other.timestamp_; }
@@ -60,7 +60,7 @@ public:
 	bool operator>(const datetime& other) const { return timestamp_ > other.timestamp_; }
 	bool operator>=(const datetime& other) const { return timestamp_ >= other.timestamp_; }
 
-private:
+  private:
 	std::time_t timestamp_;
 };
 

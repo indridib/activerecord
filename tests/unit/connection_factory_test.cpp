@@ -4,40 +4,35 @@
 // Unit tests for make_connection(URL)
 // ==============================================================================
 
-#include <gtest/gtest.h>
 #include <config.h>
 #include <connection_factory.h>
+#include <gtest/gtest.h>
 
 using namespace ar;
 
-TEST(ConnectionFactoryTest, UnsupportedProtocolThrows)
-{
+TEST(ConnectionFactoryTest, UnsupportedProtocolThrows) {
 	EXPECT_THROW(make_connection("unknown://localhost/db"), ex::config);
 }
 
 #ifndef AR_MYSQL
-TEST(ConnectionFactoryTest, DisabledMySqlProtocolThrows)
-{
+TEST(ConnectionFactoryTest, DisabledMySqlProtocolThrows) {
 	EXPECT_THROW(make_connection("mysql://user:pass@localhost/app_db"), ex::config);
 }
 #endif
 
 #ifdef AR_SQLITE
-TEST(ConnectionFactoryTest, SqliteConnectionFromUrl)
-{
+TEST(ConnectionFactoryTest, SqliteConnectionFromUrl) {
 	auto conn = make_connection("sqlite://:memory:");
 	ASSERT_TRUE(conn != nullptr);
 }
 
-TEST(ConnectionFactoryTest, ConfigSetConnectionUrl)
-{
+TEST(ConnectionFactoryTest, ConfigSetConnectionUrl) {
 	config::instance().set_connection_url("default", "sqlite://:memory:");
 	auto conn = config::instance().get_connection("default");
 	ASSERT_TRUE(conn != nullptr);
 }
 
-TEST(ConnectionFactoryTest, ConfigSetConnectionUrlsMap)
-{
+TEST(ConnectionFactoryTest, ConfigSetConnectionUrlsMap) {
 	std::map<std::string, std::string> urls;
 	urls["primary"] = "sqlite://:memory:";
 	urls["secondary"] = "sqlite://:memory:";
@@ -49,4 +44,3 @@ TEST(ConnectionFactoryTest, ConfigSetConnectionUrlsMap)
 	ASSERT_TRUE(secondary != nullptr);
 }
 #endif
-

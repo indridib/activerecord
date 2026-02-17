@@ -11,57 +11,52 @@
 #include <activerecord.h>
 #include <connection.h>
 #include <connection_factory.h>
-
 #include <map>
 #include <memory>
 
 namespace ar {
 
-
-
 /**
-* a singleton containing all configuration for active record
-*/
+ * a singleton containing all configuration for active record
+ */
 class config {
-public:
+  public:
 	static config& instance() {
 		static config instance_;
 		return instance_;
 	}
 
-	config(config const&)			= delete;
-	void operator=(config const&)	= delete;
-	
+	config(config const&) = delete;
+	void operator=(config const&) = delete;
+
 	typedef std::shared_ptr<connection> connection_ptr;
 	typedef std::map<std::string, connection_ptr> connection_map;
 
-
 	/**
-	* Sets all the connections for this config.
-	*
-	* @param connections - a map of all the connections to set.
-	*/
+	 * Sets all the connections for this config.
+	 *
+	 * @param connections - a map of all the connections to set.
+	 */
 	void set_connections(const connection_map& connections) {
 		connections_ = connections;
 		default_connection_.clear();
 	}
 
 	/**
-	* Sets all the connections for this config and the default connection.
-	*
-	* @param connections - a map of all the connections to set.
-	* @param string default_connection - a name of the default connection to use.
-	*/
+	 * Sets all the connections for this config and the default connection.
+	 *
+	 * @param connections - a map of all the connections to set.
+	 * @param string default_connection - a name of the default connection to use.
+	 */
 	void set_connections(const connection_map& connections, std::string_view default_connection) {
 		connections_ = connections;
 		default_connection_ = default_connection;
 	}
 
 	/**
-	* Sets a named connection from URL.
-	*/
-	void set_connection_url(std::string_view name, std::string_view url)
-	{
+	 * Sets a named connection from URL.
+	 */
+	void set_connection_url(std::string_view name, std::string_view url) {
 		connections_[std::string(name)] = make_connection(url);
 		if (default_connection_.empty()) {
 			default_connection_ = std::string(name);
@@ -69,10 +64,9 @@ public:
 	}
 
 	/**
-	* Sets multiple named connections from URL map.
-	*/
-	void set_connection_urls(const std::map<std::string, std::string>& urls, std::string_view default_connection = {})
-	{
+	 * Sets multiple named connections from URL map.
+	 */
+	void set_connection_urls(const std::map<std::string, std::string>& urls, std::string_view default_connection = {}) {
 		connection_map mapped;
 		for (const auto& [name, url] : urls) {
 			mapped[name] = make_connection(url);
@@ -82,15 +76,15 @@ public:
 	}
 
 	/**
-	* Gets a connection with the name 'con_name'.
-	*
-	* @param con_name - An optional name of the connection to get.
-	* @return connection - a reference to the connection with the name 'con_name' or the 
-	*					   default connection if no name is provided.
-	* @throws - exception if not found.
-	*/
+	 * Gets a connection with the name 'con_name'.
+	 *
+	 * @param con_name - An optional name of the connection to get.
+	 * @return connection - a reference to the connection with the name 'con_name' or the
+	 *					   default connection if no name is provided.
+	 * @throws - exception if not found.
+	 */
 	connection_ptr get_connection(std::string_view con_name) {
-		auto iter = connections_.end();
+		auto iter{ connections_.end() };
 		if (!con_name.empty()) {
 			iter = connections_.find(std::string(con_name));
 		} else if (!default_connection_.empty()) {
@@ -104,16 +98,14 @@ public:
 	}
 
 	/**
-	* Gets the default connection.
-	*
-	* @return connection - a reference to the default connection.
-	* @throws - exception if no default connection can be found.
-	*/
-	connection_ptr get_connection() {
-		return get_connection(default_connection_);
-	}
+	 * Gets the default connection.
+	 *
+	 * @return connection - a reference to the default connection.
+	 * @throws - exception if no default connection can be found.
+	 */
+	connection_ptr get_connection() { return get_connection(default_connection_); }
 
-private:
+  private:
 	config() {}
 
 	std::string default_connection_;

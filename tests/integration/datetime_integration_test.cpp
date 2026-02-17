@@ -8,9 +8,9 @@
 // Integration tests for datetime with database adapters
 // ============================================================================
 
-#include <gtest/gtest.h>
-#include <datetime.h>
 #include <attribute.h>
+#include <datetime.h>
+#include <gtest/gtest.h>
 #include <model.h>
 
 #ifdef AR_SQLITE
@@ -26,7 +26,7 @@ using namespace ar;
 // ============================================================================
 
 class Event : public model {
-public:
+  public:
 	Event() : model(st_table_name(), st_primary_key()) {}
 
 	// Model metadata
@@ -50,7 +50,7 @@ public:
 // ============================================================================
 
 class DateTimeIntegrationTest : public ::testing::Test {
-protected:
+  protected:
 	void SetUp() override {
 		// Use in-memory SQLite database
 		auto adapter = std::make_shared<sqlite_adapter>(":memory:");
@@ -84,7 +84,7 @@ TEST_F(DateTimeIntegrationTest, InsertRecordWithDateTime) {
 	Event event;
 	event.set_name("Conference 2024");
 	event.set_created_at(datetime::now());
-	event.set_starts_at(datetime{2024, 9, 15, 9, 0, 0});
+	event.set_starts_at(datetime{ 2024, 9, 15, 9, 0, 0 });
 
 	EXPECT_TRUE(event.save());
 	EXPECT_GT(event.id(), 0);
@@ -94,7 +94,7 @@ TEST_F(DateTimeIntegrationTest, RetrieveDateTimeFromDatabase) {
 	// Insert a record
 	Event event;
 	event.set_name("Meeting");
-	datetime start_time{2024, 6, 15, 14, 30, 0};
+	datetime start_time{ 2024, 6, 15, 14, 30, 0 };
 	event.set_starts_at(start_time);
 	event.save();
 
@@ -117,12 +117,12 @@ TEST_F(DateTimeIntegrationTest, UpdateDateTimeField) {
 	// Create event
 	Event event;
 	event.set_name("Workshop");
-	event.set_starts_at(datetime{2024, 6, 15, 10, 0, 0});
+	event.set_starts_at(datetime{ 2024, 6, 15, 10, 0, 0 });
 	event.save();
 
 	// Update the start time
 	int id = event.id();
-	datetime new_time{2024, 6, 16, 14, 0, 0};  // Reschedule to next day
+	datetime new_time{ 2024, 6, 16, 14, 0, 0 }; // Reschedule to next day
 	event.set_starts_at(new_time);
 	EXPECT_TRUE(event.save());
 
@@ -134,7 +134,7 @@ TEST_F(DateTimeIntegrationTest, UpdateDateTimeField) {
 	EXPECT_EQ(2024, retrieved_time.year());
 	EXPECT_EQ(6, retrieved_time.month());
 	EXPECT_EQ(16, retrieved_time.day());  // Changed from 15 to 16
-	EXPECT_EQ(14, retrieved_time.hour());   // Changed from 10 to 14
+	EXPECT_EQ(14, retrieved_time.hour()); // Changed from 10 to 14
 }
 
 // ============================================================================
@@ -145,25 +145,25 @@ TEST_F(DateTimeIntegrationTest, QueryByDateRange) {
 	// Insert events at different times
 	Event event1;
 	event1.set_name("Event 1");
-	event1.set_starts_at(datetime{2024, 6, 10, 10, 0, 0});
+	event1.set_starts_at(datetime{ 2024, 6, 10, 10, 0, 0 });
 	event1.save();
 
 	Event event2;
 	event2.set_name("Event 2");
-	event2.set_starts_at(datetime{2024, 6, 15, 10, 0, 0});
+	event2.set_starts_at(datetime{ 2024, 6, 15, 10, 0, 0 });
 	event2.save();
 
 	Event event3;
 	event3.set_name("Event 3");
-	event3.set_starts_at(datetime{2024, 6, 20, 10, 0, 0});
+	event3.set_starts_at(datetime{ 2024, 6, 20, 10, 0, 0 });
 	event3.save();
 
 	// Query events after June 12
 	query<Event> q;
-	q.where("starts_at >= ?", attribute_vector{attribute{datetime{2024, 6, 12, 0, 0, 0}}});
+	q.where("starts_at >= ?", attribute_vector{ attribute{ datetime{ 2024, 6, 12, 0, 0, 0 } } });
 	auto events = q.all();
 
-	EXPECT_EQ(2, events.size());  // Should get Event 2 and Event 3
+	EXPECT_EQ(2, events.size()); // Should get Event 2 and Event 3
 }
 
 // ============================================================================
@@ -191,7 +191,7 @@ TEST_F(DateTimeIntegrationTest, NullDateTimeField) {
 TEST_F(DateTimeIntegrationTest, DateOnlyStorage) {
 	Event event;
 	event.set_name("Birthday Party");
-	datetime date_only{2024, 12, 25};  // Christmas, no time
+	datetime date_only{ 2024, 12, 25 }; // Christmas, no time
 	event.set_starts_at(date_only);
 	event.save();
 
@@ -208,7 +208,7 @@ TEST_F(DateTimeIntegrationTest, DateOnlyStorage) {
 
 TEST_F(DateTimeIntegrationTest, RoundTripFormatting) {
 	// Test that datetime survives database round-trip
-	datetime original{2024, 6, 15, 14, 30, 45};
+	datetime original{ 2024, 6, 15, 14, 30, 45 };
 
 	Event event;
 	event.set_name("Test Event");
@@ -244,7 +244,7 @@ TEST_F(DateTimeIntegrationTest, CreatedAtTimestamp) {
 	datetime created = retrieved.created_at();
 
 	EXPECT_GT(created.timestamp(), 0);
-	EXPECT_EQ(datetime::now().year(), created.year());  // Same year as now
+	EXPECT_EQ(datetime::now().year(), created.year()); // Same year as now
 }
 
 TEST_F(DateTimeIntegrationTest, ScheduleFutureEvent) {
@@ -253,7 +253,7 @@ TEST_F(DateTimeIntegrationTest, ScheduleFutureEvent) {
 	event.set_name("Future Conference");
 
 	// Set date to September 1, 2025
-	datetime future{2025, 9, 1, 9, 0, 0};
+	datetime future{ 2025, 9, 1, 9, 0, 0 };
 	event.set_starts_at(future);
 	event.save();
 

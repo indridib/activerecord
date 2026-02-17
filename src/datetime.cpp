@@ -8,9 +8,9 @@
 // Date/time implementation
 // ============================================================================
 
+#include <cstring>
 #include <datetime.h>
 #include <format>
-#include <cstring>
 #include <stdexcept>
 
 // Platform-specific includes for thread-safe time functions
@@ -45,13 +45,13 @@ datetime::datetime(const std::string& date_str) {
 
 datetime::datetime(int year, int month, int day, int hour, int min, int sec) {
 	std::tm timeinfo{};
-	timeinfo.tm_year = year - 1900;  // Years since 1900
-	timeinfo.tm_mon = month - 1;     // Months since January (0-11)
+	timeinfo.tm_year = year - 1900; // Years since 1900
+	timeinfo.tm_mon = month - 1;	// Months since January (0-11)
 	timeinfo.tm_mday = day;
 	timeinfo.tm_hour = hour;
 	timeinfo.tm_min = min;
 	timeinfo.tm_sec = sec;
-	timeinfo.tm_isdst = -1;          // Let mktime determine DST
+	timeinfo.tm_isdst = -1; // Let mktime determine DST
 
 	timestamp_ = std::mktime(&timeinfo);
 	if (timestamp_ == -1) {
@@ -69,13 +69,8 @@ std::string datetime::to_string() const {
 		return "";
 	}
 
-	return std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}",
-		timeinfo.tm_year + 1900,
-		timeinfo.tm_mon + 1,
-		timeinfo.tm_mday,
-		timeinfo.tm_hour,
-		timeinfo.tm_min,
-		timeinfo.tm_sec);
+	return std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1,
+					   timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
 }
 
 std::string datetime::to_date_string() const {
@@ -88,10 +83,7 @@ std::string datetime::to_date_string() const {
 		return "";
 	}
 
-	return std::format("{:04d}-{:02d}-{:02d}",
-		timeinfo.tm_year + 1900,
-		timeinfo.tm_mon + 1,
-		timeinfo.tm_mday);
+	return std::format("{:04d}-{:02d}-{:02d}", timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
 }
 
 std::string datetime::to_time_string() const {
@@ -104,10 +96,7 @@ std::string datetime::to_time_string() const {
 		return "";
 	}
 
-	return std::format("{:02d}:{:02d}:{:02d}",
-		timeinfo.tm_hour,
-		timeinfo.tm_min,
-		timeinfo.tm_sec);
+	return std::format("{:02d}:{:02d}:{:02d}", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
 }
 
 int datetime::year() const {
@@ -141,7 +130,7 @@ int datetime::second() const {
 }
 
 datetime datetime::now() {
-	return datetime{std::time(nullptr)};
+	return datetime{ std::time(nullptr) };
 }
 
 datetime datetime::parse(const std::string& str) {
@@ -149,11 +138,10 @@ datetime datetime::parse(const std::string& str) {
 		return datetime{};
 	}
 
-	int year{0}, month{0}, day{0}, hour{0}, min{0}, sec{0};
+	int year{ 0 }, month{ 0 }, day{ 0 }, hour{ 0 }, min{ 0 }, sec{ 0 };
 
 	// Try parsing "YYYY-MM-DD HH:MM:SS"
-	if (AR_SSCANF(str.c_str(), "%d-%d-%d %d:%d:%d",
-		&year, &month, &day, &hour, &min, &sec) == 6) {
+	if (AR_SSCANF(str.c_str(), "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &min, &sec) == 6) {
 		// Validate parsed values
 		if (year < 1970 || year > 9999) {
 			throw std::invalid_argument(std::format("Invalid year in date/time string: '{}' (year={})", str, year));
@@ -173,7 +161,7 @@ datetime datetime::parse(const std::string& str) {
 		if (sec < 0 || sec > 59) {
 			throw std::invalid_argument(std::format("Invalid second in date/time string: '{}' (sec={})", str, sec));
 		}
-		return datetime{year, month, day, hour, min, sec};
+		return datetime{ year, month, day, hour, min, sec };
 	}
 
 	// Try parsing "YYYY-MM-DD"
@@ -188,7 +176,7 @@ datetime datetime::parse(const std::string& str) {
 		if (day < 1 || day > 31) {
 			throw std::invalid_argument(std::format("Invalid day in date string: '{}' (day={})", str, day));
 		}
-		return datetime{year, month, day};
+		return datetime{ year, month, day };
 	}
 
 	throw std::invalid_argument(std::format("Unable to parse date/time string: '{}'", str));

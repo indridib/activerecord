@@ -15,15 +15,15 @@
 
 // Forward declarations for ODBC types (actual header included in .cpp)
 #ifdef _WIN32
-  typedef void* SQLHANDLE;
-  typedef void* SQLHENV;
-  typedef void* SQLHDBC;
-  typedef void* SQLHSTMT;
+typedef void* SQLHANDLE;
+typedef void* SQLHENV;
+typedef void* SQLHDBC;
+typedef void* SQLHSTMT;
 #else
-  typedef void* SQLHANDLE;
-  typedef void* SQLHENV;
-  typedef void* SQLHDBC;
-  typedef void* SQLHSTMT;
+typedef void* SQLHANDLE;
+typedef void* SQLHENV;
+typedef void* SQLHDBC;
+typedef void* SQLHSTMT;
 #endif
 
 namespace ar {
@@ -32,7 +32,7 @@ namespace ar {
  * MS-SQL statement class using ODBC
  */
 class mssql_statement : public statement {
-public:
+  public:
 	mssql_statement(SQLHDBC dbc);
 	~mssql_statement() override;
 
@@ -41,13 +41,13 @@ public:
 	void get_attributes(attribute_map& attributes) override;
 	std::size_t affected_rows() const noexcept override { return affected_rows_; }
 
-private:
+  private:
 	static attribute field_as_attribute(SQLHSTMT stmt, int column_index);
 
-	SQLHDBC dbc_;       // Non-owning pointer to database connection
-	SQLHSTMT stmt_;     // Owned statement handle (freed in destructor)
-	int num_columns_;   // Number of columns in result
-	bool has_data_;     // Whether we have result data
+	SQLHDBC dbc_;				// Non-owning pointer to database connection
+	SQLHSTMT stmt_;				// Owned statement handle (freed in destructor)
+	int num_columns_;			// Number of columns in result
+	bool has_data_;				// Whether we have result data
 	std::size_t affected_rows_; // Rows affected by last execute
 };
 
@@ -55,7 +55,7 @@ private:
  * Adapter for Microsoft SQL Server database via ODBC
  */
 class mssql_adapter : public connection {
-public:
+  public:
 	// Connection via DSN
 	mssql_adapter(const std::string& dsn, const std::string& user, const std::string& password);
 
@@ -63,9 +63,8 @@ public:
 	explicit mssql_adapter(const std::string& connection_string);
 
 	// Connection via server, database, user, password
-	mssql_adapter(const std::string& server, const std::string& database,
-	              const std::string& user, const std::string& password,
-	              unsigned int port = 1433);
+	mssql_adapter(const std::string& server, const std::string& database, const std::string& user,
+				  const std::string& password, unsigned int port = 1433);
 
 	~mssql_adapter() override;
 
@@ -79,11 +78,11 @@ public:
 
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
-private:
+  private:
 	void connect(const std::string& connection_string);
 
-	SQLHENV env_;   // ODBC environment handle
-	SQLHDBC dbc_;   // ODBC connection handle
+	SQLHENV env_; // ODBC environment handle
+	SQLHDBC dbc_; // ODBC connection handle
 };
 
 } // namespace ar

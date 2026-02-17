@@ -25,7 +25,7 @@ namespace ar {
  * PostgreSQL statement class
  */
 class postgres_statement : public statement {
-public:
+  public:
 	postgres_statement(PGconn* db);
 	~postgres_statement() override;
 
@@ -34,14 +34,14 @@ public:
 	void get_attributes(attribute_map& attributes) override;
 	std::size_t affected_rows() const noexcept override { return affected_rows_; }
 
-private:
+  private:
 	static attribute field_as_attribute(PGresult* result, int row, int column);
 
-	PGconn* db_;           // Non-owning pointer to database connection
-	PGresult* result_;     // Owned result set (cleared in destructor)
-	int current_row_;      // Current row index
-	int num_rows_;         // Total number of rows
-	int num_fields_;       // Number of columns
+	PGconn* db_;				// Non-owning pointer to database connection
+	PGresult* result_;			// Owned result set (cleared in destructor)
+	int current_row_;			// Current row index
+	int num_rows_;				// Total number of rows
+	int num_fields_;			// Number of columns
 	std::size_t affected_rows_; // Rows affected by last execute
 };
 
@@ -49,10 +49,9 @@ private:
  * Adapter for PostgreSQL database
  */
 class postgres_adapter : public connection {
-public:
-	postgres_adapter(const std::string& host, const std::string& user,
-	                 const std::string& password, const std::string& database,
-	                 unsigned int port = 5432);
+  public:
+	postgres_adapter(const std::string& host, const std::string& user, const std::string& password,
+					 const std::string& database, unsigned int port = 5432);
 	~postgres_adapter() override;
 
 	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector& values = {}) override;
@@ -65,8 +64,8 @@ public:
 
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
-private:
-	PGconn* db_;  // Owned database connection (closed in destructor)
+  private:
+	PGconn* db_; // Owned database connection (closed in destructor)
 };
 
 } // namespace ar

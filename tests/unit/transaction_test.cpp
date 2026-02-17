@@ -8,10 +8,10 @@
 // Unit tests for transaction RAII wrapper
 // ============================================================================
 
-#include <gtest/gtest.h>
-#include <transaction.h>
-#include <model.h>
 #include <config.h>
+#include <gtest/gtest.h>
+#include <model.h>
+#include <transaction.h>
 
 #ifdef AR_SQLITE
 #include <adapters/sqlite_adapter.h>
@@ -20,7 +20,7 @@ using namespace ar;
 
 // Test fixture with in-memory database
 class TransactionTest : public ::testing::Test {
-protected:
+  protected:
 	void SetUp() override {
 		// Create in-memory SQLite database
 		auto adapter = std::make_shared<sqlite_adapter>(":memory:");
@@ -43,7 +43,7 @@ protected:
 
 // Test model
 class TestItem : public model {
-public:
+  public:
 	TestItem() : model(st_table_name(), st_primary_key()) {}
 
 	static const char* st_table_name() { return "test_items"; }
@@ -111,7 +111,7 @@ TEST_F(TransactionTest, AutoRollbackOnException) {
 		// Throw exception before commit
 		throw std::runtime_error("Simulated error");
 
-		tx.commit();  // This line won't be reached
+		tx.commit(); // This line won't be reached
 	} catch (const std::runtime_error&) {
 		// Expected exception
 	}
@@ -234,7 +234,7 @@ TEST_F(TransactionTest, CommitIsIdempotent) {
 		EXPECT_TRUE(item.save());
 
 		tx.commit();
-		tx.commit();  // Second commit should be safe (no-op)
+		tx.commit(); // Second commit should be safe (no-op)
 	}
 
 	// Verify data was committed
@@ -252,7 +252,7 @@ TEST_F(TransactionTest, RollbackIsIdempotent) {
 		EXPECT_TRUE(item.save());
 
 		tx.rollback();
-		tx.rollback();  // Second rollback should be safe (no-op)
+		tx.rollback(); // Second rollback should be safe (no-op)
 	}
 
 	// Verify data was rolled back

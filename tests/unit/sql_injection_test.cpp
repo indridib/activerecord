@@ -8,14 +8,14 @@
 // Tests for SQL injection prevention mechanisms
 // ============================================================================
 
-#include <gtest/gtest.h>
-#include <connection.h>
 #include <attribute.h>
+#include <connection.h>
+#include <gtest/gtest.h>
 
 #ifdef AR_SQLITE
 #include <adapters/sqlite_adapter.h>
-#include <model.h>
 #include <config.h>
+#include <model.h>
 #endif
 
 using namespace ar;
@@ -75,7 +75,7 @@ TEST(SqlInjectionTest, QuoteNameNestedQuotes) {
 
 TEST(SqlInjectionTest, AttributeStringWithQuotes) {
 	// Attributes should store values safely without manual escaping
-	attribute attr{"Robert'; DROP TABLE users; --"};
+	attribute attr{ "Robert'; DROP TABLE users; --" };
 
 	EXPECT_EQ(type_string, attr.type());
 	EXPECT_EQ("Robert'; DROP TABLE users; --", attr.as_string());
@@ -85,7 +85,7 @@ TEST(SqlInjectionTest, AttributeStringWithQuotes) {
 }
 
 TEST(SqlInjectionTest, AttributeStringWithBackticks) {
-	attribute attr{"user`name"};
+	attribute attr{ "user`name" };
 	EXPECT_EQ("user`name", attr.as_string());
 
 	// Safe when used with parameter binding
@@ -93,9 +93,9 @@ TEST(SqlInjectionTest, AttributeStringWithBackticks) {
 
 TEST(SqlInjectionTest, AttributeNumericTypes) {
 	// Numeric types can't be used for SQL injection
-	attribute int_attr{42};
-	attribute double_attr{3.14};
-	attribute bool_attr{true};
+	attribute int_attr{ 42 };
+	attribute double_attr{ 3.14 };
+	attribute bool_attr{ true };
 
 	EXPECT_EQ(42, int_attr.as_integer());
 	EXPECT_DOUBLE_EQ(3.14, double_attr.as_real());
@@ -109,7 +109,7 @@ TEST(SqlInjectionTest, AttributeNumericTypes) {
 // ============================================================================
 
 class SqlInjectionIntegrationTest : public ::testing::Test {
-protected:
+  protected:
 	void SetUp() override {
 		// Use in-memory SQLite database
 		auto adapter = std::make_shared<sqlite_adapter>(":memory:");
@@ -132,7 +132,7 @@ protected:
 
 // Test model
 class User : public model {
-public:
+  public:
 	User() : model(st_table_name(), st_primary_key()) {}
 
 	// Model metadata
@@ -173,7 +173,7 @@ TEST_F(SqlInjectionIntegrationTest, QueryMaliciousStringValue) {
 
 	// Attempt SQL injection via WHERE clause value
 	query<User> q;
-	q.where("name = ?", attribute_vector{attribute{"Alice'; DROP TABLE users; --"}});
+	q.where("name = ?", attribute_vector{ attribute{ "Alice'; DROP TABLE users; --" } });
 	auto users = q.all();
 
 	// Should find no users (malicious string doesn't match)
@@ -182,7 +182,7 @@ TEST_F(SqlInjectionIntegrationTest, QueryMaliciousStringValue) {
 
 	// Verify table still exists by querying for the real user
 	query<User> q2;
-	q2.where("name = ?", attribute_vector{attribute{"Alice"}});
+	q2.where("name = ?", attribute_vector{ attribute{ "Alice" } });
 	auto real_users = q2.all();
 	EXPECT_EQ(1, real_users.size());
 }
@@ -212,12 +212,12 @@ TEST_F(SqlInjectionIntegrationTest, UpdateMaliciousStringValue) {
 
 TEST_F(SqlInjectionIntegrationTest, SpecialCharactersInData) {
 	User user;
-	user.set_name("O'Brien");  // Single quote
+	user.set_name("O'Brien"); // Single quote
 	user.set_email("user@example.com");
 	EXPECT_TRUE(user.save());
 
 	query<User> q;
-	q.where("name = ?", attribute_vector{attribute{"O'Brien"}});
+	q.where("name = ?", attribute_vector{ attribute{ "O'Brien" } });
 	auto users = q.all();
 
 	EXPECT_EQ(1, users.size());
@@ -226,7 +226,7 @@ TEST_F(SqlInjectionIntegrationTest, SpecialCharactersInData) {
 
 TEST_F(SqlInjectionIntegrationTest, BackticksInData) {
 	User user;
-	user.set_name("user`name");  // Backtick
+	user.set_name("user`name"); // Backtick
 	user.set_email("test@example.com");
 	EXPECT_TRUE(user.save());
 
@@ -250,12 +250,12 @@ TEST_F(SqlInjectionIntegrationTest, NullByteInData) {
 	User retrieved = q.find(user.id());
 	// String is truncated at null byte (SQLite behavior)
 	EXPECT_EQ("Alice", retrieved.name());
-	EXPECT_EQ(5, retrieved.name().size());  // Only "Alice" is stored
+	EXPECT_EQ(5, retrieved.name().size()); // Only "Alice" is stored
 }
 
 TEST_F(SqlInjectionIntegrationTest, UnicodeInData) {
 	User user;
-	user.set_name("用户名");  // Chinese characters
+	user.set_name("用户名"); // Chinese characters
 	user.set_email("unicode@example.com");
 	EXPECT_TRUE(user.save());
 

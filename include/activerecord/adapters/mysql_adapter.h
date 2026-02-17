@@ -25,7 +25,7 @@ namespace ar {
  * MySQL statement class
  */
 class mysql_statement : public statement {
-public:
+  public:
 	mysql_statement(MYSQL* db);
 	~mysql_statement() override;
 
@@ -34,8 +34,9 @@ public:
 	void get_attributes(attribute_map& attributes) override;
 	std::size_t affected_rows() const noexcept override { return affected_rows_; }
 
-private:
-	static attribute field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* bind, unsigned long* lengths, int column_index);
+  private:
+	static attribute field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* bind, unsigned long* lengths,
+										int column_index);
 
 	// Helper struct for RAII management of MYSQL_BIND resources
 	struct bind_buffer {
@@ -46,25 +47,24 @@ private:
 		bind_buffer() : is_null(std::make_unique<mysql_null_flag>(0)) {}
 	};
 
-	MYSQL* db_;                                  // Non-owning pointer to database connection
-	MYSQL_STMT* stmt_;                           // Owned prepared statement (closed in destructor)
-	MYSQL_RES* metadata_;                        // Result metadata
-	std::vector<MYSQL_BIND> result_binds_;       // Result bindings (RAII)
-	std::vector<unsigned long> lengths_;         // Field lengths (RAII)
-	std::vector<bind_buffer> buffers_;           // Buffers for result data (RAII)
-	int num_fields_;                             // Number of result fields
-	bool has_result_;                            // Whether statement has results
-	std::size_t affected_rows_;                  // Rows affected by last execute
+	MYSQL* db_;							   // Non-owning pointer to database connection
+	MYSQL_STMT* stmt_;					   // Owned prepared statement (closed in destructor)
+	MYSQL_RES* metadata_;				   // Result metadata
+	std::vector<MYSQL_BIND> result_binds_; // Result bindings (RAII)
+	std::vector<unsigned long> lengths_;   // Field lengths (RAII)
+	std::vector<bind_buffer> buffers_;	   // Buffers for result data (RAII)
+	int num_fields_;					   // Number of result fields
+	bool has_result_;					   // Whether statement has results
+	std::size_t affected_rows_;			   // Rows affected by last execute
 };
 
 /**
  * Adapter for MySQL database
  */
 class mysql_adapter : public connection {
-public:
-	mysql_adapter(const std::string& host, const std::string& user,
-	              const std::string& password, const std::string& database,
-	              unsigned int port = 3306);
+  public:
+	mysql_adapter(const std::string& host, const std::string& user, const std::string& password,
+				  const std::string& database, unsigned int port = 3306);
 	~mysql_adapter() override;
 
 	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector& values = {}) override;
@@ -78,8 +78,8 @@ public:
 
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
-private:
-	MYSQL* db_;  // Owned database handle (closed in destructor)
+  private:
+	MYSQL* db_; // Owned database handle (closed in destructor)
 };
 
 } // namespace ar

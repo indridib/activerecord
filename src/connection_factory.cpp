@@ -24,8 +24,7 @@
 namespace ar {
 
 namespace {
-std::string required_field(const std::optional<std::string>& field, std::string_view name, std::string_view protocol)
-{
+std::string required_field(const std::optional<std::string>& field, std::string_view name, std::string_view protocol) {
 	if (!field.has_value() || field->empty()) {
 		throw ex::config("Invalid {} connection URL: missing {}", protocol, name);
 	}
@@ -33,14 +32,13 @@ std::string required_field(const std::optional<std::string>& field, std::string_
 }
 } // namespace
 
-std::shared_ptr<connection> make_connection(std::string_view url)
-{
+std::shared_ptr<connection> make_connection(std::string_view url) {
 	const connection::connection_url_info info = connection::parse_connection_url(url);
 	const std::string& protocol = info.protocol;
 
 	if (protocol == "sqlite") {
 #ifdef AR_SQLITE
-		const std::string file = required_field(info.file, "file", protocol);
+		const std::string file{ required_field(info.file, "file", protocol) };
 		return std::make_shared<sqlite_adapter>(file);
 #else
 		throw ex::config("Protocol '{}' is not enabled in this build", protocol);
@@ -49,10 +47,10 @@ std::shared_ptr<connection> make_connection(std::string_view url)
 
 	if (protocol == "mysql") {
 #ifdef AR_MYSQL
-		const std::string host = required_field(info.host, "host", protocol);
-		const std::string user = info.user.value_or("");
-		const std::string password = info.password.value_or("");
-		const std::string database = required_field(info.database, "database", protocol);
+		const std::string host{ required_field(info.host, "host", protocol) };
+		const std::string user{ info.user.value_or("") };
+		const std::string password{ info.password.value_or("") };
+		const std::string database{ required_field(info.database, "database", protocol) };
 		const unsigned int port = static_cast<unsigned int>(info.port.value_or(3306));
 		return std::make_shared<mysql_adapter>(host, user, password, database, port);
 #else
@@ -62,10 +60,10 @@ std::shared_ptr<connection> make_connection(std::string_view url)
 
 	if (protocol == "postgres" || protocol == "postgresql") {
 #ifdef AR_POSTGRES
-		const std::string host = required_field(info.host, "host", protocol);
-		const std::string user = info.user.value_or("");
-		const std::string password = info.password.value_or("");
-		const std::string database = required_field(info.database, "database", protocol);
+		const std::string host{ required_field(info.host, "host", protocol) };
+		const std::string user{ info.user.value_or("") };
+		const std::string password{ info.password.value_or("") };
+		const std::string database{ required_field(info.database, "database", protocol) };
 		const unsigned int port = static_cast<unsigned int>(info.port.value_or(5432));
 		return std::make_shared<postgres_adapter>(host, user, password, database, port);
 #else
@@ -76,12 +74,13 @@ std::shared_ptr<connection> make_connection(std::string_view url)
 	if (protocol == "mssql" || protocol == "sqlserver") {
 #ifdef AR_MSSQL
 		if (auto dsn_iter = info.query.find("dsn"); dsn_iter != info.query.end()) {
-			return std::make_shared<mssql_adapter>(dsn_iter->second, info.user.value_or(""), info.password.value_or(""));
+			return std::make_shared<mssql_adapter>(dsn_iter->second, info.user.value_or(""),
+												   info.password.value_or(""));
 		}
-		const std::string server = required_field(info.host, "host", protocol);
-		const std::string database = required_field(info.database, "database", protocol);
-		const std::string user = info.user.value_or("");
-		const std::string password = info.password.value_or("");
+		const std::string server{ required_field(info.host, "host", protocol) };
+		const std::string database{ required_field(info.database, "database", protocol) };
+		const std::string user{ info.user.value_or("") };
+		const std::string password{ info.password.value_or("") };
 		const unsigned int port = static_cast<unsigned int>(info.port.value_or(1433));
 		return std::make_shared<mssql_adapter>(server, database, user, password, port);
 #else
@@ -93,4 +92,3 @@ std::shared_ptr<connection> make_connection(std::string_view url)
 }
 
 } // namespace ar
-

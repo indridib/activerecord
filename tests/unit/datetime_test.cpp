@@ -8,9 +8,9 @@
 // Unit tests for ar::datetime class
 // ============================================================================
 
-#include <gtest/gtest.h>
-#include <datetime.h>
 #include <attribute.h>
+#include <datetime.h>
+#include <gtest/gtest.h>
 
 using namespace ar;
 
@@ -26,12 +26,12 @@ TEST(DateTimeTest, DefaultConstructor) {
 
 TEST(DateTimeTest, ConstructFromTimestamp) {
 	std::time_t now = std::time(nullptr);
-	datetime dt{now};
+	datetime dt{ now };
 	EXPECT_EQ(now, dt.timestamp());
 }
 
 TEST(DateTimeTest, ConstructFromComponents) {
-	datetime dt{2024, 6, 15, 14, 30, 45};
+	datetime dt{ 2024, 6, 15, 14, 30, 45 };
 
 	EXPECT_EQ(2024, dt.year());
 	EXPECT_EQ(6, dt.month());
@@ -42,7 +42,7 @@ TEST(DateTimeTest, ConstructFromComponents) {
 }
 
 TEST(DateTimeTest, ConstructFromDateOnly) {
-	datetime dt{2024, 12, 25};  // Christmas 2024
+	datetime dt{ 2024, 12, 25 }; // Christmas 2024
 
 	EXPECT_EQ(2024, dt.year());
 	EXPECT_EQ(12, dt.month());
@@ -79,7 +79,7 @@ TEST(DateTimeTest, ParseDateOnly) {
 }
 
 TEST(DateTimeTest, ConstructFromString) {
-	datetime dt{"2025-01-01 00:00:00"};  // New Year 2025
+	datetime dt{ "2025-01-01 00:00:00" }; // New Year 2025
 
 	EXPECT_EQ(2025, dt.year());
 	EXPECT_EQ(1, dt.month());
@@ -94,7 +94,7 @@ TEST(DateTimeTest, ParseEmptyString) {
 
 TEST(DateTimeTest, ParseInvalidStringThrows) {
 	EXPECT_THROW(datetime::parse("not a date"), std::invalid_argument);
-	EXPECT_THROW(datetime::parse("2024/06/15"), std::invalid_argument);  // Wrong format
+	EXPECT_THROW(datetime::parse("2024/06/15"), std::invalid_argument); // Wrong format
 }
 
 // ============================================================================
@@ -102,22 +102,22 @@ TEST(DateTimeTest, ParseInvalidStringThrows) {
 // ============================================================================
 
 TEST(DateTimeTest, FormatFullDateTime) {
-	datetime dt{2024, 6, 15, 14, 30, 45};
+	datetime dt{ 2024, 6, 15, 14, 30, 45 };
 	EXPECT_EQ("2024-06-15 14:30:45", dt.to_string());
 }
 
 TEST(DateTimeTest, FormatDateOnly) {
-	datetime dt{2024, 12, 25};
+	datetime dt{ 2024, 12, 25 };
 	EXPECT_EQ("2024-12-25", dt.to_date_string());
 }
 
 TEST(DateTimeTest, FormatTimeOnly) {
-	datetime dt{2024, 6, 15, 14, 30, 45};
+	datetime dt{ 2024, 6, 15, 14, 30, 45 };
 	EXPECT_EQ("14:30:45", dt.to_time_string());
 }
 
 TEST(DateTimeTest, FormatWithLeadingZeros) {
-	datetime dt{2024, 1, 5, 9, 8, 7};  // Single digit month, day, time
+	datetime dt{ 2024, 1, 5, 9, 8, 7 }; // Single digit month, day, time
 	EXPECT_EQ("2024-01-05 09:08:07", dt.to_string());
 }
 
@@ -126,9 +126,9 @@ TEST(DateTimeTest, FormatWithLeadingZeros) {
 // ============================================================================
 
 TEST(DateTimeTest, EqualityComparison) {
-	datetime dt1{2024, 6, 15, 12, 0, 0};
-	datetime dt2{2024, 6, 15, 12, 0, 0};
-	datetime dt3{2024, 6, 15, 13, 0, 0};
+	datetime dt1{ 2024, 6, 15, 12, 0, 0 };
+	datetime dt2{ 2024, 6, 15, 12, 0, 0 };
+	datetime dt3{ 2024, 6, 15, 13, 0, 0 };
 
 	EXPECT_TRUE(dt1 == dt2);
 	EXPECT_FALSE(dt1 == dt3);
@@ -136,8 +136,8 @@ TEST(DateTimeTest, EqualityComparison) {
 }
 
 TEST(DateTimeTest, LessThanComparison) {
-	datetime earlier{2024, 6, 15, 12, 0, 0};
-	datetime later{2024, 6, 15, 13, 0, 0};
+	datetime earlier{ 2024, 6, 15, 12, 0, 0 };
+	datetime later{ 2024, 6, 15, 13, 0, 0 };
 
 	EXPECT_TRUE(earlier < later);
 	EXPECT_FALSE(later < earlier);
@@ -163,16 +163,16 @@ TEST(DateTimeTest, NowReturnsCurrentTime) {
 // ============================================================================
 
 TEST(DateTimeAttributeTest, ConstructAttributeFromDateTime) {
-	datetime dt{2024, 6, 15, 14, 30, 45};
-	attribute attr{dt};
+	datetime dt{ 2024, 6, 15, 14, 30, 45 };
+	attribute attr{ dt };
 
 	EXPECT_EQ(type_date, attr.type());
 	EXPECT_FALSE(attr.is_null());
 }
 
 TEST(DateTimeAttributeTest, RetrieveDateTimeFromAttribute) {
-	datetime dt{2024, 12, 25, 18, 0, 0};
-	attribute attr{dt};
+	datetime dt{ 2024, 12, 25, 18, 0, 0 };
+	attribute attr{ dt };
 
 	datetime retrieved = attr.as_date();
 	EXPECT_EQ(2024, retrieved.year());
@@ -182,15 +182,15 @@ TEST(DateTimeAttributeTest, RetrieveDateTimeFromAttribute) {
 }
 
 TEST(DateTimeAttributeTest, AttributeToString) {
-	datetime dt{2024, 6, 15, 14, 30, 45};
-	attribute attr{dt};
+	datetime dt{ 2024, 6, 15, 14, 30, 45 };
+	attribute attr{ dt };
 
 	EXPECT_EQ("2024-06-15 14:30:45", attr.to_string());
 }
 
 TEST(DateTimeAttributeTest, AttributeAsNumeric) {
-	datetime dt{2024, 6, 15, 14, 30, 45};
-	attribute attr{dt};
+	datetime dt{ 2024, 6, 15, 14, 30, 45 };
+	attribute attr{ dt };
 
 	int64_t timestamp = attr.as_numeric();
 	EXPECT_EQ(dt.timestamp(), timestamp);
@@ -203,7 +203,7 @@ TEST(DateTimeAttributeTest, AttributeAsNumeric) {
 TEST(DateTimeUsageTest, CreateAndRetrieveDate) {
 	// Simulate storing a date
 	datetime created_at = datetime::now();
-	attribute attr{created_at};
+	attribute attr{ created_at };
 
 	// Simulate retrieving from database
 	datetime retrieved = attr.as_date();
@@ -225,7 +225,7 @@ TEST(DateTimeUsageTest, ParseDatabaseDateString) {
 }
 
 TEST(DateTimeUsageTest, FormatForDatabaseInsert) {
-	datetime dt{2024, 6, 15, 14, 30, 45};
+	datetime dt{ 2024, 6, 15, 14, 30, 45 };
 
 	// Format for database INSERT
 	std::string sql_value = dt.to_string();
@@ -238,7 +238,7 @@ TEST(DateTimeUsageTest, FormatForDatabaseInsert) {
 
 TEST(DateTimeUsageTest, DateOnlyValues) {
 	// Date column (no time component)
-	datetime birthday{1990, 5, 15};
+	datetime birthday{ 1990, 5, 15 };
 
 	EXPECT_EQ("1990-05-15", birthday.to_date_string());
 	EXPECT_EQ("1990-05-15 00:00:00", birthday.to_string());
