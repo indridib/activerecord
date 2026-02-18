@@ -306,19 +306,19 @@ attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, int column_index) {
 // ============================================================================
 
 mssql_adapter::mssql_adapter(const std::string& dsn, const std::string& user, const std::string& password)
-	: connection(), env_(nullptr), dbc_(nullptr) {
+	: connection() {
 	std::ostringstream connstr;
 	connstr << "DSN=" << dsn << ";UID=" << user << ";PWD=" << password << ";";
 	connect(connstr.str());
 }
 
-mssql_adapter::mssql_adapter(const std::string& connection_string) : connection(), env_(nullptr), dbc_(nullptr) {
+mssql_adapter::mssql_adapter(const std::string& connection_string) : connection() {
 	connect(connection_string);
 }
 
 mssql_adapter::mssql_adapter(const std::string& server, const std::string& database, const std::string& user,
 							 const std::string& password, unsigned int port)
-	: connection(), env_(nullptr), dbc_(nullptr) {
+	: connection() {
 	std::ostringstream connstr;
 	connstr << "DRIVER={ODBC Driver 17 for SQL Server};"
 			<< "SERVER=" << server << "," << port << ";"

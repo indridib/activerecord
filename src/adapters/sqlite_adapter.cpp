@@ -222,8 +222,7 @@ attribute sqlite_statement::field_as_attribute(sqlite3_stmt* stmt, int column_in
 // sqlite_adapter implementation
 // ============================================================================
 
-sqlite_adapter::sqlite_adapter(const std::string& db_path, const std::string&, const std::string&)
-	: connection(), db_(nullptr) {
+sqlite_adapter::sqlite_adapter(const std::string& db_path, const std::string&, const std::string&) : connection() {
 	// Note: SQLite doesn't use username/password at the library level
 
 	int rc{ sqlite3_open(db_path.c_str(), &db_) };

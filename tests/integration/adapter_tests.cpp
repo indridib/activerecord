@@ -149,7 +149,7 @@ class AdapterFactory {
 		}
 	}
 
-	static std::string drop_table_sql(AdapterType type) { return "DROP TABLE IF EXISTS users"; }
+	static std::string drop_table_sql(AdapterType /*type*/) { return "DROP TABLE IF EXISTS users"; }
 
 	static std::string adapter_name(AdapterType type) {
 		switch (type) {

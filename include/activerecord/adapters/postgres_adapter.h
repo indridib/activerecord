@@ -65,7 +65,7 @@ class postgres_adapter : public connection {
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
   private:
-	PGconn* db_; // Owned database connection (closed in destructor)
+	PGconn* db_{ nullptr }; // Owned database connection (closed in destructor)
 };
 
 } // namespace ar

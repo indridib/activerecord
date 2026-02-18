@@ -31,7 +31,7 @@ class statement {
 	virtual bool fetch() { return false; }
 	virtual std::size_t affected_rows() const noexcept { return 0; }
 
-	virtual void get_attributes(attribute_map& attributes) {}
+	virtual void get_attributes(attribute_map&) {}
 };
 
 /**

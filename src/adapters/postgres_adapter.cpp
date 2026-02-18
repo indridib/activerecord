@@ -350,7 +350,7 @@ attribute postgres_statement::field_as_attribute(PGresult* result, int row, int 
 
 postgres_adapter::postgres_adapter(const std::string& host, const std::string& user, const std::string& password,
 								   const std::string& database, unsigned int port)
-	: connection(), db_(nullptr) {
+	: connection() {
 	// Build connection string
 	std::ostringstream conninfo;
 	conninfo << "host=" << host << " port=" << port << " dbname=" << database << " user=" << user

@@ -338,7 +338,7 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 
 mysql_adapter::mysql_adapter(const std::string& host, const std::string& user, const std::string& password,
 							 const std::string& database, unsigned int port)
-	: connection(), db_(nullptr) {
+	: connection() {
 	// Initialize MySQL library
 	db_ = mysql_init(nullptr);
 	if (!db_) {

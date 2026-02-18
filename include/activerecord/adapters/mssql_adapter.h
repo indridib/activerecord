@@ -81,8 +81,8 @@ class mssql_adapter : public connection {
   private:
 	void connect(const std::string& connection_string);
 
-	SQLHENV env_; // ODBC environment handle
-	SQLHDBC dbc_; // ODBC connection handle
+	SQLHENV env_{ nullptr }; // ODBC environment handle
+	SQLHDBC dbc_{ nullptr }; // ODBC connection handle
 };
 
 } // namespace ar

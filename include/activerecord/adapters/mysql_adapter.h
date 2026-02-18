@@ -79,7 +79,7 @@ class mysql_adapter : public connection {
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
   private:
-	MYSQL* db_; // Owned database handle (closed in destructor)
+	MYSQL* db_{ nullptr }; // Owned database handle (closed in destructor)
 };
 
 } // namespace ar
