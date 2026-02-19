@@ -1,7 +1,8 @@
 
 ### C++ implementation of Active Record pattern
 Influenced by [Ruby on Rails active records](https://guides.rubyonrails.org/active_record_basics.html) and by [PHP Active records](https://github.com/jpfuentes2/php-activerecord).
-Striving to use latest C++ conventions as possible. We shouldn't be stuck in the past :-)
+Active Record maps a database row to a C++ object, so you work with models instead of writing raw CRUD code everywhere. Each model knows its table and can load, query, insert, update, and delete itself while keeping domain data and persistence behavior close together.
+Striving to use latest C++ conventions as possible. We shouldn't be stuck in the past.
 
 **Language Standard:** C++23 (prepared for C++26 reflection)
 
@@ -9,12 +10,12 @@ Striving to use latest C++ conventions as possible. We shouldn't be stuck in the
 
 - CMake 3.20+
 - C++23 compiler (officially supported):
-  - **Windows:** MSVC 19.37+ (Visual Studio 2022 17.7+) - **Recommended for static linking**
-  - **Linux/macOS:** GCC 14+ (or GCC 13+)
-  - **Clang:** Supported for development/testing and sanitizer runs
+  - **Windows:** MSVC 19.39+ (Visual Studio 2022 17.9+) - **Recommended for static linking**
+  - **Linux/macOS:** GCC 14+ (minimum GCC 13)
+  - **Clang:** Clang 17+ (latest stable recommended)
 - Git
 
-**Note:** The project uses MSVC on Windows for static release builds. Clang is supported and recommended for sanitizer-based checks in development.
+**Note:** Official compiler support includes MSVC, GCC, and Clang.
 
 ### Quick Start (vcpkg included as submodule!)
 
@@ -47,27 +48,31 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-**Clang + leak checks (unit tests):**
+**GCC/Clang + sanitizer checks (unit tests):**
 ```bash
-cmake -B build-clang -G Ninja \
+cmake -B build-gcc-sanitized -G Ninja \
   -DCMAKE_BUILD_TYPE=Debug \
-  -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_CXX_COMPILER=g++ \
   -DAR_BUILD_TESTS=ON \
   -DAR_SQLITE=ON \
   -DAR_SANITIZE_ADDRESS=ON \
-  -DAR_SANITIZE_LEAK=ON
+  -DAR_SANITIZE_UNDEFINED=ON
 
-cmake --build build-clang
-ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-clang --output-on-failure -R AllUnitTests
+cmake --build build-gcc-sanitized
+ctest --test-dir build-gcc-sanitized --output-on-failure -R AllUnitTests
 ```
+
+Use `-DCMAKE_CXX_COMPILER=clang++` for a Clang sanitizer build.
 
 **4. Run example:**
 ```bash
 # Windows
 .\build\examples\Release\sqlite_example.exe
+.\build\examples\Release\typed_model_showcase.exe
 
 # Linux/macOS
 ./build/examples/sqlite_example
+./build/examples/typed_model_showcase
 ```
 
 **That's it!** Dependencies (SQLite3, GoogleTest) install automatically via `vcpkg.json` manifest.
@@ -82,30 +87,30 @@ ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-clang --output-on-failure -R 
 
 ### Features & Testing
 
-**Database Adapters:**
-- ✅ **SQLite** - Embedded database, zero configuration (default)
-- ✅ **MySQL** - Popular open-source database
-- ✅ **PostgreSQL** - Advanced open-source database
-- ✅ **MS-SQL Server** - Microsoft SQL Server via ODBC
-
-**Comprehensive Test Suite:**
-- ✅ **237 tests** with **100% pass rate** (163 unit + 74 integration)
-- ✅ **40+ attribute tests** - Type construction, conversions, JSON/XML serialization
-- ✅ **36 model tests** - CRUD operations, dirty tracking, readonly mode, record tracking
-- ✅ **6 model size tests** - Memory footprint tracking and regression detection
-- ✅ **15 SQL builder tests** - SELECT, INSERT, UPDATE with various clauses
-- ✅ **7 config tests** - Singleton pattern, connection management
-- ✅ **66 integration tests** - Full database operations across all adapters
-- GoogleTest integrated via FetchContent for easy setup
-
-**Quality Assurance:**
+**General:**
 - Modern C++23 codebase (prepared for C++26 reflection)
 - Cross-platform (Windows, Linux, macOS)
 - **Static linking on Windows** (MSVC) - No DLL dependencies
 - Full parameter binding support (prevents SQL injection)
 - Type-safe attribute system
 - Comprehensive error handling
-- See [CPP23_MIGRATION.md](CPP23_MIGRATION.md) for C++23 features and reflection preparation
+
+**Database Adapters:**
+- ✅ **SQLite** - Embedded database, zero configuration (default)
+- ✅ **MySQL** - Popular open-source database
+- ✅ **PostgreSQL** - Advanced open-source database
+- ✅ **MS-SQL Server** - Microsoft SQL Server via ODBC
+
+**Tests Suite:**
+- ✅ Extensive unit and integration coverage (GoogleTest)
+- ✅ Unit coverage includes typed model mapping and sync behavior
+- ✅ **40+ attribute tests** - Type construction, conversions, JSON/XML serialization
+- ✅ **36+ model tests** - CRUD operations, dirty tracking, readonly mode, record tracking
+- ✅ **6 model size tests** - Memory footprint tracking and regression detection
+- ✅ **15 SQL builder tests** - SELECT, INSERT, UPDATE with various clauses
+- ✅ **7 config tests** - Singleton pattern, connection management
+- ✅ Integration tests across enabled adapters (SQLite by default)
+- GoogleTest integrated via FetchContent for easy setup
 
 **Build System:**
 - **Windows:** MSVC with static linking (single executable, no DLLs)
@@ -113,14 +118,7 @@ ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-clang --output-on-failure -R 
 - Automated dependency management via vcpkg
 - Simple build scripts (`build.bat` / `build.sh`)
 
-### C++23 Features & Roadmap
-
-**Current (C++23):**
-- 📦 `std::expected` for error handling without exceptions
-- 🖨️ `std::print` for modern formatted output
-- 🔍 Concepts for better template constraints
-- 🎯 Ranges for expressive data processing
-- 📝 `std::format` for safe string formatting
+### Roadmap
 
 **Preparing for C++26 Reflection:**
 - Simple struct-based models (reflection-ready)
@@ -129,11 +127,9 @@ ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build-clang --output-on-failure -R 
 - No more string-based attribute access
 - Compile-time schema validation
 
-See [php_research.md](php_research.md) for feature comparison with PHP ActiveRecord and planned ORM enhancements (relationships, validations, callbacks).
-
 ### Query API - Lazy Loading & Modern C++
 
-**Lazy Iteration** (90%+ memory savings):
+**Lazy Iteration**:
 ```cpp
 // Process records one-at-a-time without loading everything into memory
 for (const User& user : query<User>().where("active = ?", {true})) {
@@ -188,78 +184,171 @@ for (const auto& email : active_emails) {
 }
 ```
 
-**Memory Comparison** (100,000 records):
-| Method | Memory | Behavior |
-|--------|---------|----------|
-| `all()` | 50 MB | Loads everything into vector |
-| Iterator | 0.5 MB | One row at a time (99% savings!) |
-| Iterator + break | 0.05 MB | Only fetches what you use |
+### typed_model<T> (Direct Member Access)
+
+The new `typed_model<T>` API lets models expose plain typed members while still using
+the existing `model`/`query<T>` infrastructure.
+
+```cpp
+#include <sql_builder.h>
+#include <typed_model.h>
+
+struct User : ar::typed_model<User> {
+    static constexpr auto table_name{"users"};
+    static constexpr auto primary_key{"id"};
+    enum class status : int { pending = 0, active = 1, disabled = 2 };
+
+    long id{};
+    std::string name{};
+    std::string email{};
+    status account_status{status::pending};
+
+    static constexpr auto columns() {
+        return ar::columns(
+            ar::col<&User::id>("id"),
+            ar::col<&User::name>("name"),
+            ar::col<&User::email>("email"),
+            ar::col<&User::account_status>("account_status")
+        );
+    }
+};
+
+auto user = ar::query<User>().find(1);
+std::cout << user.name << '\n';
+
+user.email = "new@example.com";
+user.account_status = User::status::active;
+user.save();
+```
+
+Behavior notes:
+- Query hydration calls `sync_from_attributes()` automatically in `first()` and iterator paths.
+- Save uses snapshot diff; only changed mapped members are marked dirty.
+- Persisted primary key changes throw `ex::readonly`.
+- After successful save, members are refreshed from attributes (insert id, timestamps, version).
+- Tracking defaults to enabled for `created_at`, `updated_at`, and `version`.
+- Per-model opt-out is available via template argument:
+  - `ar::typed_model<MyModel, false>` (default is `true`)
+- Enum fields are supported and stored as INTEGER using the enum's underlying type.
 
 ### Auto-Timestamps & Optimistic Locking
 
-**Convention-based:** If your table has `created_at`, `updated_at`, or `version` columns, the framework auto-manages them. On new records, call `init_record_tracking(created_at, updated_at, version)` with `true` only for columns that exist in that table.
+**Convention-based:** If your table has `created_at`, `updated_at`, or `version` columns, the framework auto-manages them.
+
+- For classic `model` usage (`set/get`), tracking is strict all-or-nothing: call `init_record_tracking(true)` to enable metadata tracking as a group, or `init_record_tracking(false)` to disable all metadata tracking.
+- For `typed_model<T>`, if those fields are declared and mapped in `columns()`, they are synchronized into attributes automatically, so tracking works without an explicit `init_record_tracking(...)` call.
 
 ```cpp
-// New record: register only the tracking columns that exist on this table
+// Classic model: simple on/off metadata tracking.
 User alice;
-alice.init_record_tracking(true, true, true);  // Registers created_at, updated_at, version
-alice.set("name", attribute("Alice"));
+alice.init_record_tracking(true);  // Registers created_at, updated_at, version
+alice.set("name", "Alice");
 alice.save();
 // created_at = now, updated_at = now, version = 1
 
 // Loaded records already have all columns from SELECT — auto-detected
-auto loaded = query<User>().where("name = ?", attribute("Alice")).first_or_throw();
-loaded.set("email", attribute("alice@example.com"));
+auto loaded = query<User>().where("name = ?", {"Alice"}).first_or_throw();
+loaded.set("email", "alice@example.com");
 loaded.save();
 // updated_at = now, version = 2 (created_at unchanged)
 ```
 
-**Optimistic locking** prevents stale overwrites. The UPDATE includes `WHERE version = ?` with the old version:
+```cpp
+// typed_model<T>: metadata tracking is enabled by default.
+struct User : ar::typed_model<User> {
+    static constexpr auto table_name{"users"};
+    static constexpr auto primary_key{"id"};
+
+    long id{};
+    std::string name;
+    ar::datetime created_at;
+    ar::datetime updated_at;
+    int64_t version{};
+
+    static constexpr auto columns() {
+        return ar::columns(
+            ar::col<&User::id>("id"),
+            ar::col<&User::name>("name"),
+            ar::col<&User::created_at>("created_at"),
+            ar::col<&User::updated_at>("updated_at"),
+            ar::col<&User::version>("version")
+        );
+    }
+};
+
+User user;
+user.name = "Alice";
+user.save(); // created_at/updated_at/version managed automatically
+```
+
+```cpp
+// typed_model<T, false> disables metadata tracking for this model.
+struct ImportRow : ar::typed_model<ImportRow, false> {
+    static constexpr auto table_name{"import_rows"};
+    static constexpr auto primary_key{"id"};
+
+    long id{};
+    std::string payload;
+    ar::datetime updated_at; // can still be mapped/read/written as normal field
+    int64_t version{};
+
+    static constexpr auto columns() {
+        return ar::columns(
+            ar::col<&ImportRow::id>("id"),
+            ar::col<&ImportRow::payload>("payload"),
+            ar::col<&ImportRow::updated_at>("updated_at"),
+            ar::col<&ImportRow::version>("version")
+        );
+    }
+};
+```
+
+**Optimistic locking** prevents stale overwrites by rejecting stale updates and throwing `ex::stale_record`. The UPDATE includes `WHERE version = ?` with the old version:
 ```cpp
 auto copy1 = query<User>().find(1);  // version = 2
 auto copy2 = query<User>().find(1);  // version = 2
 
-copy1.set("name", attribute("First"));
+copy1.set("name", "First");
 copy1.save();  // UPDATE ... SET version=3 WHERE id=1 AND version=2 → succeeds
 
-copy2.set("name", attribute("Second"));
+copy2.set("name", "Second");
 copy2.save();  // UPDATE ... SET version=3 WHERE id=1 AND version=2 → 0 rows affected (stale)
 ```
 
 **Partial support:** Works with any combination — only `created_at`, only `version`, all three, or none. Models without these columns are completely unaffected.
 
-### Documentation
+### Running Tests
 
-- **[COMPILERS.md](COMPILERS.md)** - Compiler support strategy (MSVC + GCC focus)
-- **[BUILD_WINDOWS.md](BUILD_WINDOWS.md)** - Windows build instructions (MSVC)
-- **[DATABASE_ADAPTERS.md](DATABASE_ADAPTERS.md)** - Setting up MySQL, PostgreSQL, MS-SQL
-- **[CPP23_MIGRATION.md](CPP23_MIGRATION.md)** - C++23 features and reflection preparation
-- **[php_research.md](php_research.md)** - Feature comparison with PHP ActiveRecord
-- **[claude_review.md](claude_review.md)** - Code quality review and recommendations
+```bash
+# Configure (includes unit + integration tests when adapters are enabled)
+cmake -B build -DAR_BUILD_TESTS=ON
 
-### Model Memory Optimization
+# Build tests
+cmake --build build --config Release
 
-**Phase 1 Complete!** ✅
-- **Original size:** 224 bytes
-- **Current size:** 96 bytes
-- **Reduction:** 57% (128 bytes saved per instance!)
+# Run all tests
+ctest --test-dir build -C Release --output-on-failure
 
-**What was optimized:**
-- ✅ Removed unused `db_` member (32 bytes)
-- ✅ Changed `table_name_` and `primary_key_` to `std::string_view` (32 bytes)
-- ✅ Externalized `alias_attributes_` to static method (48+ bytes)
+# Run unit tests only
+ctest --test-dir build -C Release -R AllUnitTests --output-on-failure
+```
 
-**Real-world impact:**
-- 100k models: **22.4 MB → 9.6 MB** (57% savings)
-- Combined with lazy iterators: **99.5% total memory reduction!**
-
-See [todo/MODEL_OPTIMIZATION_codex.md](todo/MODEL_OPTIMIZATION_codex.md) and [todo/MODEL_OPTIMIZATION_claude.md](todo/MODEL_OPTIMIZATION_claude.md) for future optimization phases.
 
 ### TODO
 
-- Use "conditions" instead of "where" in sqlbuilder. Used in PHP activerecord.
+- Table creation, field definitions
 
-- ✅ **Model size optimization Phase 1** - Completed (96 bytes, 57% reduction)
+- Model validation
+
+- Reflection: offer a reflected_model<T> alongside typed_model<T> that auto-discovers struct members, eliminating the manual columns() mapping. Same typed member access, same save()/query<T> infrastructure — just zero registration. Pre-C++26: reflect-cpp (github.com/getml/reflect-cpp) behind a build flag. Post-C++26: native reflection replaces it. typed_model<T> remains the dependency-free default.
+
+- implement guard attributes?!?! Not sure it's helpful?
+
+- callbacks as virtual functions? Is it helpful?
+
+- Structural binding?
+
+- Use "conditions" instead of "where" in sqlbuilder. Used in PHP activerecord.
 
 - Future optimization phases (see MODEL_OPTIMIZATION docs):
   - Phase 1.5: Remove `connection_` member (additional 16 bytes)
@@ -281,34 +370,8 @@ You would then be able to get column map (name -> index) and then for each row a
 PHP Active Record has: STRING, INTEGER, DECIMAL, DATETIME, DATE, TIME
 Should we go structural allowing array of variant as a variant? Might solve problems with bindings, i.e. for "IN (?)"
 
-- ✅ **Auto-timestamps** - `created_at` set on insert, `updated_at` refreshed on insert and update (convention-based detection)
-
-- ✅ **Optimistic locking** - `version` attribute auto-incremented on update with WHERE clause check (prevents stale overwrites)
-
 - Possible allowing multiple calls to add_xxx(new) in sql_builder (simply assume: "(org) AND (new)").
 
-- implement delete
-
-- Table creation, field definitions
-
-- Structural binding?
-
-- ✅ SQLite adapter implemented (complete with tests)
-- ✅ PostgreSQL adapter implemented (complete with tests)
-- ✅ MySQL adapter implemented (complete with tests)
-- ✅ MS-SQL adapter implemented (complete with tests)
-
-- escape for json strings and xml
-
-- Add support for converting into json, [JSON for Modern C++](https://github.com/nlohmann/json)
-
-- Use same exception names as Ruby and/or PHP?
-
-- Model validation
-
-- implement guard attributes?!?! Not sure it's helpful?
-
-- callbacks as virtual functions? Is it helpful?
 
 Conventions
 ===========
