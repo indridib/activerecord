@@ -164,11 +164,11 @@ TEST(AttributeTest, EmptyStringAsNumericThrows) {
 
 TEST(AttributeTest, AttributeMapToJson) {
 	attribute_map attrs;
-	attrs["id"] = attribute(1);
-	attrs["name"] = attribute("John Doe");
-	attrs["age"] = attribute(30);
-	attrs["active"] = attribute(true);
-	attrs["score"] = attribute(95.5);
+	attrs["id"] = 1;
+	attrs["name"] = "John Doe";
+	attrs["age"] = 30;
+	attrs["active"] = true;
+	attrs["score"] = 95.5;
 
 	std::string json = to_json_string(attrs);
 
@@ -181,9 +181,9 @@ TEST(AttributeTest, AttributeMapToJson) {
 
 TEST(AttributeTest, AttributeMapToJsonWithOnly) {
 	attribute_map attrs;
-	attrs["id"] = attribute(1);
-	attrs["name"] = attribute("John");
-	attrs["email"] = attribute("john@example.com");
+	attrs["id"] = 1;
+	attrs["name"] = "John";
+	attrs["email"] = "john@example.com";
 
 	string_vector only = { "id", "name" };
 	std::string json = to_json_string(attrs, only);
@@ -195,9 +195,9 @@ TEST(AttributeTest, AttributeMapToJsonWithOnly) {
 
 TEST(AttributeTest, AttributeMapToJsonWithExclude) {
 	attribute_map attrs;
-	attrs["id"] = attribute(1);
-	attrs["name"] = attribute("John");
-	attrs["password"] = attribute("secret");
+	attrs["id"] = 1;
+	attrs["name"] = "John";
+	attrs["password"] = "secret";
 
 	string_set exclude = { "password" };
 	std::string json = to_json_string(attrs, {}, exclude);
@@ -209,7 +209,7 @@ TEST(AttributeTest, AttributeMapToJsonWithExclude) {
 
 TEST(AttributeTest, AttributeMapToJsonEscapesSpecialCharacters) {
 	attribute_map attrs;
-	attrs["name"] = attribute("A\n\"B\"\\C");
+	attrs["name"] = "A\n\"B\"\\C";
 
 	std::string json = to_json_string(attrs);
 
@@ -223,8 +223,8 @@ TEST(AttributeTest, AttributeMapToJsonEscapesSpecialCharacters) {
 
 TEST(AttributeTest, AttributeMapToXml) {
 	attribute_map attrs;
-	attrs["id"] = attribute(1);
-	attrs["name"] = attribute("John Doe");
+	attrs["id"] = 1;
+	attrs["name"] = "John Doe";
 
 	std::string xml = to_xml_string(attrs, "user");
 
@@ -236,9 +236,9 @@ TEST(AttributeTest, AttributeMapToXml) {
 
 TEST(AttributeTest, AttributeMapToXmlWithExclude) {
 	attribute_map attrs;
-	attrs["id"] = attribute(1);
-	attrs["name"] = attribute("John");
-	attrs["password"] = attribute("secret");
+	attrs["id"] = 1;
+	attrs["name"] = "John";
+	attrs["password"] = "secret";
 
 	string_set exclude = { "password" };
 	std::string xml = to_xml_string(attrs, "user", {}, exclude);
@@ -249,7 +249,7 @@ TEST(AttributeTest, AttributeMapToXmlWithExclude) {
 
 TEST(AttributeTest, AttributeMapToXmlEscapesSpecialCharacters) {
 	attribute_map attrs;
-	attrs["name"] = attribute("a<&\"'b");
+	attrs["name"] = "a<&\"'b";
 
 	std::string xml = to_xml_string(attrs, "user");
 

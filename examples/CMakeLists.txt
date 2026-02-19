@@ -2,6 +2,9 @@
 if(AR_SQLITE)
   add_executable(sqlite_example sqlite_example.cpp)
   target_link_libraries(sqlite_example PRIVATE activerecord)
+
+  add_executable(typed_model_showcase typed_model_showcase.cpp)
+  target_link_libraries(typed_model_showcase PRIVATE activerecord)
 endif()
 
 # MySQL example

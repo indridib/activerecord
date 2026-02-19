@@ -67,9 +67,9 @@ class DatabaseOperationsTest : public ::testing::Test {
 
 TEST_F(DatabaseOperationsTest, CreateAndSaveUser) {
 	User user;
-	user.set("name", attribute("John Doe"));
-	user.set("email", attribute("john@example.com"));
-	user.set("age", attribute(30));
+	user.set("name", "John Doe");
+	user.set("email", "john@example.com");
+	user.set("age", 30);
 
 	EXPECT_TRUE(user.is_new_record());
 	EXPECT_TRUE(user.is_dirty());
@@ -82,18 +82,18 @@ TEST_F(DatabaseOperationsTest, UpdateUser) {
 	// First, insert a user manually
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-				{ attribute("Jane"), attribute("jane@example.com"), attribute(25) });
+				{ "Jane", "jane@example.com", 25 });
 
 	// Create model with attributes (simulating a loaded model)
 	User user;
-	user.attributes_["id"] = attribute(1);
-	user.attributes_["name"] = attribute("Jane");
-	user.attributes_["email"] = attribute("jane@example.com");
-	user.attributes_["age"] = attribute(25);
+	user.attributes_["id"] = 1;
+	user.attributes_["name"] = "Jane";
+	user.attributes_["email"] = "jane@example.com";
+	user.attributes_["age"] = 25;
 	user.new_record_ = false;
 
 	// Update
-	user.set("age", attribute(26));
+	user.set("age", 26);
 	EXPECT_TRUE(user.is_dirty());
 	EXPECT_TRUE(user.attribute_is_dirty("age"));
 
@@ -105,24 +105,24 @@ TEST_F(DatabaseOperationsTest, UpdateUser) {
 TEST_F(DatabaseOperationsTest, DestroyDeletesPersistedRecord) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-				{ attribute("DeleteMe"), attribute("delete@example.com"), attribute(22) });
+				{ "DeleteMe", "delete@example.com", 22 });
 
-	auto user = query<User>().where("name = ?", attribute("DeleteMe")).first_or_throw();
+	auto user = query<User>().where("name = ?", "DeleteMe").first_or_throw();
 	EXPECT_FALSE(user.is_new_record());
 
 	EXPECT_TRUE(user.destroy());
 	EXPECT_TRUE(user.is_new_record());
 
-	auto deleted = query<User>().where("name = ?", attribute("DeleteMe")).first();
+	auto deleted = query<User>().where("name = ?", "DeleteMe").first();
 	EXPECT_FALSE(deleted.has_value());
 }
 
 TEST_F(DatabaseOperationsTest, SetMultipleAttributes) {
 	User user;
 	attribute_map attrs;
-	attrs["name"] = attribute("Alice");
-	attrs["email"] = attribute("alice@example.com");
-	attrs["age"] = attribute(28);
+	attrs["name"] = "Alice";
+	attrs["email"] = "alice@example.com";
+	attrs["age"] = 28;
 
 	user.set_attributes(attrs);
 
@@ -138,9 +138,9 @@ TEST_F(DatabaseOperationsTest, SetMultipleAttributes) {
 TEST_F(DatabaseOperationsTest, QueryAll) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("User1"), attribute(20) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("User2"), attribute(30) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("User3"), attribute(40) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User1", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User2", 30 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User3", 40 });
 
 	// Query all
 	query<User> q;
@@ -153,12 +153,12 @@ TEST_F(DatabaseOperationsTest, QueryAll) {
 TEST_F(DatabaseOperationsTest, QueryWithWhere) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Young"), attribute(20) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Old"), attribute(60) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Young", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Old", 60 });
 
 	// Query with WHERE
 	query<User> q;
-	q.where("age > ?", attribute(30));
+	q.where("age > ?", 30);
 	std::vector<User> users = q.all();
 
 	EXPECT_EQ(1, users.size());
@@ -168,9 +168,9 @@ TEST_F(DatabaseOperationsTest, QueryWithWhere) {
 TEST_F(DatabaseOperationsTest, QueryWithOrder) {
 	// Insert test data in random order
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("C"), attribute(30) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("A"), attribute(20) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("B"), attribute(25) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "C", 30 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 25 });
 
 	// Query with ORDER BY
 	query<User> q;
@@ -188,7 +188,7 @@ TEST_F(DatabaseOperationsTest, QueryWithLimit) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 10; i++) {
 		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ attribute("User" + std::to_string(i)), attribute(20 + i) });
+					{ "User" + std::to_string(i), 20 + i });
 	}
 
 	// Query with LIMIT
@@ -204,7 +204,7 @@ TEST_F(DatabaseOperationsTest, QueryWithLimitAndOffset) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 10; i++) {
 		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ attribute("User" + std::to_string(i)), attribute(20 + i) });
+					{ "User" + std::to_string(i), 20 + i });
 	}
 
 	// Query with LIMIT and OFFSET
@@ -221,7 +221,7 @@ TEST_F(DatabaseOperationsTest, QueryCount) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 7; i++) {
 		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ attribute("User" + std::to_string(i)), attribute(20 + i) });
+					{ "User" + std::to_string(i), 20 + i });
 	}
 
 	// Count all
@@ -234,13 +234,13 @@ TEST_F(DatabaseOperationsTest, QueryCount) {
 TEST_F(DatabaseOperationsTest, QueryCountWithWhere) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Young1"), attribute(20) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Young2"), attribute(22) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Old"), attribute(60) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Young1", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Young2", 22 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Old", 60 });
 
 	// Count with WHERE
 	query<User> q;
-	q.where("age < ?", attribute(30));
+	q.where("age < ?", 30);
 	long count = q.count();
 
 	EXPECT_EQ(2, count);
@@ -250,7 +250,7 @@ TEST_F(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 7; i++) {
 		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ attribute("User" + std::to_string(i)), attribute(20 + i) });
+					{ "User" + std::to_string(i), 20 + i });
 	}
 
 	query<User> q;
@@ -261,26 +261,26 @@ TEST_F(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
 TEST_F(DatabaseOperationsTest, QueryExists) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Test"), attribute(25) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Test", 25 });
 
 	// Check exists
 	query<User> q1;
-	q1.where("name = ?", attribute("Test"));
+	q1.where("name = ?", "Test");
 	EXPECT_TRUE(q1.exists());
 
 	query<User> q2;
-	q2.where("name = ?", attribute("NonExistent"));
+	q2.where("name = ?", "NonExistent");
 	EXPECT_FALSE(q2.exists());
 }
 
 TEST_F(DatabaseOperationsTest, QueryDeleteAllWithWhere) {
 	auto conn{ config::instance().get_connection() };
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("A"), attribute(20) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("B"), attribute(35) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("C"), attribute(40) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 35 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "C", 40 });
 
 	query<User> q;
-	const long deleted{ q.where("age >= ?", attribute(30)).delete_all() };
+	const long deleted{ q.where("age >= ?", 30).delete_all() };
 	EXPECT_EQ(2, deleted);
 
 	query<User> remaining;
@@ -292,10 +292,10 @@ TEST_F(DatabaseOperationsTest, QueryDeleteAllWithWhere) {
 TEST_F(DatabaseOperationsTest, QueryFind) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("FindMe"), attribute(25) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "FindMe", 25 });
 
 	// Get the ID (would be 1 for first insert)
-	auto stmt = conn->query("SELECT id FROM users WHERE name = ?", { attribute("FindMe") });
+	auto stmt = conn->query("SELECT id FROM users WHERE name = ?", { "FindMe" });
 	stmt->fetch();
 	attribute_map attrs;
 	stmt->get_attributes(attrs);
@@ -312,9 +312,9 @@ TEST_F(DatabaseOperationsTest, QueryFind) {
 
 TEST_F(DatabaseOperationsTest, QueryFindMultipleIds) {
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("FindA"), attribute(21) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("FindB"), attribute(22) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("FindC"), attribute(23) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "FindA", 21 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "FindB", 22 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "FindC", 23 });
 
 	query<User> q;
 	auto users = q.find(std::vector<long>{ 1, 3 });
@@ -342,8 +342,8 @@ TEST_F(DatabaseOperationsTest, QueryFindMultipleIdsEmptyInputReturnsEmpty) {
 TEST_F(DatabaseOperationsTest, QueryFirst) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("First"), attribute(10) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Second"), attribute(20) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "First", 10 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Second", 20 });
 
 	// Get first
 	query<User> q;
@@ -376,8 +376,8 @@ TEST_F(DatabaseOperationsTest, QueryLastOrThrowThrowsWhenEmpty) {
 
 TEST_F(DatabaseOperationsTest, QueryLastUsesPrimaryKeyDescWhenNoOrder) {
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("First"), attribute(10) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Last"), attribute(20) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "First", 10 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Last", 20 });
 
 	query<User> q;
 	auto last = q.last();
@@ -387,9 +387,9 @@ TEST_F(DatabaseOperationsTest, QueryLastUsesPrimaryKeyDescWhenNoOrder) {
 
 TEST_F(DatabaseOperationsTest, QueryLastRespectsReversedOrder) {
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("A"), attribute(10) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("B"), attribute(20) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("C"), attribute(30) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 10 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "C", 30 });
 
 	query<User> q;
 	q.order("age ASC");
@@ -400,8 +400,8 @@ TEST_F(DatabaseOperationsTest, QueryLastRespectsReversedOrder) {
 
 TEST_F(DatabaseOperationsTest, QueryFirstOrThrowAndLastOrThrowReturnRecords) {
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("A"), attribute(10) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("B"), attribute(20) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 10 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 20 });
 
 	query<User> first_query;
 	first_query.order("id ASC");
@@ -416,9 +416,9 @@ TEST_F(DatabaseOperationsTest, QueryFirstOrThrowAndLastOrThrowReturnRecords) {
 
 TEST_F(DatabaseOperationsTest, QuerySupportsRangeBasedIteration) {
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("A"), attribute(10) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("B"), attribute(20) });
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("C"), attribute(30) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 10 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "C", 30 });
 
 	query<User> q;
 	q.order("id ASC");
@@ -446,12 +446,12 @@ TEST_F(DatabaseOperationsTest, ComplexQuery) {
 	for (int i = 0; i < 20; i++) {
 		conn->query(
 			"INSERT INTO users (name, age, active) VALUES (?, ?, ?)",
-			{ attribute("User" + std::to_string(i)), attribute(20 + i), attribute(i % 2 == 0) }); // Even IDs are active
+			{ "User" + std::to_string(i), 20 + i, i % 2 == 0 }); // Even IDs are active
 	}
 
 	// Complex query: active users, age > 25, ordered by age desc, limit 5
 	query<User> q;
-	q.where("active = ? AND age > ?", { attribute(true), attribute(25) }).order("age DESC").limit(5);
+	q.where("active = ? AND age > ?", { true, 25 }).order("age DESC").limit(5);
 
 	std::vector<User> users = q.all();
 
@@ -467,7 +467,7 @@ TEST_F(DatabaseOperationsTest, ModelToJson) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-				{ attribute("John"), attribute("john@example.com"), attribute(30) });
+				{ "John", "john@example.com", 30 });
 
 	// Load into model
 	query<User> q;
@@ -484,7 +484,7 @@ TEST_F(DatabaseOperationsTest, ModelToJson) {
 TEST_F(DatabaseOperationsTest, ModelToXml) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, email) VALUES (?, ?)", { attribute("Jane"), attribute("jane@example.com") });
+	conn->query("INSERT INTO users (name, email) VALUES (?, ?)", { "Jane", "jane@example.com" });
 
 	// Load into model
 	query<User> q;
@@ -505,7 +505,7 @@ TEST_F(DatabaseOperationsTest, ModelToXml) {
 TEST_F(DatabaseOperationsTest, DirtyTrackingAfterLoad) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { attribute("Test"), attribute(25) });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Test", 25 });
 
 	// Load model
 	query<User> q;
@@ -516,7 +516,7 @@ TEST_F(DatabaseOperationsTest, DirtyTrackingAfterLoad) {
 	EXPECT_FALSE(user->is_dirty());
 
 	// Modify
-	user->set("age", attribute(26));
+	user->set("age", 26);
 	EXPECT_TRUE(user->is_dirty());
 	EXPECT_TRUE(user->attribute_is_dirty("age"));
 
@@ -585,14 +585,14 @@ class TimestampVersionTest : public ::testing::Test {
 
 TEST_F(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Alice"));
+	user.init_record_tracking(true);
+	user.set("name", "Alice");
 
 	datetime before = datetime::now();
 	user.save();
 
 	// Reload from DB
-	auto loaded = query<TimestampedUser>().where("name = ?", attribute("Alice")).first_or_throw();
+	auto loaded = query<TimestampedUser>().where("name = ?", "Alice").first_or_throw();
 
 	EXPECT_FALSE(loaded.get("created_at").is_null());
 	EXPECT_FALSE(loaded.get("updated_at").is_null());
@@ -610,46 +610,46 @@ TEST_F(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
 
 TEST_F(TimestampVersionTest, InsertSetsVersionToOne) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Bob"));
+	user.init_record_tracking(true);
+	user.set("name", "Bob");
 	user.save();
 
-	auto loaded = query<TimestampedUser>().where("name = ?", attribute("Bob")).first_or_throw();
+	auto loaded = query<TimestampedUser>().where("name = ?", "Bob").first_or_throw();
 	EXPECT_EQ(1, loaded.get("version").as_integer());
 }
 
 TEST_F(TimestampVersionTest, UpdateIncrementsVersion) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Charlie"));
+	user.init_record_tracking(true);
+	user.set("name", "Charlie");
 	user.save();
 
 	// Reload and update
-	auto loaded = query<TimestampedUser>().where("name = ?", attribute("Charlie")).first_or_throw();
+	auto loaded = query<TimestampedUser>().where("name = ?", "Charlie").first_or_throw();
 	EXPECT_EQ(1, loaded.get("version").as_integer());
 
-	loaded.set("email", attribute("charlie@example.com"));
+	loaded.set("email", "charlie@example.com");
 	loaded.save();
 
-	auto reloaded = query<TimestampedUser>().where("name = ?", attribute("Charlie")).first_or_throw();
+	auto reloaded = query<TimestampedUser>().where("name = ?", "Charlie").first_or_throw();
 	EXPECT_EQ(2, reloaded.get("version").as_integer());
 	EXPECT_EQ("charlie@example.com", reloaded.get("email").as_string());
 }
 
 TEST_F(TimestampVersionTest, UpdateRefreshesUpdatedAtButNotCreatedAt) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Diana"));
+	user.init_record_tracking(true);
+	user.set("name", "Diana");
 	user.save();
 
-	auto loaded = query<TimestampedUser>().where("name = ?", attribute("Diana")).first_or_throw();
+	auto loaded = query<TimestampedUser>().where("name = ?", "Diana").first_or_throw();
 	auto original_created = loaded.get("created_at").as_date().timestamp();
 
 	// Update the record
-	loaded.set("email", attribute("diana@example.com"));
+	loaded.set("email", "diana@example.com");
 	loaded.save();
 
-	auto reloaded = query<TimestampedUser>().where("name = ?", attribute("Diana")).first_or_throw();
+	auto reloaded = query<TimestampedUser>().where("name = ?", "Diana").first_or_throw();
 
 	// created_at should be unchanged
 	EXPECT_EQ(original_created, reloaded.get("created_at").as_date().timestamp());
@@ -659,44 +659,44 @@ TEST_F(TimestampVersionTest, UpdateRefreshesUpdatedAtButNotCreatedAt) {
 
 TEST_F(TimestampVersionTest, VersionInWhereClauseEnsuresOptimisticLocking) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Eve"));
+	user.init_record_tracking(true);
+	user.set("name", "Eve");
 	user.save();
 
 	// Load two copies of the same record
-	auto copy1 = query<TimestampedUser>().where("name = ?", attribute("Eve")).first_or_throw();
-	auto copy2 = query<TimestampedUser>().where("name = ?", attribute("Eve")).first_or_throw();
+	auto copy1 = query<TimestampedUser>().where("name = ?", "Eve").first_or_throw();
+	auto copy2 = query<TimestampedUser>().where("name = ?", "Eve").first_or_throw();
 
 	EXPECT_EQ(1, copy1.get("version").as_integer());
 	EXPECT_EQ(1, copy2.get("version").as_integer());
 
 	// First save succeeds (WHERE version = 1 matches)
-	copy1.set("email", attribute("eve1@example.com"));
+	copy1.set("email", "eve1@example.com");
 	copy1.save();
 
 	// Second save fails with stale_record (WHERE version = 1 no longer matches, row has version 2)
-	copy2.set("email", attribute("eve2@example.com"));
+	copy2.set("email", "eve2@example.com");
 	EXPECT_THROW(copy2.save(), ex::stale_record);
 
 	// DB should have copy1's changes, not copy2's
-	auto final_record = query<TimestampedUser>().where("name = ?", attribute("Eve")).first_or_throw();
+	auto final_record = query<TimestampedUser>().where("name = ?", "Eve").first_or_throw();
 	EXPECT_EQ("eve1@example.com", final_record.get("email").as_string());
 	EXPECT_EQ(2, final_record.get("version").as_integer());
 }
 
 TEST_F(TimestampVersionTest, StaleRecordRestoresInMemoryVersion) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Grace"));
+	user.init_record_tracking(true);
+	user.set("name", "Grace");
 	user.save();
 
-	auto copy1 = query<TimestampedUser>().where("name = ?", attribute("Grace")).first_or_throw();
-	auto copy2 = query<TimestampedUser>().where("name = ?", attribute("Grace")).first_or_throw();
+	auto copy1 = query<TimestampedUser>().where("name = ?", "Grace").first_or_throw();
+	auto copy2 = query<TimestampedUser>().where("name = ?", "Grace").first_or_throw();
 
-	copy1.set("email", attribute("grace1@example.com"));
+	copy1.set("email", "grace1@example.com");
 	copy1.save();
 
-	copy2.set("email", attribute("grace2@example.com"));
+	copy2.set("email", "grace2@example.com");
 	EXPECT_THROW(copy2.save(), ex::stale_record);
 
 	// Version should be restored after failed optimistic-lock update.
@@ -706,57 +706,57 @@ TEST_F(TimestampVersionTest, StaleRecordRestoresInMemoryVersion) {
 
 TEST_F(TimestampVersionTest, DestroyWithStaleVersionThrows) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Heidi"));
+	user.init_record_tracking(true);
+	user.set("name", "Heidi");
 	user.save();
 
-	auto copy1 = query<TimestampedUser>().where("name = ?", attribute("Heidi")).first_or_throw();
-	auto copy2 = query<TimestampedUser>().where("name = ?", attribute("Heidi")).first_or_throw();
+	auto copy1 = query<TimestampedUser>().where("name = ?", "Heidi").first_or_throw();
+	auto copy2 = query<TimestampedUser>().where("name = ?", "Heidi").first_or_throw();
 
-	copy1.set("email", attribute("heidi1@example.com"));
+	copy1.set("email", "heidi1@example.com");
 	copy1.save();
 
 	EXPECT_THROW(copy2.destroy(), ex::stale_record);
 
-	auto still_there = query<TimestampedUser>().where("name = ?", attribute("Heidi")).first();
+	auto still_there = query<TimestampedUser>().where("name = ?", "Heidi").first();
 	EXPECT_TRUE(still_there.has_value());
 }
 
 TEST_F(TimestampVersionTest, MultipleUpdatesIncrementVersionSequentially) {
 	TimestampedUser user;
-	user.init_record_tracking(true, true, true);
-	user.set("name", attribute("Frank"));
+	user.init_record_tracking(true);
+	user.set("name", "Frank");
 	user.save();
 
 	for (int i = 0; i < 5; ++i) {
-		auto loaded = query<TimestampedUser>().where("name = ?", attribute("Frank")).first_or_throw();
-		loaded.set("email", attribute("frank" + std::to_string(i) + "@example.com"));
+		auto loaded = query<TimestampedUser>().where("name = ?", "Frank").first_or_throw();
+		loaded.set("email", "frank" + std::to_string(i) + "@example.com");
 		loaded.save();
 	}
 
-	auto final_record = query<TimestampedUser>().where("name = ?", attribute("Frank")).first_or_throw();
+	auto final_record = query<TimestampedUser>().where("name = ?", "Frank").first_or_throw();
 	EXPECT_EQ(6, final_record.get("version").as_integer()); // 1 (insert) + 5 (updates)
 	EXPECT_EQ("frank4@example.com", final_record.get("email").as_string());
 }
 
 TEST_F(TimestampVersionTest, NoTimestampColumnsDoesNotCrash) {
 	PlainItem item;
-	item.set("name", attribute("Widget"));
+	item.set("name", "Widget");
 
 	EXPECT_NO_THROW(item.save());
 
-	auto loaded = query<PlainItem>().where("name = ?", attribute("Widget")).first_or_throw();
+	auto loaded = query<PlainItem>().where("name = ?", "Widget").first_or_throw();
 	EXPECT_EQ("Widget", loaded.get("name").as_string());
 
 	// Update also works fine
-	loaded.set("name", attribute("Updated Widget"));
+	loaded.set("name", "Updated Widget");
 	EXPECT_NO_THROW(loaded.save());
 
-	auto reloaded = query<PlainItem>().where("name = ?", attribute("Updated Widget")).first_or_throw();
+	auto reloaded = query<PlainItem>().where("name = ?", "Updated Widget").first_or_throw();
 	EXPECT_EQ("Updated Widget", reloaded.get("name").as_string());
 }
 
-TEST_F(TimestampVersionTest, CreatedAtExistsButUpdatedAtDoesNot) {
+TEST_F(TimestampVersionTest, MetadataTrackingOffWorksWithPartialTrackingColumns) {
 	// Create a table with only created_at (no updated_at, no version)
 	auto conn = config::instance().get_connection();
 	conn->query("CREATE TABLE partial_items ("
@@ -774,17 +774,17 @@ TEST_F(TimestampVersionTest, CreatedAtExistsButUpdatedAtDoesNot) {
 	};
 
 	PartialItem item;
-	item.init_record_tracking(true, false, false);
-	item.set("name", attribute("Partial"));
+	item.init_record_tracking(false);
+	item.set("name", "Partial");
 	item.save();
 
-	auto loaded = query<PartialItem>().where("name = ?", attribute("Partial")).first_or_throw();
-	EXPECT_FALSE(loaded.get("created_at").is_null());
+	auto loaded = query<PartialItem>().where("name = ?", "Partial").first_or_throw();
+	EXPECT_TRUE(loaded.get("created_at").is_null());
 
 	// Update should work fine without updated_at or version columns
-	loaded.set("name", attribute("Updated Partial"));
+	loaded.set("name", "Updated Partial");
 	EXPECT_NO_THROW(loaded.save());
 
-	auto reloaded = query<PartialItem>().where("name = ?", attribute("Updated Partial")).first_or_throw();
+	auto reloaded = query<PartialItem>().where("name = ?", "Updated Partial").first_or_throw();
 	EXPECT_EQ("Updated Partial", reloaded.get("name").as_string());
 }

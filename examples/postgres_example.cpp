@@ -52,23 +52,23 @@ int main() {
 		std::cout << "Creating users...\n";
 
 		User alice;
-		alice.set("name", ar::attribute("Alice Smith"));
-		alice.set("email", ar::attribute("alice@example.com"));
-		alice.set("age", ar::attribute(28));
+		alice.set("name", "Alice Smith");
+		alice.set("email", "alice@example.com");
+		alice.set("age", 28);
 		alice.save();
 		std::cout << "Created: " << alice.to_json_string() << "\n";
 
 		User bob;
-		bob.set("name", ar::attribute("Bob Johnson"));
-		bob.set("email", ar::attribute("bob@example.com"));
-		bob.set("age", ar::attribute(35));
+		bob.set("name", "Bob Johnson");
+		bob.set("email", "bob@example.com");
+		bob.set("age", 35);
 		bob.save();
 		std::cout << "Created: " << bob.to_json_string() << "\n";
 
 		User charlie;
-		charlie.set("name", ar::attribute("Charlie Brown"));
-		charlie.set("email", ar::attribute("charlie@example.com"));
-		charlie.set("age", ar::attribute(42));
+		charlie.set("name", "Charlie Brown");
+		charlie.set("email", "charlie@example.com");
+		charlie.set("age", 42);
 		charlie.save();
 		std::cout << "Created: " << charlie.to_json_string() << "\n\n";
 
@@ -82,7 +82,7 @@ int main() {
 
 		// 5. Query with WHERE clause - also lazy
 		std::cout << "Users older than 30:\n";
-		auto age_query = ar::query<User>().where("age > ?", ar::attribute(30));
+		auto age_query = ar::query<User>().where("age > ?", 30);
 		for (const auto& user : age_query) {
 			std::cout << "  " << user["name"].as_string() << " (age: " << user["age"].as_integer() << ")\n";
 		}
@@ -104,11 +104,11 @@ int main() {
 
 		// 8. Find with std::optional - safe handling of missing records
 		std::cout << "Finding Alice...\n";
-		if (auto found = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first()) {
+		if (auto found = ar::query<User>().where("name = ?", "Alice Smith").first()) {
 			std::cout << "Found: " << found->to_json_string() << "\n";
 
 			// 9. Update user
-			found->set("age", ar::attribute(29));
+			found->set("age", 29);
 			found->save();
 			std::cout << "Updated Alice's age to 29\n";
 		} else {
@@ -118,7 +118,7 @@ int main() {
 
 		// 10. first_or_throw - when absence is exceptional
 		try {
-			User admin = ar::query<User>().where("name = ?", ar::attribute("NonExistent")).first_or_throw();
+			User admin = ar::query<User>().where("name = ?", "NonExistent").first_or_throw();
 		} catch (const ar::ex::item_not_found&) {
 			std::cout << "first_or_throw correctly threw for missing record\n\n";
 		}
@@ -131,15 +131,15 @@ int main() {
 
 		// 12. Dirty tracking
 		std::cout << "Dirty tracking demo:\n";
-		auto user = ar::query<User>().where("name = ?", ar::attribute("Bob Johnson")).first_or_throw();
+		auto user = ar::query<User>().where("name = ?", "Bob Johnson").first_or_throw();
 		std::cout << "  Is dirty: " << (user.is_dirty() ? "yes" : "no") << "\n";
-		user.set("email", ar::attribute("bob.new@example.com"));
+		user.set("email", "bob.new@example.com");
 		std::cout << "  After set: " << (user.is_dirty() ? "yes" : "no") << "\n";
 		user.save();
 		std::cout << "  After save: " << (user.is_dirty() ? "yes" : "no") << "\n\n";
 
 		// 13. XML serialization
-		if (auto alice_loaded = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first()) {
+		if (auto alice_loaded = ar::query<User>().where("name = ?", "Alice Smith").first()) {
 			std::cout << "Alice as XML:\n" << alice_loaded->to_xml_string("user") << "\n\n";
 		}
 

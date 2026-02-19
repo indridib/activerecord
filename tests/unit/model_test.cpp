@@ -69,7 +69,7 @@ TEST_F(ModelTest, GetTableName) {
 
 TEST_F(ModelTest, SetAndGetAttribute) {
 	TestModel m;
-	m.set("name", attribute("John"));
+	m.set("name", "John");
 
 	const attribute& attr = m.get("name");
 	EXPECT_EQ("John", attr.as_string());
@@ -77,9 +77,9 @@ TEST_F(ModelTest, SetAndGetAttribute) {
 
 TEST_F(ModelTest, SetAndGetMultipleAttributes) {
 	TestModel m;
-	m.set("name", attribute("John"));
-	m.set("age", attribute(30));
-	m.set("active", attribute(true));
+	m.set("name", "John");
+	m.set("age", 30);
+	m.set("active", true);
 
 	EXPECT_EQ("John", m.get("name").as_string());
 	EXPECT_EQ(30, m.get("age").as_integer());
@@ -93,14 +93,14 @@ TEST_F(ModelTest, GetNonExistentAttributeThrows) {
 
 TEST_F(ModelTest, BracketOperatorAccess) {
 	TestModel m;
-	m.set("name", attribute("Jane"));
+	m.set("name", "Jane");
 
 	EXPECT_EQ("Jane", m["name"].as_string());
 }
 
 TEST_F(ModelTest, IssetExistingAttribute) {
 	TestModel m;
-	m.set("name", attribute("John"));
+	m.set("name", "John");
 
 	EXPECT_TRUE(m.isset("name"));
 }
@@ -117,9 +117,9 @@ TEST_F(ModelTest, IssetNonExistentAttribute) {
 TEST_F(ModelTest, SetAttributes) {
 	TestModel m;
 	attribute_map attrs;
-	attrs["name"] = attribute("John");
-	attrs["age"] = attribute(25);
-	attrs["email"] = attribute("john@example.com");
+	attrs["name"] = "John";
+	attrs["age"] = 25;
+	attrs["email"] = "john@example.com";
 
 	m.set_attributes(attrs);
 
@@ -130,11 +130,11 @@ TEST_F(ModelTest, SetAttributes) {
 
 TEST_F(ModelTest, SetAttributesWithGuardTrue) {
 	TestModel m;
-	m.set("name", attribute("Original"));
+	m.set("name", "Original");
 
 	attribute_map attrs;
-	attrs["name"] = attribute("Updated");
-	attrs["nonexistent"] = attribute("New"); // This should throw
+	attrs["name"] = "Updated";
+	attrs["nonexistent"] = "New"; // This should throw
 
 	EXPECT_THROW(m.set_attributes(attrs, false), ex::attribute_not_found); // allow_new_attributes=false throws
 }
@@ -142,7 +142,7 @@ TEST_F(ModelTest, SetAttributesWithGuardTrue) {
 TEST_F(ModelTest, SetAttributesWithGuardFalse) {
 	TestModel m;
 	attribute_map attrs;
-	attrs["new_field"] = attribute("New Value");
+	attrs["new_field"] = "New Value";
 
 	m.set_attributes(attrs, true); // allow_new_attributes=true (or use default)
 
@@ -151,8 +151,8 @@ TEST_F(ModelTest, SetAttributesWithGuardFalse) {
 
 TEST_F(ModelTest, GetAttributes) {
 	TestModel m;
-	m.set("name", attribute("John"));
-	m.set("age", attribute(30));
+	m.set("name", "John");
+	m.set("age", 30);
 
 	const attribute_map& attrs = m.attributes();
 
@@ -173,7 +173,7 @@ TEST_F(ModelTest, InitiallyNotDirty) {
 
 TEST_F(ModelTest, SettingAttributeMakesDirty) {
 	TestModel m;
-	m.set("name", attribute("John"));
+	m.set("name", "John");
 
 	EXPECT_TRUE(m.is_dirty());
 	EXPECT_TRUE(m.attribute_is_dirty("name"));
@@ -189,7 +189,7 @@ TEST_F(ModelTest, FlagDirty) {
 
 TEST_F(ModelTest, ResetDirty) {
 	TestModel m;
-	m.set("name", attribute("John"));
+	m.set("name", "John");
 	EXPECT_TRUE(m.is_dirty());
 
 	m.reset_dirty();
@@ -200,9 +200,9 @@ TEST_F(ModelTest, ResetDirty) {
 
 TEST_F(ModelTest, DirtyAttributesSet) {
 	TestModel m;
-	m.set("name", attribute("John"));
-	m.set("age", attribute(30));
-	m.set("email", attribute("john@example.com"));
+	m.set("name", "John");
+	m.set("age", 30);
+	m.set("email", "john@example.com");
 
 	const string_set& dirty = m.dirty_attributes();
 
@@ -252,10 +252,10 @@ TEST_F(ModelTest, VerifyNotReadonlyThrowsWhenReadonly) {
 TEST_F(ModelTest, CannotModifyPrimaryKeyOnPersistedRecord) {
 	TestModel m;
 	m.new_record_ = false;
-	m.attributes_["id"] = attribute(1); // setup persisted PK directly
+	m.attributes_["id"] = 1; // setup persisted PK directly
 	m.reset_dirty();
 
-	EXPECT_THROW(m.set("id", attribute(2), false), ex::readonly);
+	EXPECT_THROW(m.set("id", 2, false), ex::readonly);
 }
 
 // ==============================================================================
@@ -280,9 +280,9 @@ TEST_F(ModelTest, IsInvalidReturnsFalse) {
 
 TEST_F(ModelTest, ToJsonString) {
 	TestModel m;
-	m.set("id", attribute(1));
-	m.set("name", attribute("John Doe"));
-	m.set("age", attribute(30));
+	m.set("id", 1);
+	m.set("name", "John Doe");
+	m.set("age", 30);
 
 	std::string json = m.to_json_string();
 
@@ -293,9 +293,9 @@ TEST_F(ModelTest, ToJsonString) {
 
 TEST_F(ModelTest, ToJsonStringWithOnly) {
 	TestModel m;
-	m.set("id", attribute(1));
-	m.set("name", attribute("John"));
-	m.set("password", attribute("secret"));
+	m.set("id", 1);
+	m.set("name", "John");
+	m.set("password", "secret");
 
 	string_vector only = { "id", "name" };
 	std::string json = m.to_json_string(only);
@@ -307,9 +307,9 @@ TEST_F(ModelTest, ToJsonStringWithOnly) {
 
 TEST_F(ModelTest, ToJsonStringWithExclude) {
 	TestModel m;
-	m.set("id", attribute(1));
-	m.set("name", attribute("John"));
-	m.set("password", attribute("secret"));
+	m.set("id", 1);
+	m.set("name", "John");
+	m.set("password", "secret");
 
 	string_set exclude = { "password" };
 	std::string json = m.to_json_string({}, exclude);
@@ -321,8 +321,8 @@ TEST_F(ModelTest, ToJsonStringWithExclude) {
 
 TEST_F(ModelTest, ToXmlString) {
 	TestModel m;
-	m.set("id", attribute(1));
-	m.set("name", attribute("John Doe"));
+	m.set("id", 1);
+	m.set("name", "John Doe");
 
 	std::string xml = m.to_xml_string();
 
@@ -334,7 +334,7 @@ TEST_F(ModelTest, ToXmlString) {
 
 TEST_F(ModelTest, ToXmlStringWithCustomName) {
 	TestModel m;
-	m.set("id", attribute(1));
+	m.set("id", 1);
 
 	std::string xml = m.to_xml_string("user");
 
@@ -344,9 +344,9 @@ TEST_F(ModelTest, ToXmlStringWithCustomName) {
 
 TEST_F(ModelTest, ToXmlStringWithExclude) {
 	TestModel m;
-	m.set("id", attribute(1));
-	m.set("name", attribute("John"));
-	m.set("password", attribute("secret"));
+	m.set("id", 1);
+	m.set("name", "John");
+	m.set("password", "secret");
 
 	string_set exclude = { "password" };
 	std::string xml = m.to_xml_string("user", {}, exclude);
@@ -361,7 +361,7 @@ TEST_F(ModelTest, ToXmlStringWithExclude) {
 
 TEST_F(ModelTest, InitRecordTrackingCreatesPlaceholders) {
 	TestModel m;
-	m.init_record_tracking(true, true, true);
+	m.init_record_tracking(true);
 
 	EXPECT_TRUE(m.isset("created_at"));
 	EXPECT_TRUE(m.isset("updated_at"));
@@ -375,8 +375,8 @@ TEST_F(ModelTest, InitRecordTrackingCreatesPlaceholders) {
 
 TEST_F(ModelTest, InitRecordTrackingDoesNotOverwriteExisting) {
 	TestModel m;
-	m.set("created_at", attribute(datetime{ 2024, 1, 1 }));
-	m.init_record_tracking(true, true, true);
+	m.set("created_at", datetime{ 2024, 1, 1 });
+	m.init_record_tracking(true);
 
 	// Should NOT overwrite the existing value
 	EXPECT_FALSE(m.get("created_at").is_null());
@@ -386,7 +386,7 @@ TEST_F(ModelTest, InitRecordTrackingDoesNotOverwriteExisting) {
 TEST_F(ModelTest, InitRecordTrackingDoesNotFlagDirty) {
 	TestModel m;
 	m.reset_dirty(); // Clear any dirty state from construction
-	m.init_record_tracking(true, true, true);
+	m.init_record_tracking(true);
 
 	// Placeholders should NOT be dirty
 	EXPECT_FALSE(m.attribute_is_dirty("created_at"));
@@ -396,7 +396,7 @@ TEST_F(ModelTest, InitRecordTrackingDoesNotFlagDirty) {
 
 TEST_F(ModelTest, NoTimestampsWhenAttributesMissing) {
 	TestModel m;
-	m.set("name", attribute("test"));
+	m.set("name", "test");
 
 	// Without init_record_tracking(), these attributes don't exist
 	EXPECT_FALSE(m.isset("created_at"));
@@ -406,20 +406,20 @@ TEST_F(ModelTest, NoTimestampsWhenAttributesMissing) {
 
 TEST_F(ModelTest, InitRecordTrackingIdempotent) {
 	TestModel m;
-	m.set("created_at", attribute(datetime{ 2024, 6, 15 }));
-	m.init_record_tracking(true, true, true); // Should not overwrite
-	m.init_record_tracking(true, true, true); // Call again - should be safe
+	m.set("created_at", datetime{ 2024, 6, 15 });
+	m.init_record_tracking(true); // Should not overwrite
+	m.init_record_tracking(true); // Call again - should be safe
 
 	EXPECT_EQ(2024, m.get("created_at").as_date().year());
 	EXPECT_TRUE(m.get("updated_at").is_null());
 	EXPECT_TRUE(m.get("version").is_null());
 }
 
-TEST_F(ModelTest, InitRecordTrackingSelectiveColumns) {
+TEST_F(ModelTest, InitRecordTrackingOffDoesNotCreatePlaceholders) {
 	TestModel m;
-	m.init_record_tracking(true, false, false);
+	m.init_record_tracking(false);
 
-	EXPECT_TRUE(m.isset("created_at"));
+	EXPECT_FALSE(m.isset("created_at"));
 	EXPECT_FALSE(m.isset("updated_at"));
 	EXPECT_FALSE(m.isset("version"));
 }

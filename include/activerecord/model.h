@@ -304,7 +304,9 @@ class model {
 		}
 
 		const attribute& pk_value{ get(primary_key_) };
-		const bool has_version{ attributes_.find("version") != attributes_.end() && !attributes_["version"].is_null() };
+		const bool has_version{
+			track_record_metadata_ && attributes_.find("version") != attributes_.end() && !attributes_["version"].is_null()
+		};
 
 		std::string where{ std::string(primary_key_) + " = ?" };
 		attribute_vector values{ pk_value };
@@ -419,21 +421,23 @@ class model {
 	}
 
 	/**
-	 * Initialize timestamp/version tracking placeholders for selected columns.
+	 * Initialize timestamp/version tracking placeholders with a simple on/off switch.
 	 *
-	 * IMPORTANT: pass true only for columns that actually exist in the table.
-	 * This avoids generating INSERT/UPDATE SQL with non-existent columns.
+	 * When enabled, created_at/updated_at/version placeholders are registered.
+	 * When disabled, metadata tracking is turned off for this model instance.
 	 *
-	 * @param track_created_at - register created_at placeholder.
-	 * @param track_updated_at - register updated_at placeholder.
-	 * @param track_version - register version placeholder.
+	 * @param track_record_metadata - enable or disable metadata tracking.
 	 */
-	void init_record_tracking(bool track_created_at, bool track_updated_at, bool track_version) {
-		if (track_created_at && attributes_.find("created_at") == attributes_.end())
+	void init_record_tracking(bool track_record_metadata) {
+		set_record_tracking_policy(track_record_metadata);
+		if (!track_record_metadata) {
+			return;
+		}
+		if (attributes_.find("created_at") == attributes_.end())
 			attributes_["created_at"] = attribute();
-		if (track_updated_at && attributes_.find("updated_at") == attributes_.end())
+		if (attributes_.find("updated_at") == attributes_.end())
 			attributes_["updated_at"] = attribute();
-		if (track_version && attributes_.find("version") == attributes_.end())
+		if (attributes_.find("version") == attributes_.end())
 			attributes_["version"] = attribute();
 	}
 
@@ -497,6 +501,10 @@ class model {
 	// - transaction()
 
   protected:
+	void set_record_tracking_policy(bool track_record_metadata) noexcept {
+		track_record_metadata_ = track_record_metadata;
+	}
+
 	// NOTE: hooks to add functionality
 	//	before_create
 	//	after_create
@@ -532,7 +540,7 @@ class model {
 
 		// Optimistic locking: capture old version before incrementing
 		const bool has_version =
-			(attributes_.find("version") != attributes_.end() && !attributes_["version"].is_null());
+			track_record_metadata_ && (attributes_.find("version") != attributes_.end() && !attributes_["version"].is_null());
 		int64_t old_version{ 0 };
 		if (has_version) {
 			old_version = get("version").as_integer();
@@ -639,11 +647,11 @@ class model {
 	 */
 	void set_timestamps_for_create() {
 		datetime now{ datetime::now() };
-		if (attributes_.find("created_at") != attributes_.end()) {
+		if (track_record_metadata_ && attributes_.find("created_at") != attributes_.end()) {
 			attributes_["created_at"] = attribute(now);
 			flag_dirty("created_at");
 		}
-		if (attributes_.find("updated_at") != attributes_.end()) {
+		if (track_record_metadata_ && attributes_.find("updated_at") != attributes_.end()) {
 			attributes_["updated_at"] = attribute(now);
 			flag_dirty("updated_at");
 		}
@@ -654,7 +662,7 @@ class model {
 	 * Called automatically during update(). Does NOT touch created_at.
 	 */
 	void set_timestamps_for_update() {
-		if (attributes_.find("updated_at") != attributes_.end()) {
+		if (track_record_metadata_ && attributes_.find("updated_at") != attributes_.end()) {
 			attributes_["updated_at"] = attribute(datetime::now());
 			flag_dirty("updated_at");
 		}
@@ -665,7 +673,7 @@ class model {
 	 * Called automatically during insert().
 	 */
 	void set_version_for_create() {
-		if (attributes_.find("version") != attributes_.end()) {
+		if (track_record_metadata_ && attributes_.find("version") != attributes_.end()) {
 			attributes_["version"] = attribute(static_cast<int64_t>(1));
 			flag_dirty("version");
 		}
@@ -688,6 +696,7 @@ class model {
   protected:
 	string_set dirty_;		 // attributes that are dirty
 	bool readonly_{ false }; // no writing
+	bool track_record_metadata_{ true };
 };
 
 } // namespace ar

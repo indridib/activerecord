@@ -262,6 +262,9 @@ template <class T> class query : public sql_builder {
 			current_ = T{};
 			stmt_->get_attributes(current_.attributes_);
 			current_.new_record_ = false;
+			if constexpr (requires(T& item) { item.sync_from_attributes(); }) {
+				current_.sync_from_attributes();
+			}
 			end_ = false;
 		}
 
@@ -371,6 +374,9 @@ template <class T> class query : public sql_builder {
 			T item;
 			stmt->get_attributes(item.attributes_);
 			item.new_record_ = false;
+			if constexpr (requires(T& value) { value.sync_from_attributes(); }) {
+				item.sync_from_attributes();
+			}
 			return item;
 		}
 		return std::nullopt;

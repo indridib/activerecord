@@ -41,6 +41,7 @@ add_executable(unit_tests
   unit/sql_builder_test.cpp
   unit/config_test.cpp
   unit/sql_injection_test.cpp
+  unit/typed_model_test.cpp
   unit/transaction_test.cpp
 )
 

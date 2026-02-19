@@ -77,7 +77,7 @@ TEST(SqlBuilderTest, SelectWithWhere) {
 	sql_builder builder(conn, "users");
 
 	builder.add_select("*");
-	builder.add_where("id = ?", { attribute(5) });
+	builder.add_where("id = ?", { 5 });
 	std::string sql = builder.to_string();
 
 	EXPECT_NE(std::string::npos, sql.find("WHERE"));
@@ -93,7 +93,7 @@ TEST(SqlBuilderTest, SelectWithMultipleWhereValues) {
 	sql_builder builder(conn, "users");
 
 	builder.add_select("*");
-	attribute_vector values = { attribute("John"), attribute(25) };
+	attribute_vector values = { "John", 25 };
 	builder.add_where("name = ? AND age > ?", values);
 	std::string sql = builder.to_string();
 
@@ -180,7 +180,7 @@ TEST(SqlBuilderTest, CompleteSelectQuery) {
 	sql_builder builder(conn, "users");
 
 	builder.add_select("id, name");
-	builder.add_where("age > ?", { attribute(18) });
+	builder.add_where("age > ?", { 18 });
 	builder.add_order("name ASC");
 	builder.set_limit(10);
 	builder.set_offset(5);
@@ -204,7 +204,7 @@ TEST(SqlBuilderTest, BasicInsert) {
 	sql_builder builder(conn, "users");
 
 	string_vector names = { "name", "email", "age" };
-	attribute_vector values = { attribute("John"), attribute("john@example.com"), attribute(30) };
+	attribute_vector values = { "John", "john@example.com", 30 };
 
 	builder.insert(names, values);
 	std::string sql = builder.to_string();
@@ -228,7 +228,7 @@ TEST(SqlBuilderTest, InsertSingleColumn) {
 	sql_builder builder(conn, "users");
 
 	string_vector names = { "name" };
-	attribute_vector values = { attribute("John") };
+	attribute_vector values = { "John" };
 
 	builder.insert(names, values);
 	std::string sql = builder.to_string();
@@ -247,7 +247,7 @@ TEST(SqlBuilderTest, BasicUpdate) {
 	sql_builder builder(conn, "users");
 
 	string_vector names = { "name", "age" };
-	attribute_vector values = { attribute("Jane"), attribute(25) };
+	attribute_vector values = { "Jane", 25 };
 
 	builder.update(names, values);
 	std::string sql = builder.to_string();
@@ -262,10 +262,10 @@ TEST(SqlBuilderTest, UpdateWithWhere) {
 	sql_builder builder(conn, "users");
 
 	string_vector names = { "name" };
-	attribute_vector values = { attribute("Jane") };
+	attribute_vector values = { "Jane" };
 
 	builder.update(names, values);
-	builder.add_where("id = ?", { attribute(5) });
+	builder.add_where("id = ?", { 5 });
 	std::string sql = builder.to_string();
 
 	EXPECT_NE(std::string::npos, sql.find("UPDATE users"));
@@ -285,7 +285,7 @@ TEST(SqlBuilderTest, DeleteWithWhereUsesBindValues) {
 	auto conn = std::make_shared<mock_connection>();
 	delete_sql_builder_for_test builder(conn, "users");
 
-	builder.add_where("id = ?", { attribute(7) });
+	builder.add_where("id = ?", { 7 });
 	std::string sql = builder.build_delete_public();
 
 	EXPECT_EQ("DELETE FROM users WHERE id = ?", sql);
@@ -298,7 +298,7 @@ TEST(SqlBuilderTest, DeleteWithOrderLimitAndOffset) {
 	auto conn = std::make_shared<mock_delete_limit_connection>();
 	delete_sql_builder_for_test builder(conn, "users");
 
-	builder.add_where("active = ?", { attribute(true) });
+	builder.add_where("active = ?", { true });
 	builder.add_order("id DESC");
 	builder.set_limit(2);
 	builder.set_offset(1);

@@ -220,15 +220,15 @@ class DatabaseAdapterTest : public ::testing::TestWithParam<AdapterType> {
 
 TEST_P(DatabaseAdapterTest, InsertAndRetrieve) {
 	User user;
-	user.set("name", attribute("John Doe"));
-	user.set("email", attribute("john@example.com"));
-	user.set("age", attribute(30));
+	user.set("name", "John Doe");
+	user.set("email", "john@example.com");
+	user.set("age", 30);
 
 	EXPECT_TRUE(user.save());
 
 	// Retrieve and verify
 	query<User> q;
-	auto users = q.where("name = ?", attribute("John Doe")).all();
+	auto users = q.where("name = ?", "John Doe").all();
 	ASSERT_EQ(1, users.size());
 	EXPECT_EQ("John Doe", users[0]["name"].as_string());
 	EXPECT_EQ("john@example.com", users[0]["email"].as_string());
@@ -237,15 +237,15 @@ TEST_P(DatabaseAdapterTest, InsertAndRetrieve) {
 
 TEST_P(DatabaseAdapterTest, UpdateRecord) {
 	User user;
-	user.set("name", attribute("Jane"));
-	user.set("age", attribute(25));
+	user.set("name", "Jane");
+	user.set("age", 25);
 	user.save();
 
-	user.set("age", attribute(26));
+	user.set("age", 26);
 	EXPECT_TRUE(user.save());
 
 	query<User> q;
-	auto users = q.where("name = ?", attribute("Jane")).all();
+	auto users = q.where("name = ?", "Jane").all();
 	ASSERT_EQ(1, users.size());
 	EXPECT_EQ(26, users[0]["age"].as_integer());
 }
@@ -254,29 +254,29 @@ TEST_P(DatabaseAdapterTest, QueryWithWhere) {
 	// Insert multiple users
 	for (int i = 0; i < 5; ++i) {
 		User u;
-		u.set("name", attribute("User" + std::to_string(i)));
-		u.set("age", attribute(20 + i * 5));
+		u.set("name", "User" + std::to_string(i));
+		u.set("age", 20 + i * 5);
 		u.save();
 	}
 
 	// Query users older than 25
 	query<User> q;
-	auto users = q.where("age > ?", attribute(25)).all();
+	auto users = q.where("age > ?", 25).all();
 	EXPECT_GE(users.size(), 2);
 }
 
 TEST_P(DatabaseAdapterTest, QueryWithOrderBy) {
 	User u1, u2, u3;
-	u1.set("name", attribute("Charlie"));
-	u1.set("age", attribute(30));
+	u1.set("name", "Charlie");
+	u1.set("age", 30);
 	u1.save();
 
-	u2.set("name", attribute("Alice"));
-	u2.set("age", attribute(25));
+	u2.set("name", "Alice");
+	u2.set("age", 25);
 	u2.save();
 
-	u3.set("name", attribute("Bob"));
-	u3.set("age", attribute(35));
+	u3.set("name", "Bob");
+	u3.set("age", 35);
 	u3.save();
 
 	query<User> q;
@@ -288,7 +288,7 @@ TEST_P(DatabaseAdapterTest, QueryWithOrderBy) {
 TEST_P(DatabaseAdapterTest, QueryWithLimit) {
 	for (int i = 0; i < 10; ++i) {
 		User u;
-		u.set("name", attribute("User" + std::to_string(i)));
+		u.set("name", "User" + std::to_string(i));
 		u.save();
 	}
 
@@ -300,7 +300,7 @@ TEST_P(DatabaseAdapterTest, QueryWithLimit) {
 TEST_P(DatabaseAdapterTest, QueryCount) {
 	for (int i = 0; i < 7; ++i) {
 		User u;
-		u.set("name", attribute("User" + std::to_string(i)));
+		u.set("name", "User" + std::to_string(i));
 		u.save();
 	}
 
@@ -310,36 +310,36 @@ TEST_P(DatabaseAdapterTest, QueryCount) {
 
 TEST_P(DatabaseAdapterTest, ParameterBinding) {
 	User u;
-	u.set("name", attribute("Test's Name")); // Name with apostrophe
-	u.set("email", attribute("test@example.com"));
+	u.set("name", "Test's Name"); // Name with apostrophe
+	u.set("email", "test@example.com");
 	EXPECT_TRUE(u.save());
 
 	query<User> q;
-	auto users = q.where("name = ?", attribute("Test's Name")).all();
+	auto users = q.where("name = ?", "Test's Name").all();
 	ASSERT_EQ(1, users.size());
 	EXPECT_EQ("Test's Name", users[0]["name"].as_string());
 }
 
 TEST_P(DatabaseAdapterTest, NullValues) {
 	User u;
-	u.set("name", attribute("NoEmail"));
+	u.set("name", "NoEmail");
 	u.set("email", attribute()); // NULL
 	u.save();
 
 	query<User> q;
-	auto users = q.where("name = ?", attribute("NoEmail")).all();
+	auto users = q.where("name = ?", "NoEmail").all();
 	ASSERT_EQ(1, users.size());
 	EXPECT_TRUE(users[0]["email"].is_null());
 }
 
 TEST_P(DatabaseAdapterTest, BooleanValues) {
 	User u;
-	u.set("name", attribute("Active User"));
-	u.set("active", attribute(true));
+	u.set("name", "Active User");
+	u.set("active", true);
 	u.save();
 
 	query<User> q;
-	auto users = q.where("name = ?", attribute("Active User")).all();
+	auto users = q.where("name = ?", "Active User").all();
 	ASSERT_EQ(1, users.size());
 	// Note: Boolean handling may vary by database
 }

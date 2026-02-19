@@ -50,36 +50,36 @@ int main() {
 		std::cout << "Creating users...\n";
 
 		User alice;
-		alice.init_record_tracking(true, true, true); // Registers created_at, updated_at, version
-		alice.set("name", ar::attribute("Alice Smith"));
-		alice.set("email", ar::attribute("alice@example.com"));
-		alice.set("age", ar::attribute(28));
-		alice.set("active", ar::attribute(true));
-		alice.set("salary", ar::attribute(75000.50));
-		alice.set("bio", ar::attribute("Software engineer from Reykjavik"));
+		alice.init_record_tracking(true); // Registers created_at, updated_at, version
+		alice.set("name", "Alice Smith");
+		alice.set("email", "alice@example.com");
+		alice.set("age", 28);
+		alice.set("active", true);
+		alice.set("salary", 75000.50);
+		alice.set("bio", "Software engineer from Reykjavik");
 		alice.save();
 		// created_at = now, updated_at = now, version = 1
 		std::cout << "Created: " << alice.to_json_string() << "\n";
 
 		User bob;
-		bob.init_record_tracking(true, true, true);
-		bob.set("name", ar::attribute("Bob Johnson"));
-		bob.set("email", ar::attribute("bob@example.com"));
-		bob.set("age", ar::attribute(35));
-		bob.set("active", ar::attribute(true));
-		bob.set("salary", ar::attribute(92000.00));
+		bob.init_record_tracking(true);
+		bob.set("name", "Bob Johnson");
+		bob.set("email", "bob@example.com");
+		bob.set("age", 35);
+		bob.set("active", true);
+		bob.set("salary", 92000.00);
 		// bio left as NULL to demonstrate null handling
 		bob.save();
 		std::cout << "Created: " << bob.to_json_string() << "\n";
 
 		User charlie;
-		charlie.init_record_tracking(true, true, true);
-		charlie.set("name", ar::attribute("Charlie Brown"));
-		charlie.set("email", ar::attribute("charlie@example.com"));
-		charlie.set("age", ar::attribute(42));
-		charlie.set("active", ar::attribute(false));
-		charlie.set("salary", ar::attribute(110000.75));
-		charlie.set("bio", ar::attribute("Retired database administrator"));
+		charlie.init_record_tracking(true);
+		charlie.set("name", "Charlie Brown");
+		charlie.set("email", "charlie@example.com");
+		charlie.set("age", 42);
+		charlie.set("active", false);
+		charlie.set("salary", 110000.75);
+		charlie.set("bio", "Retired database administrator");
 		charlie.save();
 		std::cout << "Created: " << charlie.to_json_string() << "\n\n";
 
@@ -94,7 +94,7 @@ int main() {
 
 		// 5. Query with WHERE clause - filtering on boolean
 		std::cout << "Active users:\n";
-		auto active_query = ar::query<User>().where("active = ?", ar::attribute(true));
+		auto active_query = ar::query<User>().where("active = ?", true);
 		for (const auto& user : active_query) {
 			std::cout << "  " << user["name"].as_string() << "\n";
 		}
@@ -116,11 +116,11 @@ int main() {
 
 		// 8. Find with std::optional - safe handling of missing records
 		std::cout << "Finding Alice...\n";
-		if (auto found = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first()) {
+		if (auto found = ar::query<User>().where("name = ?", "Alice Smith").first()) {
 			std::cout << "Found: " << found->to_json_string() << "\n";
 
 			// 9. Update triggers auto-refresh of updated_at and version increment
-			found->set("salary", ar::attribute(80000.00));
+			found->set("salary", 80000.00);
 			found->save();
 			std::cout << "Updated Alice's salary\n";
 		}
@@ -128,28 +128,28 @@ int main() {
 
 		// 10. Timestamps and version tracking demo
 		std::cout << "Timestamp and version tracking:\n";
-		auto loaded = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first_or_throw();
+		auto loaded = ar::query<User>().where("name = ?", "Alice Smith").first_or_throw();
 		std::cout << "  version:    " << loaded.get("version").as_integer() << "\n";
 		std::cout << "  created_at: " << loaded.get("created_at").as_date().to_string() << "\n";
 		std::cout << "  updated_at: " << loaded.get("updated_at").as_date().to_string() << "\n";
 
 		// Another update increments version again
-		loaded.set("age", ar::attribute(29));
+		loaded.set("age", 29);
 		loaded.save();
 
-		auto reloaded = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first_or_throw();
+		auto reloaded = ar::query<User>().where("name = ?", "Alice Smith").first_or_throw();
 		std::cout << "  After 2nd update:\n";
 		std::cout << "  version:    " << reloaded.get("version").as_integer() << "\n";
 		std::cout << "  updated_at: " << reloaded.get("updated_at").as_date().to_string() << "\n\n";
 
 		// 11. NULL handling
 		std::cout << "NULL handling:\n";
-		auto bob_loaded = ar::query<User>().where("name = ?", ar::attribute("Bob Johnson")).first_or_throw();
+		auto bob_loaded = ar::query<User>().where("name = ?", "Bob Johnson").first_or_throw();
 		std::cout << "  Bob's bio is null: " << (bob_loaded.get("bio").is_null() ? "yes" : "no") << "\n\n";
 
 		// 12. first_or_throw - when absence is exceptional
 		try {
-			ar::query<User>().where("name = ?", ar::attribute("NonExistent")).first_or_throw();
+			ar::query<User>().where("name = ?", "NonExistent").first_or_throw();
 		} catch (const ar::ex::item_not_found&) {
 			std::cout << "first_or_throw correctly threw for missing record\n\n";
 		}
@@ -162,15 +162,15 @@ int main() {
 
 		// 14. Dirty tracking
 		std::cout << "Dirty tracking demo:\n";
-		auto user = ar::query<User>().where("name = ?", ar::attribute("Bob Johnson")).first_or_throw();
+		auto user = ar::query<User>().where("name = ?", "Bob Johnson").first_or_throw();
 		std::cout << "  Is dirty: " << (user.is_dirty() ? "yes" : "no") << "\n";
-		user.set("email", ar::attribute("bob.new@example.com"));
+		user.set("email", "bob.new@example.com");
 		std::cout << "  After set: " << (user.is_dirty() ? "yes" : "no") << "\n";
 		user.save();
 		std::cout << "  After save: " << (user.is_dirty() ? "yes" : "no") << "\n\n";
 
 		// 15. XML serialization (shows all types)
-		if (auto alice_final = ar::query<User>().where("name = ?", ar::attribute("Alice Smith")).first()) {
+		if (auto alice_final = ar::query<User>().where("name = ?", "Alice Smith").first()) {
 			std::cout << "Alice as XML:\n" << alice_final->to_xml_string("user") << "\n\n";
 		}
 
