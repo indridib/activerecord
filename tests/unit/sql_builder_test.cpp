@@ -106,6 +106,23 @@ TEST(SqlBuilderTest, SelectWithMultipleWhereValues) {
 	EXPECT_EQ(25, bind_values[1].as_integer());
 }
 
+TEST(SqlBuilderTest, ChainedWhereClausesAreCombinedWithAnd) {
+	auto conn = std::make_shared<mock_connection>();
+	sql_builder builder(conn, "users");
+
+	builder.add_select("*");
+	builder.add_where("active = ?", { true });
+	builder.add_where("age > ?", { 21 });
+	std::string sql = builder.to_string();
+
+	EXPECT_NE(std::string::npos, sql.find("WHERE (active = ?) AND (age > ?)"));
+
+	const attribute_vector& bind_values = builder.get_bind_values();
+	ASSERT_EQ(2, bind_values.size());
+	EXPECT_TRUE(bind_values[0].as_bool());
+	EXPECT_EQ(21, bind_values[1].as_integer());
+}
+
 TEST(SqlBuilderTest, SelectWithOrderBy) {
 	auto conn = std::make_shared<mock_connection>();
 	sql_builder builder(conn, "users");

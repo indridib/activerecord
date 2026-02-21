@@ -63,9 +63,18 @@ class sql_builder {
 	void set_offset(long offset) noexcept { offset_ = offset; }
 
 	void add_where(std::string_view str_where, const attribute_vector& values) noexcept {
-		where_ = str_where;
-		where_bind_values_ = values;
-		bind_values_ = values;
+		if (str_where.empty()) {
+			return;
+		}
+
+		if (where_.empty()) {
+			where_ = str_where;
+		} else {
+			where_ = std::format("({}) AND ({})", where_, str_where);
+		}
+
+		where_bind_values_.insert(where_bind_values_.end(), values.begin(), values.end());
+		bind_values_ = where_bind_values_;
 	}
 
 	void update(const string_vector& names, const attribute_vector& values) noexcept {
@@ -349,6 +358,19 @@ template <class T> class query : public sql_builder {
 	}
 
 	/*
+	 * Returns SQL for the current query scope without executing it.
+	 */
+	std::string to_sql() const { return to_string(); }
+
+	/*
+	 * Returns bind values for the current query scope.
+	 */
+	const attribute_vector& bind_values() const {
+		(void)to_string(); // Ensure lazy bind-values are synchronized with the current SQL state.
+		return get_bind_values();
+	}
+
+	/*
 	 * Returns true if a record matching the query exists
 	 */
 	bool exists() { return count() > 0; }
@@ -448,6 +470,37 @@ template <class T> class query : public sql_builder {
 		return *this;
 	}
 
+	query& where_not(std::string_view str_where, const attribute_vector& values = {}) {
+		add_where(std::format("NOT ({})", str_where), values);
+		return *this;
+	}
+
+	query& where_in(std::string_view column, const attribute_vector& values) {
+		if (values.empty()) {
+			add_where("1 = 0", {});
+			return *this;
+		}
+
+		std::string placeholders;
+		placeholders.reserve(values.size() * 2);
+		for (std::size_t i = 0; i < values.size(); ++i) {
+			if (i > 0) {
+				placeholders += ", ";
+			}
+			placeholders += "?";
+		}
+
+		add_where(std::format("{} IN ({})", column, placeholders), values);
+		return *this;
+	}
+
+	query& distinct() {
+		if (!starts_with_ci(select_, "distinct ")) {
+			add_select(std::format("DISTINCT {}", select_));
+		}
+		return *this;
+	}
+
 	query& limit(long limit) {
 		set_limit(limit);
 		return *this;
@@ -506,6 +559,20 @@ template <class T> class query : public sql_builder {
 		for (std::size_t i = 0; i < suffix.size(); ++i) {
 			const auto lhs{ static_cast<unsigned char>(value[offset + i]) };
 			const auto rhs{ static_cast<unsigned char>(suffix[i]) };
+			if (std::tolower(lhs) != std::tolower(rhs)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	static bool starts_with_ci(std::string_view value, std::string_view prefix) {
+		if (prefix.size() > value.size()) {
+			return false;
+		}
+		for (std::size_t i = 0; i < prefix.size(); ++i) {
+			const auto lhs{ static_cast<unsigned char>(value[i]) };
+			const auto rhs{ static_cast<unsigned char>(prefix[i]) };
 			if (std::tolower(lhs) != std::tolower(rhs)) {
 				return false;
 			}

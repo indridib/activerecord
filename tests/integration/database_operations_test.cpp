@@ -165,6 +165,37 @@ TEST_F(DatabaseOperationsTest, QueryWithWhere) {
 	EXPECT_EQ("Old", users[0].get("name").as_string());
 }
 
+TEST_F(DatabaseOperationsTest, QueryToSqlIncludesCurrentScope) {
+	query<User> q;
+	q.select("id, name").where("age > ?", 18).order("name ASC").limit(5).offset(2);
+
+	const std::string sql = q.to_sql();
+	EXPECT_NE(std::string::npos, sql.find("SELECT id, name FROM users"));
+	EXPECT_NE(std::string::npos, sql.find("WHERE age > ?"));
+	EXPECT_NE(std::string::npos, sql.find("ORDER BY name ASC"));
+	EXPECT_NE(std::string::npos, sql.find("LIMIT 5"));
+	EXPECT_NE(std::string::npos, sql.find("OFFSET 2"));
+}
+
+TEST_F(DatabaseOperationsTest, QueryBindValuesExposeWhereParameters) {
+	query<User> q;
+	q.where("age > ? AND active = ?", { 18, true });
+
+	const auto& values = q.bind_values();
+	ASSERT_EQ(2u, values.size());
+	EXPECT_EQ(18, values[0].as_integer());
+	EXPECT_TRUE(values[1].as_bool());
+}
+
+TEST_F(DatabaseOperationsTest, QueryOrderReplacesPreviousOrder) {
+	query<User> q;
+	q.order("name ASC").order("id DESC");
+
+	const std::string sql = q.to_sql();
+	EXPECT_NE(std::string::npos, sql.find("ORDER BY id DESC"));
+	EXPECT_EQ(std::string::npos, sql.find("ORDER BY name ASC"));
+}
+
 TEST_F(DatabaseOperationsTest, QueryWithOrder) {
 	// Insert test data in random order
 	auto conn = config::instance().get_connection();
@@ -181,6 +212,70 @@ TEST_F(DatabaseOperationsTest, QueryWithOrder) {
 	EXPECT_EQ("A", users[0].get("name").as_string());
 	EXPECT_EQ("B", users[1].get("name").as_string());
 	EXPECT_EQ("C", users[2].get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QueryWhereInFiltersRows) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Age20", 20 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Age30", 30 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Age40", 40 });
+
+	query<User> q;
+	auto users = q.where_in("age", { 20, 40 }).order("age ASC").all();
+
+	ASSERT_EQ(2u, users.size());
+	EXPECT_EQ("Age20", users[0].get("name").as_string());
+	EXPECT_EQ("Age40", users[1].get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QueryWhereInEmptyReturnsNoRows) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "OnlyUser", 33 });
+
+	query<User> q;
+	const attribute_vector none{};
+	auto users = q.where_in("id", none).all();
+
+	EXPECT_TRUE(users.empty());
+}
+
+TEST_F(DatabaseOperationsTest, QueryWhereNotFiltersRows) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Young", 18 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Adult", 35 });
+
+	query<User> q;
+	auto users = q.where_not("age < ?", { 30 }).all();
+
+	ASSERT_EQ(1u, users.size());
+	EXPECT_EQ("Adult", users[0].get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QueryChainedWhereHelpersAreCombinedWithAnd) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO users (name, age, active) VALUES (?, ?, ?)", { "A", 20, true });
+	conn->query("INSERT INTO users (name, age, active) VALUES (?, ?, ?)", { "B", 40, true });
+	conn->query("INSERT INTO users (name, age, active) VALUES (?, ?, ?)", { "C", 40, false });
+
+	query<User> q;
+	auto users = q.where("active = ?", true).where_in("age", { 40 }).all();
+
+	ASSERT_EQ(1u, users.size());
+	EXPECT_EQ("B", users[0].get("name").as_string());
+}
+
+TEST_F(DatabaseOperationsTest, QueryDistinctReturnsUniqueValues) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A1", 21 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A2", 21 });
+	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B1", 35 });
+
+	query<User> q;
+	auto rows = q.select("age").distinct().order("age ASC").all();
+
+	ASSERT_EQ(2u, rows.size());
+	EXPECT_EQ(21, rows[0].get("age").as_integer());
+	EXPECT_EQ(35, rows[1].get("age").as_integer());
 }
 
 TEST_F(DatabaseOperationsTest, QueryWithLimit) {
@@ -256,6 +351,18 @@ TEST_F(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
 	query<User> q;
 	q.limit(2).offset(3);
 	EXPECT_EQ(7, q.count());
+}
+
+TEST_F(DatabaseOperationsTest, QueryCountIgnoresOrder) {
+	auto conn = config::instance().get_connection();
+	for (int i = 0; i < 5; i++) {
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
+					{ "User" + std::to_string(i), 20 + i });
+	}
+
+	query<User> q;
+	q.order("name DESC");
+	EXPECT_EQ(5, q.count());
 }
 
 TEST_F(DatabaseOperationsTest, QueryExists) {

@@ -188,6 +188,24 @@ if (auto user = ar::query<User>().where("email = ?", "test@example.com").first()
 User admin = ar::query<User>().where("role = ?", "admin").first_or_throw();
 ```
 
+**Advanced query helpers:**
+```cpp
+auto q = ar::query<User>()
+    .select("id, name")
+    .distinct()
+    .where_not("active = ?", { false })
+    .where_in("role_id", { 1, 2, 3 })
+    .order("name ASC")
+    .limit(10);
+
+std::cout << q.to_sql() << '\n';            // inspect generated SQL
+for (const auto& bind : q.bind_values()) {  // inspect bind values
+    std::cout << bind.to_string() << '\n';
+}
+```
+
+Multiple `where*` calls are combined with `AND` in call order.
+
 **`std::ranges` compatible:**
 ```cpp
 auto active_emails = ar::query<User>()
