@@ -171,6 +171,7 @@ class model {
 		return save();
 	}
 
+
 	/**
 	 * Sets a single attribute.
 	 *
