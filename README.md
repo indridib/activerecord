@@ -21,6 +21,7 @@ The library offers two model styles: a classic dynamic model with string-based a
 - **Full parameter binding** — prevents SQL injection across all adapters
 - **Type-safe attribute system** — string, integer, float, bool, datetime, null
 - **Dirty tracking** — only changed attributes are included in UPDATE statements
+- **Typed model validations** — declarative rules with per-attribute error collection
 - **Cross-platform** — Windows (MSVC, static linking), Linux (GCC), macOS (Clang)
 - **Comprehensive test suite** — unit and integration tests via GoogleTest
 
@@ -83,9 +84,9 @@ Enable adapters with CMake flags: `-DAR_MYSQL=ON`, `-DAR_POSTGRES=ON`, `-DAR_MSS
 
 ## Usage
 
-### Classic Model (Dynamic Attributes)
+A quick taste of both model styles. For full details, see the [documentation](docs/).
 
-The base `model` class uses string-keyed attributes — flexible and straightforward:
+### Classic Model
 
 ```cpp
 #include <model.h>
@@ -95,193 +96,47 @@ class User : public ar::model {
   public:
     static constexpr std::string_view st_table_name() { return "users"; }
     static constexpr std::string_view st_primary_key() { return "id"; }
-
     User() : model(st_table_name(), st_primary_key()) {}
 };
 
-// Create
 User alice;
 alice.set("name", "Alice");
 alice.set("email", "alice@example.com");
 alice.save();
 
-// Query
 auto user = ar::query<User>().where("name = ?", "Alice").first_or_throw();
 std::cout << user.get("name").as_string() << '\n';
-
-// Update
-user.set("email", "alice.new@example.com");
-user.save();
-
-// Delete
-user.destroy();
 ```
 
-### typed_model\<T\> (Direct Member Access)
-
-`typed_model<T>` maps struct members directly to database columns. Same query engine, same adapters — but you work with real types instead of strings:
+### typed_model\<T\>
 
 ```cpp
-#include <sql_builder.h>
 #include <typed_model.h>
+#include <sql_builder.h>
 
 struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};
     static constexpr auto primary_key{"id"};
-    enum class status : int { pending = 0, active = 1, disabled = 2 };
 
     long id{};
     std::string name{};
     std::string email{};
-    status account_status{status::pending};
 
     static constexpr auto columns() {
         return ar::columns(
             ar::col<&User::id>("id"),
             ar::col<&User::name>("name"),
-            ar::col<&User::email>("email"),
-            ar::col<&User::account_status>("account_status")
+            ar::col<&User::email>("email")
         );
     }
 };
 
 auto user = ar::query<User>().find(1);
-std::cout << user.name << '\n';
-
 user.email = "new@example.com";
-user.account_status = User::status::active;
 user.save();
 ```
 
-Key behaviors:
-- Query results automatically sync to struct members via `sync_from_attributes()`.
-- Save uses snapshot-based dirty detection — only changed members generate SQL.
-- Modifying a persisted primary key throws `ex::readonly`.
-- After save, members are refreshed (auto-generated id, timestamps, version).
-- Enum fields are stored as INTEGER using the underlying type.
-- Metadata tracking (`created_at`, `updated_at`, `version`) is enabled by default.
-  Opt out per model with `ar::typed_model<MyModel, false>`.
-
-### Query API
-
-**Lazy iteration** — rows are fetched one at a time, not loaded into memory:
-```cpp
-for (const User& user : ar::query<User>().where("active = ?", true)) {
-    std::cout << user.get("name").as_string() << '\n';
-}
-
-// Early termination stops fetching
-int count = 0;
-for (const User& user : ar::query<User>().order("created_at DESC")) {
-    process(user);
-    if (++count >= 100) break;
-}
-```
-
-**`std::optional` for safe lookups:**
-```cpp
-if (auto user = ar::query<User>().where("email = ?", "test@example.com").first()) {
-    std::cout << "Found: " << user->get("name").as_string() << '\n';
-}
-
-// Throwing variant when absence is exceptional
-User admin = ar::query<User>().where("role = ?", "admin").first_or_throw();
-```
-
-**Advanced query helpers:**
-```cpp
-auto q = ar::query<User>()
-    .select("id, name")
-    .distinct()
-    .where_not("active = ?", { false })
-    .where_in("role_id", { 1, 2, 3 })
-    .order("name ASC")
-    .limit(10);
-
-std::cout << q.to_sql() << '\n';            // inspect generated SQL
-for (const auto& bind : q.bind_values()) {  // inspect bind values
-    std::cout << bind.to_string() << '\n';
-}
-```
-
-Multiple `where*` calls are combined with `AND` in call order.
-
-**`std::ranges` compatible:**
-```cpp
-auto active_emails = ar::query<User>()
-    | std::views::filter([](const User& u) { return u.get("active").as_bool(); })
-    | std::views::transform([](const User& u) { return u.get("email").as_string(); })
-    | std::views::take(50);
-
-for (const auto& email : active_emails) {
-    std::cout << email << '\n';
-}
-```
-
-### Auto-Timestamps & Optimistic Locking
-
-**Convention-based:** if your table has `created_at`, `updated_at`, or `version` columns, the framework manages them automatically.
-
-For the classic `model`, call `init_record_tracking(true)` on new records to register the columns. Records loaded via `query<T>` already have all columns from SELECT and are detected automatically.
-
-```cpp
-User alice;
-alice.init_record_tracking(true);
-alice.set("name", "Alice");
-alice.save();
-// created_at = now, updated_at = now, version = 1
-
-auto loaded = ar::query<User>().where("name = ?", "Alice").first_or_throw();
-loaded.set("email", "alice@example.com");
-loaded.save();
-// updated_at = now, version = 2 (created_at unchanged)
-```
-
-For `typed_model<T>`, include the fields in `columns()` and tracking works without any extra setup:
-
-```cpp
-struct User : ar::typed_model<User> {
-    static constexpr auto table_name{"users"};
-    static constexpr auto primary_key{"id"};
-
-    long id{};
-    std::string name;
-    ar::datetime created_at;
-    ar::datetime updated_at;
-    int64_t version{};
-
-    static constexpr auto columns() {
-        return ar::columns(
-            ar::col<&User::id>("id"),
-            ar::col<&User::name>("name"),
-            ar::col<&User::created_at>("created_at"),
-            ar::col<&User::updated_at>("updated_at"),
-            ar::col<&User::version>("version")
-        );
-    }
-};
-
-User user;
-user.name = "Alice";
-user.save(); // created_at, updated_at, version managed automatically
-```
-
-Disable tracking per model with `ar::typed_model<MyModel, false>`.
-
-**Optimistic locking** prevents stale overwrites. The UPDATE includes `WHERE version = ?` with the old version, and throws `ex::stale_record` if no rows are affected:
-
-```cpp
-auto copy1 = ar::query<User>().find(1);  // version = 2
-auto copy2 = ar::query<User>().find(1);  // version = 2
-
-copy1.set("name", "First");
-copy1.save();  // SET version=3 WHERE id=1 AND version=2 -> succeeds
-
-copy2.set("name", "Second");
-copy2.save();  // SET version=3 WHERE id=1 AND version=2 -> 0 rows, throws ex::stale_record
-```
-
-**Partial support:** any combination works — only `created_at`, only `version`, all three, or none. Models without these columns are unaffected.
+See the [documentation](docs/) for the full query API, validations, timestamps, optimistic locking, serialization, and more.
 
 ## Building & Testing
 
@@ -339,7 +194,7 @@ Following Active Record conventions:
 
 - **Table creation / DDL:** generate `CREATE TABLE` from model definitions, with adapter-specific SQL.
 
-- **Model validation:** declarative validation rules checked before save.
+- **Validation:** uniqueness checks, validation contexts (`on_create`/`on_update`), and richer custom validators.
 
 - **Indexed storage:** migrate internal storage from `std::map<string, attribute>` to `std::vector<attribute>` with a shared column index, reducing per-instance memory and enabling bitset-based dirty tracking.
 

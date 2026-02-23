@@ -12,7 +12,9 @@
 #include <attribute.h>
 #include <config.h>
 #include <connection.h>
+#include <errors.h>
 #include <map>
+#include <memory>
 #include <set>
 #include <sql_builder.h>
 
@@ -35,6 +37,31 @@ class model {
 	model(std::string_view table_name, std::string_view primary_key = "id", std::string_view con_name = {})
 		: table_name_(table_name), primary_key_(primary_key), connection_(config::instance().get_connection(con_name)) {
 	}
+
+	model(const model& other)
+		: connection_(other.connection_), table_name_(other.table_name_), primary_key_(other.primary_key_),
+		  attributes_(other.attributes_), new_record_(other.new_record_), dirty_(other.dirty_), readonly_(other.readonly_),
+		  track_record_metadata_(other.track_record_metadata_),
+		  errors_(other.errors_ ? std::make_unique<ar::errors>(*other.errors_) : nullptr) {}
+
+	model& operator=(const model& other) {
+		if (this == &other) {
+			return *this;
+		}
+		connection_ = other.connection_;
+		table_name_ = other.table_name_;
+		primary_key_ = other.primary_key_;
+		attributes_ = other.attributes_;
+		new_record_ = other.new_record_;
+		dirty_ = other.dirty_;
+		readonly_ = other.readonly_;
+		track_record_metadata_ = other.track_record_metadata_;
+		errors_ = other.errors_ ? std::make_unique<ar::errors>(*other.errors_) : nullptr;
+		return *this;
+	}
+
+	model(model&&) noexcept = default;
+	model& operator=(model&&) noexcept = default;
 
 	/**
 	 * Return the database table name.
@@ -459,7 +486,7 @@ class model {
 	 * @see is_invalid()
 	 * @return - true if the model is valid
 	 */
-	bool is_valid() const { return validate(); }
+	bool is_valid() { return validate(); }
 
 	/**
 	 * Runs validations and returns true if invalid.
@@ -467,7 +494,30 @@ class model {
 	 * @see is_valid()
 	 * @return - true if the model is invalid
 	 */
-	bool is_invalid() const { return !validate(); }
+	bool is_invalid() { return !validate(); }
+
+	/**
+	 * Returns the model's validation errors.
+	 *
+	 * @return - validation errors container.
+	 */
+	const ar::errors& errors() const noexcept { return errors_ ? *errors_ : empty_errors(); }
+
+	/**
+	 * Returns true if model has validation errors.
+	 *
+	 * @return - true if there are validation errors.
+	 */
+	bool has_errors() const noexcept { return errors_ && !errors_->empty(); }
+
+	/**
+	 * Clears validation errors.
+	 */
+	void clear_errors() noexcept {
+		if (errors_) {
+			errors_->clear();
+		}
+	}
 
 	/**
 	 * Returns a JSON representation of this model.
@@ -637,9 +687,9 @@ class model {
 	 *
 	 * @return bool - true if passed validators otherwise false
 	 */
-	bool validate() const {
-		// FixMe: do the stuff
-		return true;
+	bool validate() {
+		clear_errors();
+		return !has_errors();
 	}
 
 	/**
@@ -685,6 +735,18 @@ class model {
 		return aliases;
 	}
 
+	ar::errors& mutable_errors() {
+		if (!errors_) {
+			errors_ = std::make_unique<ar::errors>();
+		}
+		return *errors_;
+	}
+
+	static const ar::errors& empty_errors() noexcept {
+		static const ar::errors empty{};
+		return empty;
+	}
+
 	// Per-instance metadata kept lightweight to reduce model footprint.
 	config::connection_ptr connection_; // a reference to the database connection to use
 	std::string_view table_name_;		// name of the database table (expected static lifetime)
@@ -698,6 +760,7 @@ class model {
 	string_set dirty_;		 // attributes that are dirty
 	bool readonly_{ false }; // no writing
 	bool track_record_metadata_{ true };
+	mutable std::unique_ptr<ar::errors> errors_{};
 };
 
 } // namespace ar

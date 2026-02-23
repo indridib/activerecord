@@ -13,6 +13,7 @@
 #include <optional>
 #include <tuple>
 #include <type_traits>
+#include <validations.h>
 
 namespace ar {
 
@@ -150,7 +151,10 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 
 	bool save(bool should_validate = true) {
 		sync_to_attributes();
-		const bool saved{ model::save(should_validate) };
+		if (should_validate && !run_validations()) {
+			return false;
+		}
+		const bool saved{ model::save(false) };
 		if (saved) {
 			// Pull adapter/model-managed values (e.g. insert id, timestamps, version)
 			// back into typed members, then refresh snapshot.
@@ -158,6 +162,10 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 		}
 		return saved;
 	}
+
+	bool is_valid() { return run_validations(); }
+
+	bool is_invalid() { return !run_validations(); }
 
 	void sync_from_attributes() {
 		auto& self = static_cast<T&>(*this);
@@ -222,6 +230,18 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 				 ...);
 			},
 			T::columns());
+	}
+
+	bool run_validations() {
+		sync_to_attributes();
+		this->clear_errors();
+		if constexpr (requires { T::validations(); }) {
+			auto& self = static_cast<T&>(*this);
+			auto validation_rules = T::validations();
+			detail::run_validation_rules(self, this->mutable_errors(), validation_rules);
+			return !this->has_errors();
+		}
+		return true;
 	}
 
 	attribute_map snapshot_{};
