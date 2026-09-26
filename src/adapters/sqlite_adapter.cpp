@@ -83,12 +83,12 @@ std::string normalize_sqlite_datetime(std::string value) {
 // sqlite_statement implementation
 // ============================================================================
 
-sqlite_statement::sqlite_statement(sqlite3* db)
-	: statement(), db_(db), stmt_(nullptr), first_step_result_(SQLITE_OK), used_first_result_(false),
-	  affected_rows_(0) {}
+static_assert(SQLITE_OK == 0, "sqlite_statement::first_step_result_ default assumes SQLITE_OK == 0");
+
+sqlite_statement::sqlite_statement(sqlite3* db) : statement(), db_(db) {}
 
 sqlite_statement::~sqlite_statement() {
-	if (stmt_) {
+	if (stmt_ != nullptr) {
 		sqlite3_finalize(stmt_);
 		stmt_ = nullptr;
 	}
@@ -176,7 +176,7 @@ void sqlite_statement::get_attributes(attribute_map& attributes) {
 
 	for (int i = 0; i < column_count; i++) {
 		const char* column_name = sqlite3_column_name(stmt_, i);
-		if (column_name) {
+		if (column_name != nullptr) {
 			attributes.emplace(column_name, field_as_attribute(stmt_, i));
 		}
 	}
@@ -188,33 +188,31 @@ attribute sqlite_statement::field_as_attribute(sqlite3_stmt* stmt, int column_in
 
 	switch (type) {
 	case SQLITE_NULL:
-		return attribute();
+		return {};
 
 	case SQLITE_INTEGER:
 		if (is_datetime) {
-			return attribute(datetime{ static_cast<std::time_t>(sqlite3_column_int64(stmt, column_index)) });
+			return { datetime{ static_cast<std::time_t>(sqlite3_column_int64(stmt, column_index)) } };
 		}
-		return attribute(sqlite3_column_int64(stmt, column_index));
+		return { sqlite3_column_int64(stmt, column_index) };
 
 	case SQLITE_FLOAT:
-		return attribute(sqlite3_column_double(stmt, column_index));
+		return { sqlite3_column_double(stmt, column_index) };
 
 	case SQLITE_TEXT: {
 		const unsigned char* text = sqlite3_column_text(stmt, column_index);
-		const std::string value{ text ? reinterpret_cast<const char*>(text) : "" };
+		const std::string value{ text != nullptr ? reinterpret_cast<const char*>(text) : "" };
 		if (is_datetime && !value.empty()) {
-			return attribute(datetime::parse(normalize_sqlite_datetime(value)));
+			return { datetime::parse(normalize_sqlite_datetime(value)) };
 		}
-		return attribute(value);
+		return { value };
 	}
 
 	case SQLITE_BLOB:
 		// For now, return null for BLOB data
 		// Could be enhanced later to handle binary data
-		return attribute();
-
 	default:
-		return attribute();
+		return {};
 	}
 }
 
@@ -228,7 +226,7 @@ sqlite_adapter::sqlite_adapter(const std::string& db_path, const std::string&, c
 	int rc{ sqlite3_open(db_path.c_str(), &db_) };
 	if (rc != SQLITE_OK) {
 		std::string error{ "SQLite connection error: " };
-		if (db_) {
+		if (db_ != nullptr) {
 			error += sqlite3_errmsg(db_);
 			sqlite3_close(db_);
 		} else {
@@ -240,7 +238,7 @@ sqlite_adapter::sqlite_adapter(const std::string& db_path, const std::string&, c
 }
 
 sqlite_adapter::~sqlite_adapter() {
-	if (db_) {
+	if (db_ != nullptr) {
 		sqlite3_close_v2(db_); // v2 waits for statements to finalize
 		db_ = nullptr;
 	}
@@ -263,7 +261,7 @@ void sqlite_adapter::limit(std::string& sql, long offset, long limit) const {
 }
 
 std::size_t sqlite_adapter::insert_id() const {
-	if (!db_) {
+	if (db_ == nullptr) {
 		return 0;
 	}
 	return static_cast<std::size_t>(sqlite3_last_insert_rowid(db_));

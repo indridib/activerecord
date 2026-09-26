@@ -33,6 +33,8 @@ using namespace ar;
 // Test Model
 // ==============================================================================
 
+namespace {
+
 class User : public model {
   public:
 	static const char* st_table_name() { return "users"; }
@@ -41,11 +43,13 @@ class User : public model {
 	User() : model(st_table_name(), st_primary_key()) {}
 };
 
+} // namespace
+
 // ==============================================================================
 // Adapter Factory - Creates different adapter types
 // ==============================================================================
 
-enum class AdapterType { SQLite, MySQL, PostgreSQL, MSSQL };
+enum class AdapterType : std::uint8_t { SQLite, MySQL, PostgreSQL, MSSQL };
 
 class AdapterFactory {
   public:
@@ -187,8 +191,7 @@ class DatabaseAdapterTest : public ::testing::TestWithParam<AdapterType> {
 			// Drop table if it exists (for MySQL)
 			try {
 				adapter_->query(AdapterFactory::drop_table_sql(adapter_type_), {});
-			} catch (...) {
-				// Ignore errors if table doesn't exist
+			} catch (...) { // NOLINT(bugprone-empty-catch) -- ignore errors if table doesn't exist
 			}
 
 			// Create table
@@ -204,8 +207,7 @@ class DatabaseAdapterTest : public ::testing::TestWithParam<AdapterType> {
 		if (adapter_) {
 			try {
 				adapter_->query(AdapterFactory::drop_table_sql(adapter_type_), {});
-			} catch (...) {
-				// Ignore cleanup errors
+			} catch (...) { // NOLINT(bugprone-empty-catch) -- ignore cleanup errors
 			}
 		}
 	}

@@ -26,7 +26,7 @@ namespace ar {
 class sql_builder {
 
   public:
-	sql_builder(config::connection_ptr con, std::string_view table) : connection_(con), table_(table) {}
+	sql_builder(config::connection_ptr con, std::string_view table) : connection_(std::move(con)), table_(table) {}
 
 	// - __toString
 	// - to_s
@@ -202,7 +202,7 @@ class sql_builder {
 	config::connection_ptr connection_; ///< a reference to the database connection to use
 	std::string table_;
 
-	enum sql_type { sql_select, sql_insert, sql_update, sql_delete };
+	enum sql_type : std::uint8_t { sql_select, sql_insert, sql_update, sql_delete };
 	sql_type operation_{ sql_select };
 	std::string select_{ "*" };
 	std::string joins_;
@@ -288,7 +288,8 @@ template <class T> class query : public sql_builder {
 		return iterator{ std::shared_ptr<statement>{ connection_->query(to_string(), get_bind_values()) } };
 	}
 
-	iterator end() noexcept { return iterator{}; }
+	// Not noexcept: iterator{} default-constructs T, whose model ctor looks up a connection and may throw
+	iterator end() { return iterator{}; }
 
 	/*
 	 * Returns an array of records found

@@ -4,17 +4,36 @@
 // Tests for model memory footprint tracking
 // ============================================================================
 
+#include <array>
 #include <attribute.h>
+#include <config.h>
 #include <gtest/gtest.h>
 #include <model.h>
 
 namespace ar {
 
+namespace {
+// Minimal connection so model construction can resolve "default"; no queries are executed
+class size_test_connection : public connection {
+  public:
+	std::unique_ptr<statement> query(const std::string&, const attribute_vector&) override { return nullptr; }
+	void limit(std::string&, long, long) const override {}
+	std::size_t insert_id() const override { return 0; }
+	void begin_transaction() override {}
+	void commit() override {}
+	void rollback() override {}
+};
+} // namespace
+
 // Test fixture for size tracking
 class ModelSizeTest : public ::testing::Test {
   protected:
-	void SetUp() override {}
-	void TearDown() override {}
+	void SetUp() override {
+		config::connection_map connections;
+		connections["default"] = std::make_shared<size_test_connection>();
+		config::instance().set_connections(connections, "default");
+	}
+	void TearDown() override { config::instance().set_connections({}); }
 };
 
 TEST_F(ModelSizeTest, BaseModelSize) {
@@ -27,9 +46,17 @@ TEST_F(ModelSizeTest, BaseModelSize) {
 	// - bool new_record_: 1 byte
 	// - bool readonly_: 1 byte
 	// - padding: varies
-	// Total: ~146-160 bytes (target: < 160 bytes)
-
-	constexpr size_t expected_max = 160; // Maximum acceptable size
+	//
+	// Budgets are exact current sizes so that any growth fails and gets a deliberate look; if an
+	// increase is intended, update the number here. They are per standard library: std::map/std::set
+	// are 16 bytes in MSVC STL (24 with Debug iterator debugging) but 48 bytes in libstdc++.
+#if defined(_MSVC_STL_VERSION) && _ITERATOR_DEBUG_LEVEL == 0
+	constexpr size_t expected_max = 104; // MSVC STL, Release
+#elif defined(_MSVC_STL_VERSION)
+	constexpr size_t expected_max = 120; // MSVC STL, Debug (iterator debugging adds a proxy pointer)
+#else
+	constexpr size_t expected_max = 168; // libstdc++; libc++ is uncalibrated
+#endif
 	constexpr size_t phase0_size = 224;	 // Original size before optimization
 
 	size_t actual = sizeof(model);
@@ -41,7 +68,7 @@ TEST_F(ModelSizeTest, BaseModelSize) {
 	std::cout << "  Expected max: " << expected_max << " bytes\n";
 
 	if (actual < phase0_size) {
-		double reduction = ((phase0_size - actual) / static_cast<double>(phase0_size)) * 100.0;
+		double reduction = (static_cast<double>(phase0_size - actual) / static_cast<double>(phase0_size)) * 100.0;
 		std::cout << "  Reduction: " << reduction << "%\n";
 	}
 	std::cout << "\n";
@@ -105,7 +132,7 @@ TEST_F(ModelSizeTest, BulkMemoryUsage) {
 
 	// Calculate memory used
 	size_t per_instance = sizeof(model);
-	size_t total_mb = (per_instance * count) / (1024 * 1024);
+	size_t total_mb = (per_instance * count) / (size_t{ 1024 } * 1024);
 
 	std::cout << "\n[Bulk Memory Usage]\n";
 	std::cout << "  " << count << " models:\n";
@@ -128,10 +155,10 @@ TEST_F(ModelSizeTest, PhaseProgressTracking) {
 		const char* description;
 	};
 
-	PhaseTarget phases[] = { { "Phase 0 (Original)", 224, "Before any optimization" },
-							 { "Phase 1 (Current)", 160, "string_view + externalized aliases" },
-							 { "Phase 2 (Future)", 80, "Indexed storage + bitset dirty" },
-							 { "CRTP (Alternative)", 98, "Template-based metadata elimination" } };
+	const std::array<PhaseTarget, 4> phases{ { { "Phase 0 (Original)", 224, "Before any optimization" },
+											   { "Phase 1 (Current)", 160, "string_view + externalized aliases" },
+											   { "Phase 2 (Future)", 80, "Indexed storage + bitset dirty" },
+											   { "CRTP (Alternative)", 98, "Template-based metadata elimination" } } };
 
 	size_t current = sizeof(model);
 

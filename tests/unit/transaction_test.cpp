@@ -108,12 +108,9 @@ TEST_F(TransactionTest, AutoRollbackOnException) {
 		item.set_value(100);
 		EXPECT_TRUE(item.save());
 
-		// Throw exception before commit
+		// Throw before commit; tx must roll back in its destructor
 		throw std::runtime_error("Simulated error");
-
-		tx.commit(); // This line won't be reached
-	} catch (const std::runtime_error&) {
-		// Expected exception
+	} catch (const std::runtime_error&) { // NOLINT(bugprone-empty-catch) -- expected exception
 	}
 
 	// Verify data was rolled back

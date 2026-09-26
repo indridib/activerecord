@@ -34,8 +34,9 @@ class model {
 	 * @param primary_key - name of the primary key of the table.
 	 * @param con_name - name of the connection to use.
 	 */
+	// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- public API; see HARDENING.md
 	model(std::string_view table_name, std::string_view primary_key = "id", std::string_view con_name = {})
-		: table_name_(table_name), primary_key_(primary_key), connection_(config::instance().get_connection(con_name)) {
+		: connection_(config::instance().get_connection(con_name)), table_name_(table_name), primary_key_(primary_key) {
 	}
 
 	model(const model& other)

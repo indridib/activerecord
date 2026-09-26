@@ -172,10 +172,16 @@ cmake -B build-sanitized -G Ninja \
   -DAR_SANITIZE_UNDEFINED=ON
 
 cmake --build build-sanitized
-ctest --test-dir build-sanitized --output-on-failure -R AllUnitTests
+export ASAN_OPTIONS=halt_on_error=1:detect_leaks=1
+export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+ctest --test-dir build-sanitized --output-on-failure
 ```
 
-Use `-DCMAKE_CXX_COMPILER=clang++` for Clang.
+Use `-DCMAKE_CXX_COMPILER=clang++` for Clang. The `UBSAN_OPTIONS` setting is required: without `halt_on_error=1`, UBSan only prints a report and the tests still pass.
+
+### Hardening Checks
+
+Compiler warnings and clang-tidy findings are errors in every build. [HARDENING.md](HARDENING.md) is the runbook for the full set of pre-release checks: MSVC, GCC and Clang builds, clang-tidy, and ASan + UBSan. It also logs every waived finding.
 
 ## Conventions
 

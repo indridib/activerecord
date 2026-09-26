@@ -106,6 +106,7 @@ struct typed_user_tracking_off : typed_model<typed_user_tracking_off, false> {
 	}
 };
 
+// NOLINTNEXTLINE(performance-enum-size) -- int32_t base is deliberate: exercises enum <-> INTEGER mapping
 enum class task_state : int32_t { pending = 0, running = 1, done = 2 };
 
 struct typed_task : typed_model<typed_task> {

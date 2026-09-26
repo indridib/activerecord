@@ -13,12 +13,8 @@
 #include <format>
 #include <stdexcept>
 
-// Platform-specific includes for thread-safe time functions
-#ifdef _WIN32
-#include <time.h>
-#else
-#include <time.h>
-#endif
+// Thread-safe time functions: <ctime> also declares ::localtime_s (MSVC) and ::localtime_r (POSIX)
+#include <ctime>
 
 namespace ar {
 
@@ -43,6 +39,7 @@ datetime::datetime(const std::string& date_str) {
 	*this = parse(date_str);
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- public API; see HARDENING.md
 datetime::datetime(int year, int month, int day, int hour, int min, int sec) {
 	std::tm timeinfo{};
 	timeinfo.tm_year = year - 1900; // Years since 1900

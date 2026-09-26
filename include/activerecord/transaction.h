@@ -47,7 +47,7 @@ class transaction {
 	 * @param conn The connection to use for the transaction
 	 * @throws ex::activerecord if connection is null
 	 */
-	explicit transaction(config::connection_ptr conn) : connection_(conn) {
+	explicit transaction(config::connection_ptr conn) : connection_(std::move(conn)) {
 		if (!connection_) {
 			throw ex::activerecord("Connection cannot be null");
 		}
@@ -62,8 +62,7 @@ class transaction {
 		if (!committed_ && connection_) {
 			try {
 				connection_->rollback();
-			} catch (...) {
-				// Suppress exceptions in destructor
+			} catch (...) { // NOLINT(bugprone-empty-catch) -- suppress exceptions in destructor
 			}
 		}
 	}

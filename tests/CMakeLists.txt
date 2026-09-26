@@ -90,6 +90,9 @@ if(AR_SQLITE OR AR_MYSQL OR AR_POSTGRES OR AR_MSSQL)
   if(COMMAND ar_set_default_warnings)
     ar_set_default_warnings(integration_tests)
   endif()
+  if(COMMAND ar_enable_sanitizers)
+    ar_enable_sanitizers(integration_tests)
+  endif()
 
   # Add a single test that runs all integration tests
   add_test(NAME AllIntegrationTests COMMAND integration_tests)

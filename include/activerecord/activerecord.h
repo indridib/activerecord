@@ -19,8 +19,8 @@
 
 namespace ar {
 
-typedef std::vector<std::string> string_vector;
-typedef std::set<std::string> string_set;
+using string_vector = std::vector<std::string>;
+using string_set = std::set<std::string>;
 
 namespace ex {
 

@@ -25,8 +25,8 @@ namespace ar {
  */
 class statement {
   public:
-	statement() {}
-	virtual ~statement() {}
+	statement() = default;
+	virtual ~statement() = default;
 	virtual void execute(const std::string& cmd, const attribute_vector& values) = 0;
 	virtual bool fetch() { return false; }
 	virtual std::size_t affected_rows() const noexcept { return 0; }
@@ -58,9 +58,9 @@ class connection {
 	 */
 	static const char QUOTE_CHARACTER = '`';
 
-	connection() {}
+	connection() = default;
 
-	virtual ~connection() {}
+	virtual ~connection() = default;
 
 	/**
 	 * Tells you if this adapter supports sequences or not.
@@ -328,7 +328,7 @@ class connection {
 			throw ex::config("Invalid sqlite connection URL: missing file path");
 		}
 
-		if (value.rfind("unix(", 0) == 0) {
+		if (value.starts_with("unix(")) {
 			if (value.back() != ')') {
 				throw ex::config("Invalid sqlite connection URL: malformed unix(...) path");
 			}
@@ -336,7 +336,7 @@ class connection {
 			return;
 		}
 
-		if (value.rfind("windows(", 0) == 0) {
+		if (value.starts_with("windows(")) {
 			if (value.back() != ')') {
 				throw ex::config("Invalid sqlite connection URL: malformed windows(...) path");
 			}
@@ -359,7 +359,7 @@ class connection {
 		const std::size_t host_start{ (at_pos == std::string_view::npos) ? 0 : (at_pos + 1) };
 		const std::string_view host_segment = value.substr(host_start);
 
-		if (host_segment.rfind("unix(", 0) == 0) {
+		if (host_segment.starts_with("unix(")) {
 			const auto close_pos{ host_segment.find(')') };
 			if (close_pos == std::string_view::npos) {
 				throw ex::config("Invalid connection URL: malformed unix(...) host");
@@ -402,7 +402,7 @@ class connection {
 			}
 		}
 
-		if (hostinfo.rfind("unix(", 0) == 0) {
+		if (hostinfo.starts_with("unix(")) {
 			if (hostinfo.back() != ')') {
 				throw ex::config("Invalid connection URL: malformed unix(...) host");
 			}

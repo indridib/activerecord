@@ -36,7 +36,6 @@
 
 # Tooling
 /compile_commands.json
-/.clang-tidy
 
 # vcpkg
 vcpkg_installed/
@@ -49,6 +48,5 @@ AGENTS.md
 claude_review.md
 CPP23_MIGRATION.md
 php_research.md
-
-# Local TODO notes
 todo/
+/_tmp_php_ar/

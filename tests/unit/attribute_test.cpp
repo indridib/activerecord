@@ -57,9 +57,9 @@ TEST(AttributeTest, ConstructBool) {
 }
 
 TEST(AttributeTest, ConstructDouble) {
-	attribute attr(3.14159);
+	attribute attr(1.23456);
 	EXPECT_EQ(type_decimal, attr.type());
-	EXPECT_DOUBLE_EQ(3.14159, attr.as_real());
+	EXPECT_DOUBLE_EQ(1.23456, attr.as_real());
 }
 
 TEST(AttributeTest, ConstructString) {

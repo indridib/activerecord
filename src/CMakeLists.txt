@@ -9,6 +9,8 @@ add_library(activerecord::activerecord ALIAS activerecord)
 
 include(${PROJECT_SOURCE_DIR}/cmake/Warnings.cmake)
 ar_set_default_warnings(activerecord)
+include(${PROJECT_SOURCE_DIR}/cmake/Sanitizers.cmake)
+ar_enable_sanitizers(activerecord)
 
 target_compile_features(activerecord PUBLIC cxx_std_23)
 

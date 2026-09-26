@@ -113,9 +113,9 @@ template <class FieldType> attribute to_attribute(const FieldType& value) {
 			return attribute{};
 		}
 		return to_attribute(*value);
-	} else if constexpr (std::is_same_v<raw_type, std::string>) {
-		return attribute{ value };
-	} else if constexpr (std::is_same_v<raw_type, bool>) {
+	} else if constexpr (std::is_same_v<raw_type, std::string> || std::is_same_v<raw_type, bool> ||
+						 std::is_same_v<raw_type, datetime>) {
+		// Types attribute stores directly
 		return attribute{ value };
 	} else if constexpr (std::is_enum_v<raw_type>) {
 		using underlying_type = std::underlying_type_t<raw_type>;
@@ -124,8 +124,6 @@ template <class FieldType> attribute to_attribute(const FieldType& value) {
 		return attribute{ static_cast<int64_t>(value) };
 	} else if constexpr (std::is_floating_point_v<raw_type>) {
 		return attribute{ static_cast<double>(value) };
-	} else if constexpr (std::is_same_v<raw_type, datetime>) {
-		return attribute{ value };
 	} else {
 		static_assert(!sizeof(raw_type), "Unsupported typed_model field type");
 	}
@@ -240,8 +238,9 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 			auto validation_rules = T::validations();
 			detail::run_validation_rules(self, this->mutable_errors(), validation_rules);
 			return !this->has_errors();
+		} else {
+			return true;
 		}
-		return true;
 	}
 
 	attribute_map snapshot_{};

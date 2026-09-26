@@ -9,6 +9,7 @@
 #pragma once
 
 #include <activerecord.h>
+#include <concepts>
 #include <datetime.h>
 #include <map>
 #include <variant>
@@ -17,6 +18,7 @@ namespace ar {
 
 // NOTE: PHP Active Record defines the following types:
 //	STRING, INTEGER, DECIMAL, DATETIME, DATE, TIME
+// NOLINTNEXTLINE(performance-enum-size) -- public unscoped enum; a uint8_t base would print as a char via ostream/gtest
 enum attribute_type {
 	type_null = 0,
 	type_string = 1,
@@ -44,11 +46,14 @@ class attribute {
 	attribute(bool value) : data_(value) {}
 	attribute(int64_t value) : data_(value) {}
 	attribute(int value) : data_(static_cast<int64_t>(value)) {}
-	attribute(long value) : data_(static_cast<int64_t>(value)) {}
+	// Whichever of long / long long is not int64_t on this platform (LLP64 vs LP64)
+	template <typename I>
+		requires((std::same_as<I, long> || std::same_as<I, long long>) && !std::same_as<I, int64_t>)
+	attribute(I value) : data_(static_cast<int64_t>(value)) {}
 	attribute(const std::string& value) : data_(value) {}
 	attribute(std::string_view value) : data_(std::string(value)) {}
 	attribute(const char* value) {
-		if (value) {
+		if (value != nullptr) {
 			data_ = std::string{ value };
 		} else {
 			data_ = std::monostate{};
@@ -121,7 +126,7 @@ class attribute {
 		case type_decimal:
 			return std::to_string(std::get<double>(data_));
 		case type_bool:
-			return std::to_string(std::get<bool>(data_));
+			return std::to_string(static_cast<int>(std::get<bool>(data_)));
 		case type_date:
 			return std::get<datetime>(data_).to_string();
 		}
@@ -132,8 +137,8 @@ class attribute {
 	attribute_storage data_;
 };
 
-typedef std::map<std::string, attribute> attribute_map;
-typedef std::vector<attribute> attribute_vector;
+using attribute_map = std::map<std::string, attribute>;
+using attribute_vector = std::vector<attribute>;
 
 /**
  * Return all keys from attributes. If only is definied contains only those keys else we will select all keys
@@ -156,7 +161,7 @@ string_vector get_attrib_keys(const attribute_map& attributes, const string_vect
  * @return - string JSON representation of the attributes.
  */
 std::string to_json_string(const attribute_map& attributes, const string_vector& only = {},
-						   const string_set& excluded = {}) noexcept;
+						   const string_set& excluded = {});
 
 /**
  * Return attributes as XML string.
@@ -167,13 +172,13 @@ std::string to_json_string(const attribute_map& attributes, const string_vector&
  * @return - string XML representation of the attributes.
  */
 std::string to_xml_string(const attribute_map& attributes, std::string_view obj_name, const string_vector& only = {},
-						  const string_set& exclude = {}) noexcept;
+						  const string_set& exclude = {});
 
 } // namespace ar
 
 namespace std {
-std::string to_string(const ar::attribute_map& attributes) noexcept;
-inline std::string to_string(const ar::attribute& attrib) noexcept {
+std::string to_string(const ar::attribute_map& attributes);
+inline std::string to_string(const ar::attribute& attrib) {
 	return attrib.to_string();
 }
 } // namespace std

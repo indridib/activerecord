@@ -15,6 +15,8 @@
 using namespace ar;
 
 // Mock connection for testing (satisfies the interface without real DB)
+namespace {
+
 class mock_connection : public connection {
   public:
 	std::unique_ptr<statement> query(const std::string&, const attribute_vector&) override { return nullptr; }
@@ -35,9 +37,12 @@ class mock_connection : public connection {
 	void rollback() override {}
 };
 
+} // namespace
+
 class delete_sql_builder_for_test : public sql_builder {
   public:
-	delete_sql_builder_for_test(config::connection_ptr con, std::string_view table) : sql_builder(con, table) {}
+	delete_sql_builder_for_test(config::connection_ptr con, std::string_view table)
+		: sql_builder(std::move(con), table) {}
 
 	std::string build_delete_public() const { return build_delete(); }
 };
@@ -231,7 +236,7 @@ TEST(SqlBuilderTest, BasicInsert) {
 	EXPECT_NE(std::string::npos, sql.find("email"));
 	EXPECT_NE(std::string::npos, sql.find("age"));
 	EXPECT_NE(std::string::npos, sql.find("VALUES"));
-	EXPECT_NE(std::string::npos, sql.find("?"));
+	EXPECT_NE(std::string::npos, sql.find('?'));
 
 	const attribute_vector& bind_values = builder.get_bind_values();
 	ASSERT_EQ(3, bind_values.size());
@@ -271,7 +276,7 @@ TEST(SqlBuilderTest, BasicUpdate) {
 
 	EXPECT_NE(std::string::npos, sql.find("UPDATE users"));
 	EXPECT_NE(std::string::npos, sql.find("SET"));
-	EXPECT_NE(std::string::npos, sql.find("?"));
+	EXPECT_NE(std::string::npos, sql.find('?'));
 }
 
 TEST(SqlBuilderTest, UpdateWithWhere) {

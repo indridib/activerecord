@@ -40,11 +40,11 @@ std::string escape_json(std::string_view value) {
 			break;
 		default:
 			if (static_cast<unsigned char>(c) < 0x20U) {
-				const unsigned char uc = static_cast<unsigned char>(c);
+				const std::size_t uc{ static_cast<unsigned char>(c) };
 				out += "\\u00";
-				constexpr char hex[] = "0123456789ABCDEF";
-				out += hex[(uc >> 4) & 0x0F];
-				out += hex[uc & 0x0F];
+				constexpr std::string_view hex{ "0123456789ABCDEF" };
+				out += hex[(uc >> 4U) & 0x0FU];
+				out += hex[uc & 0x0FU];
 			} else {
 				out += c;
 			}
@@ -98,8 +98,7 @@ string_vector get_attrib_keys(const attribute_map& attributes, const string_vect
 	return attrib_names;
 }
 
-std::string to_json_string(const attribute_map& attributes, const string_vector& only,
-						   const string_set& exclude) noexcept {
+std::string to_json_string(const attribute_map& attributes, const string_vector& only, const string_set& exclude) {
 	std::string result{ "{" };
 	string_vector attrib_keys{ get_attrib_keys(attributes, only, exclude) };
 
@@ -128,7 +127,7 @@ std::string to_json_string(const attribute_map& attributes, const string_vector&
 			break;
 
 		default:
-			result += std::format("\"{}\": \"{}\"", key, escape_json(value.to_string()));
+			result += std::format(R"("{}": "{}")", key, escape_json(value.to_string()));
 			break;
 		}
 	}
@@ -137,7 +136,7 @@ std::string to_json_string(const attribute_map& attributes, const string_vector&
 }
 
 std::string to_xml_string(const attribute_map& attributes, std::string_view obj_name, const string_vector& only,
-						  const string_set& exclude) noexcept {
+						  const string_set& exclude) {
 	std::string result{ std::format("<{}>", obj_name) };
 	string_vector attrib_keys{ get_attrib_keys(attributes, only, exclude) };
 
@@ -164,7 +163,7 @@ std::string to_xml_string(const attribute_map& attributes, std::string_view obj_
 
 namespace std {
 
-std::string to_string(const ar::attribute_map& attributes) noexcept {
+std::string to_string(const ar::attribute_map& attributes) {
 	std::string result;
 	for (const auto& [name, value] : attributes) {
 		if (!result.empty())

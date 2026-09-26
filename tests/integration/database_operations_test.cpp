@@ -22,6 +22,8 @@ using namespace ar;
 // Test Model
 // ==============================================================================
 
+namespace {
+
 class User : public model {
   public:
 	static const char* st_table_name() { return "users"; }
@@ -29,6 +31,8 @@ class User : public model {
 
 	User() : model(st_table_name(), st_primary_key()) {}
 };
+
+} // namespace
 
 // ==============================================================================
 // Test Fixture

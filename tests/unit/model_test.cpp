@@ -16,6 +16,8 @@
 using namespace ar;
 
 // Mock connection for testing (satisfies the interface without real DB)
+namespace {
+
 class mock_connection : public connection {
   public:
 	std::unique_ptr<statement> query(const std::string&, const attribute_vector&) override { return nullptr; }
@@ -35,6 +37,8 @@ class mock_connection : public connection {
 	void commit() override {}
 	void rollback() override {}
 };
+
+} // namespace
 
 // Test model class
 class TestModel : public model {

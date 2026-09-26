@@ -29,8 +29,8 @@ class config {
 	config(config const&) = delete;
 	void operator=(config const&) = delete;
 
-	typedef std::shared_ptr<connection> connection_ptr;
-	typedef std::map<std::string, connection_ptr> connection_map;
+	using connection_ptr = std::shared_ptr<connection>;
+	using connection_map = std::map<std::string, connection_ptr>;
 
 	/**
 	 * Sets all the connections for this config.
@@ -106,7 +106,7 @@ class config {
 	connection_ptr get_connection() { return get_connection(default_connection_); }
 
   private:
-	config() {}
+	config() = default;
 
 	std::string default_connection_;
 	connection_map connections_;

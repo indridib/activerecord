@@ -1,0 +1,17 @@
+# Disabled checks (see HARDENING.md "Waived findings"):
+#   modernize-use-trailing-return-type: codebase uses leading return types throughout; style-only
+#   modernize-use-nodiscard: project convention is no [[nodiscard]] (AGENTS.md "Code Quality Notes")
+Checks: >
+  -*,
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  readability-implicit-bool-conversion,
+  readability-container-size-empty
+# Any finding fails the build, matching /WX / -Werror for compiler warnings
+WarningsAsErrors: '*'
+# Matched against absolute header paths, so it must not be anchored at '^'
+HeaderFilterRegex: '/include/activerecord/'
+FormatStyle: none

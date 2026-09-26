@@ -180,7 +180,7 @@ TEST_F(DateTimeIntegrationTest, NullDateTimeField) {
 	Event retrieved = q.find(event.id());
 
 	// Accessing NULL datetime field
-	attribute attr = retrieved.get("starts_at");
+	const attribute& attr = retrieved.get("starts_at");
 	EXPECT_TRUE(attr.is_null());
 }
 
