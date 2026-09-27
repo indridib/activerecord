@@ -13,20 +13,57 @@ This implements the project rule "We don't like warnings in our compiled code" (
 | 3 | Clang Release | WSL / Linux | Builds (warnings are errors), `ctest` 100% |
 | 4 | clang-tidy | WSL / Linux | Builds (findings are errors); log contains no `warning:` lines |
 | 5 | ASan + UBSan | WSL / Linux | `ctest` 100%, no sanitizer report in the output |
+| 6 | MySQL + PostgreSQL adapter runs | WSL / Linux | Adapter tests ran against the real servers; only documented waivers skipped |
+| 7 | MS-SQL (MSVC Release + Debug) | Windows | Builds (warnings are errors), `ctest` 100%, MS-SQL tests ran; only documented waivers skipped |
+
+Checks 2-5 build with the MySQL and PostgreSQL adapters enabled, so they need the WSL database servers below. SQLite is always on. Do not run the Windows and WSL checks at the same time: both use the repo's `vcpkg/`, which allows one install at a time (the second waits on `vcpkg/.vcpkg-root`).
 
 ## Prerequisites
 
-**Windows:** Visual Studio 2022 17.9+ with the C++ workload. `build.bat` bootstraps vcpkg on first run.
+**Windows:** Visual Studio 2022 17.9+ with the C++ workload, and Python 3 for the check-7 script. `build.bat` bootstraps vcpkg on first run.
 
 **WSL / Linux:** Ubuntu 24.04 (older releases ship compilers too old for C++23):
 
 ```bash
 sudo apt update && sudo apt install -y build-essential g++-14 clang clang-tidy libclang-rt-18-dev \
-  cmake ninja-build pkg-config zip unzip curl git
+  cmake ninja-build pkg-config zip unzip curl git python3 \
+  libtirpc-dev bison flex autoconf autoconf-archive automake libtool   # vcpkg libmysql / libpq builds
 cd /mnt/c/dev/github/activerecord/vcpkg && ./bootstrap-vcpkg.sh -disableMetrics   # once; coexists with vcpkg.exe
 ```
 
-Keep WSL build directories on the Linux filesystem (`~/ar-build/...`). Building from `/mnt/c` works but is several times slower.
+Keep WSL build directories on the Linux filesystem (`~/ar-build/...`). Building from `/mnt/c` works but is several times slower. For the same reason, and because renaming directories on `/mnt/c` can fail with `Permission denied`, vcpkg's buildtrees and packages go under `~/ar-build` (see `VCPKG_OPTS` below). The first adapter-enabled configure builds `libmysql` and `libpq` with their dependencies from source (95 ports, including Boost); later configures reuse the cache.
+
+**WSL database servers** (once). Enable systemd so the servers start with WSL: put `[boot]` / `systemd=true` in `/etc/wsl.conf`, run `wsl --shutdown` from Windows, reopen Ubuntu. Then:
+
+```bash
+sudo apt install -y mysql-server postgresql
+sudo mysql -e "CREATE DATABASE test_db;
+  CREATE USER 'test'@'localhost' IDENTIFIED BY 'test'; CREATE USER 'test'@'127.0.0.1' IDENTIFIED BY 'test';
+  GRANT ALL ON test_db.* TO 'test'@'localhost'; GRANT ALL ON test_db.* TO 'test'@'127.0.0.1';"
+sudo -u postgres psql -c "CREATE ROLE test LOGIN PASSWORD 'test';" -c "CREATE DATABASE test_db OWNER test;"
+systemctl is-enabled mysql postgresql            # enabled, enabled
+systemctl is-active mysql postgresql@16-main     # active, active
+```
+
+Check PostgreSQL through the cluster unit `postgresql@16-main`: the `postgresql` umbrella unit reports active even when the cluster is down. Both servers listen on `127.0.0.1` only, so the `test`/`test` login is not reachable from other machines. The MySQL tests connect to `127.0.0.1` (TCP) rather than `localhost`, which would use a Unix socket whose default path depends on how `libmysql` was built.
+
+**Windows SQL Server** (once, elevated PowerShell). SQL Server 2025 Developer: the 2022 winget package points at a retired installer. `--interactive` is needed on systems whose Windows language SQL Server does not support: setup asks "continue in English?" and exits with 1009 when run silently.
+
+```powershell
+winget install Microsoft.SQLServer.2025.Developer --interactive   # Basic install, default instance MSSQLSERVER
+winget install Microsoft.msodbcsql.17                             # the adapter hardcodes "ODBC Driver 17 for SQL Server"
+winget install Microsoft.Sqlcmd
+# Basic install allows Windows logins only and has TCP off; enable SQL logins and TCP (port 1433 is preset):
+$base = 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\MSSQL17.MSSQLSERVER\MSSQLServer'
+Set-ItemProperty $base -Name LoginMode -Value 2
+Set-ItemProperty "$base\SuperSocketNetLib\Tcp" -Name Enabled -Value 1
+Restart-Service MSSQLSERVER -Force
+# Open a new shell first, or call "C:\Program Files\SqlCmd\sqlcmd.exe". -C accepts the self-signed certificate.
+sqlcmd -S localhost -E -C -Q "CREATE LOGIN test WITH PASSWORD = 'test', CHECK_POLICY = OFF; CREATE DATABASE test_db; ALTER AUTHORIZATION ON DATABASE::test_db TO test;"
+sqlcmd -S localhost,1433 -U test -P test -d test_db -C -Q "SELECT 1"
+```
+
+`CHECK_POLICY = OFF` is required because Windows password policy rejects `test`. The server listens on all interfaces; Windows Firewall blocks port 1433 from other machines unless a rule allows it.
 
 ## Commands
 
@@ -39,19 +76,22 @@ build.bat Debug
 
 Debug matters: MSVC reports some warnings (e.g. C4702 unreachable code) only in Debug.
 
-### Shared WSL setup (checks 2-5)
+### Shared WSL setup (checks 2-6)
 
 ```bash
 R=/mnt/c/dev/github/activerecord                           # repo as seen from WSL
 TC=$R/vcpkg/scripts/buildsystems/vcpkg.cmake
-COMMON="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$TC -DAR_BUILD_TESTS=ON -DAR_BUILD_EXAMPLES=ON -DAR_SQLITE=ON"
+VCPKG_OPTS="-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$HOME/ar-build/vcpkg-buildtrees;--x-packages-root=$HOME/ar-build/vcpkg-packages"
+COMMON="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$TC -DAR_BUILD_TESTS=ON -DAR_BUILD_EXAMPLES=ON -DAR_SQLITE=ON -DAR_MYSQL=ON -DAR_POSTGRES=ON"
 set -o pipefail                                            # a failed build piped into tee must still fail
 ```
+
+Every `cmake -S` below also passes `"$VCPKG_OPTS"`, quoted because it contains a `;`.
 
 ### 2. GCC 14 Release
 
 ```bash
-cmake -S $R -B ~/ar-build/gcc $COMMON -DCMAKE_BUILD_TYPE=Release \
+cmake -S $R -B ~/ar-build/gcc $COMMON "$VCPKG_OPTS" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14
 cmake --build ~/ar-build/gcc && ctest --test-dir ~/ar-build/gcc --output-on-failure
 ```
@@ -59,7 +99,7 @@ cmake --build ~/ar-build/gcc && ctest --test-dir ~/ar-build/gcc --output-on-fail
 ### 3. Clang Release
 
 ```bash
-cmake -S $R -B ~/ar-build/clang $COMMON -DCMAKE_BUILD_TYPE=Release \
+cmake -S $R -B ~/ar-build/clang $COMMON "$VCPKG_OPTS" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
 cmake --build ~/ar-build/clang && ctest --test-dir ~/ar-build/clang --output-on-failure
 ```
@@ -67,7 +107,7 @@ cmake --build ~/ar-build/clang && ctest --test-dir ~/ar-build/clang --output-on-
 ### 4. clang-tidy
 
 ```bash
-cmake -S $R -B ~/ar-build/tidy $COMMON -DCMAKE_BUILD_TYPE=Release \
+cmake -S $R -B ~/ar-build/tidy $COMMON "$VCPKG_OPTS" -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAR_CLANG_TIDY=ON
 cmake --build ~/ar-build/tidy --clean-first 2>&1 | tee ~/ar-build/tidy.log
 ! grep -n "warning:" ~/ar-build/tidy.log    # must print nothing; exit status 0 means clean
@@ -82,7 +122,7 @@ Two limitations:
 ### 5. ASan + UBSan
 
 ```bash
-cmake -S $R -B ~/ar-build/san $COMMON -DCMAKE_BUILD_TYPE=Debug \
+cmake -S $R -B ~/ar-build/san $COMMON "$VCPKG_OPTS" -DCMAKE_BUILD_TYPE=Debug \
   -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
   -DAR_SANITIZE_ADDRESS=ON -DAR_SANITIZE_UNDEFINED=ON
 cmake --build ~/ar-build/san
@@ -91,7 +131,62 @@ export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
 ctest --test-dir ~/ar-build/san --output-on-failure
 ```
 
-The options are required. By default UBSan prints a report and keeps running, so `ctest` would pass despite undefined behavior. `halt_on_error=1` makes any report fail the test. The library, tests and examples are all instrumented.
+The options are required. By default UBSan prints a report and keeps running, so `ctest` would pass despite undefined behavior. `halt_on_error=1` makes any report fail the test. The library, tests and examples are all instrumented; the vcpkg-built `libmysql` and `libpq` are not (ASan still intercepts their allocations). A report from inside them is still a failure: first find out whether project code caused it.
+
+### 6. MySQL + PostgreSQL adapter runs (after check 3)
+
+`ctest` passing is not enough, because it would also pass if the adapter tests were skipped. An adapter compiled into the build that cannot connect fails its tests; this check confirms the tests actually ran:
+
+```bash
+T=~/ar-build/clang/tests/integration_tests; failed=0
+for A in MySQL PostgreSQL; do
+  "$T" --gtest_filter="AllAdapters/*/$A" --gtest_output=xml:$HOME/ar-build/$A.xml &&
+  python3 $R/tools/check_adapter_tests.py ~/ar-build/$A.xml $R/HARDENING.md || { echo "FAILED: $A"; failed=1; }
+done
+test $failed -eq 0
+```
+
+Each adapter must print `OK: <n> test case(s) completed, no unwaived skips`; the block exits 0 only if both did.
+
+**Outage proof** (occasionally, and after changing connection or test setup code; needs `sudo`). It stops a server, requires the tests to fail because of the connection, and always restarts the server:
+
+```bash
+( T=~/ar-build/clang/tests/integration_tests; test -x "$T" || exit 1
+  trap 'sudo systemctl start mysql' EXIT
+  sudo systemctl stop mysql
+  "$T" --gtest_filter="AllAdapters/*/MySQL" > ~/ar-build/outage.log 2>&1; rc=$?
+  test $rc -ne 0 && grep -q "Cannot connect to MySQL" ~/ar-build/outage.log && grep -q "\[  PASSED  \] 0 tests" ~/ar-build/outage.log
+) && echo "outage OK" || echo "outage check FAILED"
+```
+
+For PostgreSQL use the unit `postgresql@16-main` and `PostgreSQL` in the filter and message.
+
+### 7. MS-SQL (Windows PowerShell, from the repo root)
+
+`build.bat` stays SQLite-only. The MS-SQL build uses its own directory outside the repo:
+
+```powershell
+cmake -S . -B C:\ar-build\mssql -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+  -DAR_BUILD_TESTS=ON -DAR_SQLITE=ON -DAR_MSSQL=ON
+foreach ($cfg in "Release", "Debug") {
+  cmake --build C:\ar-build\mssql --config $cfg; if ($LASTEXITCODE) { throw "build $cfg failed" }
+  ctest --test-dir C:\ar-build\mssql -C $cfg --output-on-failure; if ($LASTEXITCODE) { throw "ctest $cfg failed" }
+  & "C:\ar-build\mssql\tests\$cfg\integration_tests.exe" --gtest_filter="AllAdapters/*/MSSQL" "--gtest_output=xml:C:\ar-build\MSSQL-$cfg.xml"
+  if ($LASTEXITCODE) { throw "MSSQL tests $cfg failed" }
+  python tools\check_adapter_tests.py "C:\ar-build\MSSQL-$cfg.xml" HARDENING.md; if ($LASTEXITCODE) { throw "MSSQL check $cfg failed" }
+}
+```
+
+**Outage proof** (elevated PowerShell, from the repo root):
+
+```powershell
+$T = "C:\ar-build\mssql\tests\Release\integration_tests.exe"; if (-not (Test-Path $T)) { throw "build check 7 first" }
+try {
+  Stop-Service MSSQLSERVER -Force
+  $out = & $T --gtest_filter="AllAdapters/*/MSSQL" 2>&1 | Out-String; $rc = $LASTEXITCODE
+  if ($rc -ne 0 -and $out -match "Cannot connect to MSSQL" -and $out -match "\[  PASSED  \] 0 tests") { "outage OK" } else { "outage check FAILED" }
+} finally { Start-Service MSSQLSERVER }
+```
 
 ## Waived findings
 
@@ -124,9 +219,16 @@ Every clang-tidy suppression in the codebase, with its reason. Add new entries h
 | `tests/integration/adapter_tests.cpp` (2x) | `bugprone-empty-catch` | Best-effort `DROP TABLE` in setup/teardown |
 | `tests/unit/transaction_test.cpp` | `bugprone-empty-catch` | The exception is the point of the test |
 
+### Waived adapter tests
+
+Adapter tests skipped for one adapter because of a known adapter bug. Each is skipped in the test body with `GTEST_SKIP() << "WAIVED: <reason>"` and listed here by full gtest name (`AllAdapters/DatabaseAdapterTest.<Test>/<Adapter>`); `tools/check_adapter_tests.py` rejects any other skip.
+
+_None._
+
 ## Known gaps
 
 - Sanitizers run only on Linux/Clang. MSVC builds are compiled but not sanitized.
-- Only the SQLite adapter is built and tested. The MySQL, PostgreSQL and MS-SQL adapters are not covered by any check here.
+- MySQL and PostgreSQL are built and tested only on Linux, MS-SQL only on Windows (MSVC). The MS-SQL adapter is therefore not analyzed by clang-tidy or run under the sanitizers.
+- Only the shared parameterized suite (`adapter_tests.cpp`) runs against every adapter; the richer integration suites are SQLite-only.
 - `ModelSizeTest.BaseModelSize` pins `sizeof(model)` exactly per standard library (MSVC Release/Debug, libstdc++). Any growth fails on purpose; if it is intended, update the budget in [tests/unit/model_size_test.cpp](tests/unit/model_size_test.cpp).
 - Clang 18 (Ubuntu 24.04 default) cannot use libstdc++ 14's `<expected>`. If the project adopts `std::expected`, install `clang-20` and use it for checks 3-5.

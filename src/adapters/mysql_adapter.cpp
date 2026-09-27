@@ -11,7 +11,10 @@
 #include <activerecord.h>
 #include <adapters/mysql_adapter.h>
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
+#include <limits>
+#include <memory>
 #include <mysql/mysql.h>
 #include <string>
 #include <type_traits>
@@ -47,16 +50,15 @@ std::string normalize_mysql_datetime(std::string value) {
 // mysql_statement implementation
 // ============================================================================
 
-mysql_statement::mysql_statement(MYSQL* db)
-	: statement(), db_(db), stmt_(nullptr), metadata_(nullptr), num_fields_(0), has_result_(false), affected_rows_(0) {}
+mysql_statement::mysql_statement(MYSQL* db) : statement(), db_(db) {}
 
 mysql_statement::~mysql_statement() {
 	// Vectors (result_binds_, lengths_, buffers_) clean themselves up via RAII
-	if (metadata_) {
+	if (metadata_ != nullptr) {
 		mysql_free_result(metadata_);
 		metadata_ = nullptr;
 	}
-	if (stmt_) {
+	if (stmt_ != nullptr) {
 		mysql_stmt_close(stmt_);
 		stmt_ = nullptr;
 	}
@@ -65,12 +67,12 @@ mysql_statement::~mysql_statement() {
 void mysql_statement::execute(const std::string& command, const attribute_vector& values) {
 	// Initialize statement
 	stmt_ = mysql_stmt_init(db_);
-	if (!stmt_) {
+	if (stmt_ == nullptr) {
 		throw ex::activerecord("MySQL: Failed to initialize statement");
 	}
 
 	// Prepare the SQL statement
-	if (mysql_stmt_prepare(stmt_, command.c_str(), static_cast<unsigned long>(command.length()))) {
+	if (mysql_stmt_prepare(stmt_, command.c_str(), static_cast<unsigned long>(command.length())) != 0) {
 		std::string error{ "MySQL prepare error: " };
 		error += mysql_stmt_error(stmt_);
 		throw ex::activerecord(error);
@@ -81,8 +83,13 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		std::vector<MYSQL_BIND> param_binds(values.size());
 		std::memset(param_binds.data(), 0, sizeof(MYSQL_BIND) * values.size());
 		std::vector<unsigned long> string_lengths(values.size(), 0U);
+		// Each flag wrapped in a struct: MYSQL_BIND::is_null needs a real address per flag,
+		// which std::vector<bool> cannot provide
 		using mysql_null_flag = std::remove_pointer_t<decltype(MYSQL_BIND{}.is_null)>;
-		std::vector<mysql_null_flag> is_null(values.size(), static_cast<mysql_null_flag>(0));
+		struct null_flag {
+			mysql_null_flag value{};
+		};
+		std::vector<null_flag> is_null(values.size());
 
 		// CRITICAL: Reserve capacity to prevent reallocation. We store pointers to elements
 		// of these vectors in param_binds, so the vectors must not reallocate during the loop.
@@ -100,8 +107,8 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 			switch (param.type()) {
 			case type_null:
 				param_binds[i].buffer_type = MYSQL_TYPE_NULL;
-				is_null[i] = true;
-				param_binds[i].is_null = &is_null[i];
+				is_null[i].value = true;
+				param_binds[i].is_null = &is_null[i].value;
 				break;
 
 			case type_string:
@@ -139,8 +146,8 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 
 			default:
 				param_binds[i].buffer_type = MYSQL_TYPE_NULL;
-				is_null[i] = true;
-				param_binds[i].is_null = &is_null[i];
+				is_null[i].value = true;
+				param_binds[i].is_null = &is_null[i].value;
 				break;
 			}
 		}
@@ -152,14 +159,14 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		}
 
 		// Execute while bound parameter storage is still alive.
-		if (mysql_stmt_execute(stmt_)) {
+		if (mysql_stmt_execute(stmt_) != 0) {
 			std::string error{ "MySQL execute error: " };
 			error += mysql_stmt_error(stmt_);
 			throw ex::activerecord(error);
 		}
 	} else {
 		// Execute the statement
-		if (mysql_stmt_execute(stmt_)) {
+		if (mysql_stmt_execute(stmt_) != 0) {
 			std::string error{ "MySQL execute error: " };
 			error += mysql_stmt_error(stmt_);
 			throw ex::activerecord(error);
@@ -168,14 +175,15 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 
 	// Prepare result bindings if this is a SELECT query
 	metadata_ = mysql_stmt_result_metadata(stmt_);
-	const auto rows{ mysql_stmt_affected_rows(stmt_) };
-	affected_rows_ = (rows == static_cast<decltype(rows)>(-1)) ? 0 : static_cast<std::size_t>(rows);
-	if (metadata_) {
+	// mysql_stmt_affected_rows() returns (uint64_t)-1 on error or for a SELECT
+	const std::uint64_t rows{ mysql_stmt_affected_rows(stmt_) };
+	affected_rows_ = (rows == std::numeric_limits<std::uint64_t>::max()) ? 0 : static_cast<std::size_t>(rows);
+	if (metadata_ != nullptr) {
 		has_result_ = true;
 		num_fields_ = mysql_num_fields(metadata_);
 
 		// Ask server to compute max_length for each column so we can size buffers better.
-		my_bool update_max_length = 1;
+		bool update_max_length{ true }; // MySQL 8 replaced my_bool with bool
 		mysql_stmt_attr_set(stmt_, STMT_ATTR_UPDATE_MAX_LENGTH, &update_max_length);
 
 		// Use RAII vectors instead of raw arrays to prevent memory leaks
@@ -184,18 +192,18 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		buffers_.resize(num_fields_);
 		std::memset(result_binds_.data(), 0, sizeof(MYSQL_BIND) * num_fields_);
 
-		if (mysql_stmt_store_result(stmt_)) {
+		if (mysql_stmt_store_result(stmt_) != 0) {
 			std::string error{ "MySQL store result error: " };
 			error += mysql_stmt_error(stmt_);
 			throw ex::activerecord(error);
 		}
 
 		MYSQL_FIELD* fields = mysql_fetch_fields(metadata_);
-		if (!fields) {
+		if (fields == nullptr) {
 			throw ex::activerecord("MySQL: Failed to fetch field metadata");
 		}
 
-		for (int i = 0; i < num_fields_; ++i) {
+		for (unsigned int i = 0; i < num_fields_; ++i) {
 			result_binds_[i].buffer_type = MYSQL_TYPE_STRING;
 			const unsigned long preferred = fields[i].max_length;
 			const unsigned long buffer_size = std::max(preferred + 1UL, 256UL);
@@ -230,7 +238,7 @@ bool mysql_statement::fetch() {
 		return false; // No more rows
 	} else if (result == MYSQL_DATA_TRUNCATED) {
 		// Resize and fetch full column values for truncated fields.
-		for (int i = 0; i < num_fields_; ++i) {
+		for (unsigned int i = 0; i < num_fields_; ++i) {
 			if (lengths_[i] <= result_binds_[i].buffer_length) {
 				continue;
 			}
@@ -246,7 +254,7 @@ bool mysql_statement::fetch() {
 			fetch_bind.length = &full_length;
 			fetch_bind.is_null = buffers_[i].is_null.get();
 
-			if (mysql_stmt_fetch_column(stmt_, &fetch_bind, static_cast<unsigned int>(i), 0) != 0) {
+			if (mysql_stmt_fetch_column(stmt_, &fetch_bind, i, 0) != 0) {
 				std::string error{ "MySQL fetch column error: " };
 				error += mysql_stmt_error(stmt_);
 				throw ex::activerecord(error);
@@ -266,29 +274,29 @@ bool mysql_statement::fetch() {
 }
 
 void mysql_statement::get_attributes(attribute_map& attributes) {
-	if (!has_result_ || !metadata_) {
+	if (!has_result_ || metadata_ == nullptr) {
 		return;
 	}
 
 	MYSQL_FIELD* fields = mysql_fetch_fields(metadata_);
-	if (!fields) {
+	if (fields == nullptr) {
 		throw ex::activerecord("MySQL: Failed to fetch field metadata");
 	}
 
-	for (int i = 0; i < num_fields_; ++i) {
+	for (unsigned int i = 0; i < num_fields_; ++i) {
 		std::string column_name{ fields[i].name };
 		attributes.emplace(column_name, field_as_attribute(metadata_, result_binds_.data(), lengths_.data(), i));
 	}
 }
 
 attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* binds, unsigned long* lengths,
-											  int column_index) {
+											  unsigned int column_index) {
 	MYSQL_FIELD* fields = mysql_fetch_fields(metadata);
 	MYSQL_FIELD& field = fields[column_index];
 
 	// Check for NULL value
 	if (binds[column_index].is_null != nullptr && *binds[column_index].is_null) {
-		return attribute();
+		return {};
 	}
 
 	const char* raw_value = static_cast<const char*>(binds[column_index].buffer);
@@ -328,7 +336,7 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 	case MYSQL_TYPE_MEDIUM_BLOB:
 	case MYSQL_TYPE_LONG_BLOB:
 	default:
-		return attribute(value);
+		return { value };
 	}
 }
 
@@ -341,12 +349,13 @@ mysql_adapter::mysql_adapter(const std::string& host, const std::string& user, c
 	: connection() {
 	// Initialize MySQL library
 	db_ = mysql_init(nullptr);
-	if (!db_) {
+	if (db_ == nullptr) {
 		throw ex::activerecord("MySQL: Failed to initialize");
 	}
 
 	// Connect to database
-	if (!mysql_real_connect(db_, host.c_str(), user.c_str(), password.c_str(), database.c_str(), port, nullptr, 0)) {
+	if (mysql_real_connect(db_, host.c_str(), user.c_str(), password.c_str(), database.c_str(), port, nullptr, 0) ==
+		nullptr) {
 		std::string error{ "MySQL connection error: " };
 		error += mysql_error(db_);
 		mysql_close(db_);
@@ -358,7 +367,7 @@ mysql_adapter::mysql_adapter(const std::string& host, const std::string& user, c
 }
 
 mysql_adapter::~mysql_adapter() {
-	if (db_) {
+	if (db_ != nullptr) {
 		mysql_close(db_);
 		db_ = nullptr;
 	}
@@ -381,7 +390,7 @@ void mysql_adapter::limit(std::string& sql, long offset, long limit) const {
 }
 
 std::size_t mysql_adapter::insert_id() const {
-	if (!db_) {
+	if (db_ == nullptr) {
 		return 0;
 	}
 	return static_cast<std::size_t>(mysql_insert_id(db_));

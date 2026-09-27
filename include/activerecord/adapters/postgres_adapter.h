@@ -16,8 +16,8 @@
 // Forward declarations for PostgreSQL types (actual header included in .cpp)
 struct pg_conn;
 struct pg_result;
-typedef struct pg_conn PGconn;
-typedef struct pg_result PGresult;
+using PGconn = struct pg_conn;
+using PGresult = struct pg_result;
 
 namespace ar {
 
@@ -37,12 +37,12 @@ class postgres_statement : public statement {
   private:
 	static attribute field_as_attribute(PGresult* result, int row, int column);
 
-	PGconn* db_;				// Non-owning pointer to database connection
-	PGresult* result_;			// Owned result set (cleared in destructor)
-	int current_row_;			// Current row index
-	int num_rows_;				// Total number of rows
-	int num_fields_;			// Number of columns
-	std::size_t affected_rows_; // Rows affected by last execute
+	PGconn* db_;					 // Non-owning pointer to database connection
+	PGresult* result_{ nullptr };	 // Owned result set (cleared in destructor)
+	int current_row_{ -1 };			 // Current row index
+	int num_rows_{ 0 };				 // Total number of rows
+	int num_fields_{ 0 };			 // Number of columns
+	std::size_t affected_rows_{ 0 }; // Rows affected by last execute
 };
 
 /**

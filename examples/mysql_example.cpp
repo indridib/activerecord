@@ -24,13 +24,14 @@ int main() {
 		// 1. Setup database connection
 		// Note: Update these credentials for your MySQL server
 		std::string host = "localhost";
-		std::string user = "root";
+		std::string username = "root";
 		std::string password = ""; // Set your MySQL password
 		std::string database = "activerecord_test";
 		unsigned int port = 3306;
 
 		ar::config::instance().set_connections(
-			{ { "default", std::make_shared<ar::mysql_adapter>(host, user, password, database, port) } }, "default");
+			{ { "default", std::make_shared<ar::mysql_adapter>(host, username, password, database, port) } },
+			"default");
 
 		auto conn = ar::config::instance().get_connection();
 

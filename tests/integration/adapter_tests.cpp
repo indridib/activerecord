@@ -62,9 +62,9 @@ class AdapterFactory {
 
 #ifdef AR_MYSQL
 		case AdapterType::MySQL:
-			// Note: This requires a running MySQL server
-			// You may need to adjust these credentials or skip MySQL tests
-			return std::make_shared<mysql_adapter>("localhost", // host
+			// Requires a running MySQL server (see HARDENING.md). 127.0.0.1 forces TCP: "localhost"
+			// makes the client use a Unix socket whose default path depends on how libmysql was built.
+			return std::make_shared<mysql_adapter>("127.0.0.1", // host
 												   "test",		// user
 												   "test",		// password
 												   "test_db",	// database
@@ -74,8 +74,7 @@ class AdapterFactory {
 
 #ifdef AR_POSTGRES
 		case AdapterType::PostgreSQL:
-			// Note: This requires a running PostgreSQL server
-			// You may need to adjust these credentials or skip PostgreSQL tests
+			// Requires a running PostgreSQL server (see HARDENING.md)
 			return std::make_shared<postgres_adapter>("localhost", // host
 													  "test",	   // user
 													  "test",	   // password
@@ -86,8 +85,7 @@ class AdapterFactory {
 
 #ifdef AR_MSSQL
 		case AdapterType::MSSQL:
-			// Note: This requires a running MS-SQL server
-			// You may need to adjust these credentials or skip MS-SQL tests
+			// Requires a running MS-SQL server (see HARDENING.md)
 			return std::make_shared<mssql_adapter>("localhost", // server
 												   "test_db",	// database
 												   "test",		// user
@@ -198,8 +196,9 @@ class DatabaseAdapterTest : public ::testing::TestWithParam<AdapterType> {
 			adapter_->query(AdapterFactory::create_table_sql(adapter_type_), {});
 
 		} catch (const std::exception& e) {
-			GTEST_SKIP() << "Cannot connect to " << AdapterFactory::adapter_name(adapter_type_)
-						 << " database: " << e.what();
+			// An adapter compiled into this build must be reachable: fail rather than skip,
+			// so a missing server can't pass as green
+			FAIL() << "Cannot connect to " << AdapterFactory::adapter_name(adapter_type_) << " database: " << e.what();
 		}
 	}
 
@@ -345,6 +344,49 @@ TEST_P(DatabaseAdapterTest, BooleanValues) {
 	ASSERT_EQ(1, users.size());
 	// Note: Boolean handling may vary by database
 }
+
+#ifdef AR_MSSQL
+// ==============================================================================
+// MS-SQL: the id read back after an INSERT must be the inserted row's, even when an
+// INSERT trigger inserts into another identity table (@@IDENTITY would return that id)
+// ==============================================================================
+
+class MssqlInsertIdTest : public ::testing::Test {
+  protected:
+	void SetUp() override {
+		adapter_ = AdapterFactory::create(AdapterType::MSSQL);
+		config::instance().set_connections({ { "default", adapter_ } }, "default");
+		TearDown();
+		adapter_->query(AdapterFactory::create_table_sql(AdapterType::MSSQL), {});
+		// Seeded at 100 so a trigger identity can't coincide with the users id
+		adapter_->query("CREATE TABLE users_audit (id INT IDENTITY(100,1) PRIMARY KEY, user_id INT)", {});
+		adapter_->query("CREATE TRIGGER users_audit_trg ON users AFTER INSERT AS "
+						"INSERT INTO users_audit (user_id) SELECT id FROM inserted",
+						{});
+	}
+
+	void TearDown() override {
+		if (adapter_) {
+			adapter_->query("DROP TABLE IF EXISTS users", {}); // drops the trigger too
+			adapter_->query("DROP TABLE IF EXISTS users_audit", {});
+		}
+	}
+
+	std::shared_ptr<connection> adapter_;
+};
+
+TEST_F(MssqlInsertIdTest, IgnoresTriggerIdentity) {
+	User user;
+	user.set("name", "Trigger");
+	ASSERT_TRUE(user.save());
+
+	query<User> q;
+	auto users = q.where("name = ?", "Trigger").all();
+	ASSERT_EQ(1, users.size());
+	EXPECT_EQ(users[0]["id"].as_integer(), user["id"].as_integer());
+	EXPECT_LT(user["id"].as_integer(), 100); // not the users_audit identity
+}
+#endif
 
 // ==============================================================================
 // Test Instantiation

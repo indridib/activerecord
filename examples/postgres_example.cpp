@@ -24,13 +24,14 @@ int main() {
 		// 1. Setup database connection
 		// Note: Update these credentials for your PostgreSQL server
 		std::string host = "localhost";
-		std::string user = "postgres";
+		std::string username = "postgres";
 		std::string password = ""; // Set your PostgreSQL password
 		std::string database = "activerecord_test";
 		unsigned int port = 5432;
 
 		ar::config::instance().set_connections(
-			{ { "default", std::make_shared<ar::postgres_adapter>(host, user, password, database, port) } }, "default");
+			{ { "default", std::make_shared<ar::postgres_adapter>(host, username, password, database, port) } },
+			"default");
 
 		auto conn = ar::config::instance().get_connection();
 

@@ -12,6 +12,18 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/vcpk
   message(STATUS "Using project vcpkg: ${CMAKE_TOOLCHAIN_FILE}")
 endif()
 
+# Adapter options must precede project(): the vcpkg toolchain installs manifest
+# features during project(), so each enabled adapter adds its client library here.
+# Appending keeps any features the caller passed via -DVCPKG_MANIFEST_FEATURES.
+option(AR_MYSQL "Build MySQL adapter" OFF)
+option(AR_POSTGRES "Build PostgreSQL adapter" OFF)
+if(AR_MYSQL AND NOT "mysql" IN_LIST VCPKG_MANIFEST_FEATURES)
+  list(APPEND VCPKG_MANIFEST_FEATURES "mysql")
+endif()
+if(AR_POSTGRES AND NOT "postgresql" IN_LIST VCPKG_MANIFEST_FEATURES)
+  list(APPEND VCPKG_MANIFEST_FEATURES "postgresql")
+endif()
+
 project(activerecord VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -26,8 +38,6 @@ endif()
 option(AR_BUILD_TESTS "Build tests" OFF)
 option(AR_BUILD_EXAMPLES "Build examples" ON)
 option(AR_SQLITE "Build SQLite adapter" ON)
-option(AR_MYSQL "Build MySQL adapter" OFF)
-option(AR_POSTGRES "Build PostgreSQL adapter" OFF)
 option(AR_MSSQL "Build MS-SQL adapter" OFF)
 option(AR_CLANG_TIDY "Enable clang-tidy integration" OFF)
 option(AR_SANITIZE_ADDRESS "Enable AddressSanitizer (Clang/GCC)" OFF)

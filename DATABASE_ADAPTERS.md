@@ -88,10 +88,10 @@ cmake -B build -DAR_MSSQL=ON
 cmake --build build --config Release
 ```
 
-**3. ODBC driver required:**
-- Windows: ODBC drivers included with OS
-- Linux: `sudo apt-get install unixodbc-dev`
-- You may also need MS-SQL ODBC driver: [ODBC Driver for SQL Server](https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
+**3. ODBC driver required:** the adapter's server/database/user/password constructor connects with `DRIVER={ODBC Driver 17 for SQL Server}`, so that exact driver must be installed (Windows: `winget install Microsoft.msodbcsql.17`). The legacy `SQL Server` driver that ships with Windows is not enough. Driver 18 is not used by that constructor; it defaults to `Encrypt=yes` and needs `TrustServerCertificate=yes` for a self-signed server certificate. The connection-string constructor can name any driver.
+- Linux: `sudo apt-get install unixodbc-dev` plus Microsoft's ODBC driver: [ODBC Driver for SQL Server](https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
+
+**4. Server settings the adapter needs:** SQL Server authentication ("mixed mode") for user/password logins, and TCP/IP enabled on the port you pass (default 1433). SQL Server Developer and Express installs have both off by default. For the exact commands used for the project's test server, including a local `test` login (`CHECK_POLICY = OFF`, because Windows password policy rejects weak test passwords), see [HARDENING.md](HARDENING.md) "Windows SQL Server".
 
 ## 💻 Usage Examples
 
@@ -248,6 +248,8 @@ cmake --build build --config Release
 # Run tests - automatically tests all enabled adapters
 ctest --test-dir build -C Release
 ```
+
+Every enabled adapter must be reachable with the test credentials (`test`/`test`, database `test_db`): an adapter compiled into the build that cannot connect **fails** its tests instead of skipping them. [HARDENING.md](HARDENING.md) has the server setup (MySQL and PostgreSQL in WSL, MS-SQL on Windows) and the check that confirms the adapter tests actually ran.
 
 **Test output example:**
 ```

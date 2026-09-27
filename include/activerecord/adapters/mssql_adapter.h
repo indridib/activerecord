@@ -41,8 +41,12 @@ class mssql_statement : public statement {
 	void get_attributes(attribute_map& attributes) override;
 	std::size_t affected_rows() const noexcept override { return affected_rows_; }
 
+	// After executing "INSERT ...; SELECT SCOPE_IDENTITY()": skip the row-count results of the
+	// INSERT (and of any triggers) and return the selected identity, or 0 if there is none.
+	std::size_t read_insert_id();
+
   private:
-	static attribute field_as_attribute(SQLHSTMT stmt, int column_index);
+	static attribute field_as_attribute(SQLHSTMT stmt, unsigned short column_index); // SQLUSMALLINT
 
 	SQLHDBC dbc_;				// Non-owning pointer to database connection
 	SQLHSTMT stmt_;				// Owned statement handle (freed in destructor)
@@ -81,8 +85,9 @@ class mssql_adapter : public connection {
   private:
 	void connect(const std::string& connection_string);
 
-	SQLHENV env_{ nullptr }; // ODBC environment handle
-	SQLHDBC dbc_{ nullptr }; // ODBC connection handle
+	SQLHENV env_{ nullptr };		  // ODBC environment handle
+	SQLHDBC dbc_{ nullptr };		  // ODBC connection handle
+	std::size_t last_insert_id_{ 0 }; // Identity of the row inserted by the last INSERT via query()
 };
 
 } // namespace ar

@@ -25,13 +25,13 @@ int main() {
 		// Note: Update these credentials for your MS-SQL Server
 		std::string server = "localhost";
 		std::string database = "activerecord_test";
-		std::string user = "sa";
+		std::string username = "sa";
 		std::string password = ""; // Set your SQL Server password
 		unsigned int port = 1433;
 
 		// Option 1: Connect using server/database/user/password
 		ar::config::instance().set_connections(
-			{ { "default", std::make_shared<ar::mssql_adapter>(server, database, user, password, port) } }, "default");
+			{ { "default", std::make_shared<ar::mssql_adapter>(server, database, username, password, port) } }, "default");
 
 		// Option 2: Connect using connection string
 		// ar::config::instance().set_connections({

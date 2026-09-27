@@ -44,7 +44,7 @@ if(AR_MYSQL)
   # Install: vcpkg install libmysql
   find_package(unofficial-libmysql CONFIG)
   if(unofficial-libmysql_FOUND)
-    target_link_libraries(activerecord PRIVATE unofficial::libmysql)
+    target_link_libraries(activerecord PRIVATE unofficial::libmysql::libmysql)
   else()
     # Fallback to FindMySQL
     find_package(MySQL REQUIRED)

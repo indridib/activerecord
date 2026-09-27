@@ -36,26 +36,26 @@ class mysql_statement : public statement {
 
   private:
 	static attribute field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* bind, unsigned long* lengths,
-										int column_index);
+										unsigned int column_index);
 
 	// Helper struct for RAII management of MYSQL_BIND resources
 	struct bind_buffer {
 		std::vector<char> data;
-		using mysql_null_flag = unsigned char;
+		using mysql_null_flag = bool; // MYSQL_BIND::is_null is bool* since MySQL 8.0 (was my_bool*)
 		std::unique_ptr<mysql_null_flag> is_null;
 
-		bind_buffer() : is_null(std::make_unique<mysql_null_flag>(0)) {}
+		bind_buffer() : is_null(std::make_unique<mysql_null_flag>(false)) {}
 	};
 
 	MYSQL* db_;							   // Non-owning pointer to database connection
-	MYSQL_STMT* stmt_;					   // Owned prepared statement (closed in destructor)
-	MYSQL_RES* metadata_;				   // Result metadata
+	MYSQL_STMT* stmt_{ nullptr };		   // Owned prepared statement (closed in destructor)
+	MYSQL_RES* metadata_{ nullptr };	   // Result metadata
 	std::vector<MYSQL_BIND> result_binds_; // Result bindings (RAII)
 	std::vector<unsigned long> lengths_;   // Field lengths (RAII)
 	std::vector<bind_buffer> buffers_;	   // Buffers for result data (RAII)
-	int num_fields_;					   // Number of result fields
-	bool has_result_;					   // Whether statement has results
-	std::size_t affected_rows_;			   // Rows affected by last execute
+	unsigned int num_fields_{ 0 };		   // Number of result fields
+	bool has_result_{ false };			   // Whether statement has results
+	std::size_t affected_rows_{ 0 };	   // Rows affected by last execute
 };
 
 /**

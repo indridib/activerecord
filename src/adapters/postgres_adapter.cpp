@@ -11,6 +11,7 @@
 #include <activerecord.h>
 #include <adapters/postgres_adapter.h>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <libpq-fe.h>
 #include <sstream>
@@ -25,7 +26,7 @@ class pg_result_guard {
   public:
 	explicit pg_result_guard(PGresult* res) : result_(res) {}
 	~pg_result_guard() {
-		if (result_) {
+		if (result_ != nullptr) {
 			PQclear(result_);
 		}
 	}
@@ -80,10 +81,10 @@ std::string convert_placeholders_to_postgres(std::string_view sql) {
 
 	int param_index{ 1 };
 	std::string dollar_tag;
-	enum class state_t { normal, single_quote, double_quote, line_comment, block_comment, dollar_quote };
+	enum class state_t : std::uint8_t { normal, single_quote, double_quote, line_comment, block_comment, dollar_quote };
 	state_t state = state_t::normal;
 
-	auto is_tag_char = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+	auto is_tag_char = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; };
 
 	for (std::size_t i = 0; i < sql.size(); ++i) {
 		const char c = sql[i];
@@ -186,11 +187,10 @@ std::string convert_placeholders_to_postgres(std::string_view sql) {
 // postgres_statement implementation
 // ============================================================================
 
-postgres_statement::postgres_statement(PGconn* db)
-	: statement(), db_(db), result_(nullptr), current_row_(-1), num_rows_(0), num_fields_(0), affected_rows_(0) {}
+postgres_statement::postgres_statement(PGconn* db) : statement(), db_(db) {}
 
 postgres_statement::~postgres_statement() {
-	if (result_) {
+	if (result_ != nullptr) {
 		PQclear(result_);
 		result_ = nullptr;
 	}
@@ -239,7 +239,7 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 				break;
 
 			case type_bool:
-				param_strings.push_back(param.as_bool() ? "t" : "f");
+				param_strings.emplace_back(param.as_bool() ? "t" : "f");
 				param_values.push_back(param_strings.back().c_str());
 				break;
 
@@ -282,7 +282,7 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 }
 
 bool postgres_statement::fetch() {
-	if (!result_ || num_rows_ == 0) {
+	if (result_ == nullptr || num_rows_ == 0) {
 		return false;
 	}
 
@@ -291,7 +291,7 @@ bool postgres_statement::fetch() {
 }
 
 void postgres_statement::get_attributes(attribute_map& attributes) {
-	if (!result_ || current_row_ < 0 || current_row_ >= num_rows_) {
+	if (result_ == nullptr || current_row_ < 0 || current_row_ >= num_rows_) {
 		return;
 	}
 
@@ -303,8 +303,8 @@ void postgres_statement::get_attributes(attribute_map& attributes) {
 
 attribute postgres_statement::field_as_attribute(PGresult* result, int row, int column) {
 	// Check for NULL
-	if (PQgetisnull(result, row, column)) {
-		return attribute();
+	if (PQgetisnull(result, row, column) != 0) {
+		return {};
 	}
 
 	// Get the value as a string
@@ -318,29 +318,29 @@ attribute postgres_statement::field_as_attribute(PGresult* result, int row, int 
 	// These are standard and should be consistent across PostgreSQL versions
 	switch (type_oid) {
 	case 16: // BOOLOID
-		return attribute(value_str[0] == 't' || value_str[0] == 'T');
+		return { value_str[0] == 't' || value_str[0] == 'T' };
 
 	case 20: // INT8OID
 	case 21: // INT2OID
 	case 23: // INT4OID
-		return attribute(std::stoll(value_str));
+		return { std::stoll(value_str) };
 
 	case 700:  // FLOAT4OID
 	case 701:  // FLOAT8OID
 	case 1700: // NUMERICOID
-		return attribute(std::stod(value_str));
+		return { std::stod(value_str) };
 
 	case 1114: // TIMESTAMPOID
 	case 1184: // TIMESTAMPTZOID
 	case 1082: // DATEOID
-		return attribute(datetime::parse(normalize_postgres_datetime(std::string(value_str))));
+		return { datetime::parse(normalize_postgres_datetime(std::string(value_str))) };
 
 	case 25:   // TEXTOID
 	case 1043: // VARCHAROID
 	case 1042: // BPCHAROID
 	default:
 		// Text and unknown types - return as string
-		return attribute(std::string(value_str));
+		return { std::string(value_str) };
 	}
 }
 
@@ -368,7 +368,7 @@ postgres_adapter::postgres_adapter(const std::string& host, const std::string& u
 }
 
 postgres_adapter::~postgres_adapter() {
-	if (db_) {
+	if (db_ != nullptr) {
 		PQfinish(db_);
 		db_ = nullptr;
 	}
@@ -391,7 +391,7 @@ void postgres_adapter::limit(std::string& sql, long offset, long limit) const {
 }
 
 std::size_t postgres_adapter::insert_id() const {
-	if (!db_) {
+	if (db_ == nullptr) {
 		return 0;
 	}
 

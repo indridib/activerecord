@@ -20,6 +20,7 @@
 #include <sqlext.h>
 #include <sstream>
 #include <string>
+#include <type_traits>
 
 namespace ar {
 
@@ -63,6 +64,20 @@ std::string normalize_mssql_datetime(std::string value) {
 	}
 
 	return value;
+}
+
+bool is_insert(std::string_view sql) {
+	const std::size_t start{ sql.find_first_not_of(" \t\r\n") };
+	if (start == std::string_view::npos || sql.size() - start < 6) {
+		return false;
+	}
+	constexpr std::string_view keyword{ "insert" };
+	for (std::size_t i{ 0 }; i < keyword.size(); ++i) {
+		if (std::tolower(static_cast<unsigned char>(sql[start + i])) != keyword[i]) {
+			return false;
+		}
+	}
+	return true;
 }
 
 bool contains_order_by(std::string_view sql) {
@@ -195,6 +210,32 @@ void mssql_statement::execute(const std::string& command, const attribute_vector
 	}
 }
 
+std::size_t mssql_statement::read_insert_id() {
+	SQLRETURN ret{ SQL_SUCCESS };
+	while (num_columns_ == 0) {
+		ret = SQLMoreResults(stmt_);
+		if (ret == SQL_NO_DATA) {
+			return 0;
+		}
+		check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLMoreResults failed");
+		SQLSMALLINT cols{ 0 };
+		check_odbc_error(SQLNumResultCols(stmt_, &cols), SQL_HANDLE_STMT, stmt_, "SQLNumResultCols failed");
+		num_columns_ = cols;
+	}
+
+	SQLBIGINT id{ 0 };
+	SQLLEN indicator{ 0 };
+	ret = SQLFetch(stmt_);
+	if (ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO) {
+		ret = SQLGetData(stmt_, 1, SQL_C_SBIGINT, &id, 0, &indicator);
+	}
+	has_data_ = false; // the identity row has been consumed
+	if ((ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) || indicator == SQL_NULL_DATA || id <= 0) {
+		return 0;
+	}
+	return static_cast<std::size_t>(id);
+}
+
 bool mssql_statement::fetch() {
 	if (!has_data_) {
 		return false;
@@ -217,7 +258,7 @@ void mssql_statement::get_attributes(attribute_map& attributes) {
 		return;
 	}
 
-	for (int i = 1; i <= num_columns_; ++i) {
+	for (SQLUSMALLINT i = 1; i <= num_columns_; ++i) {
 		// Get column name
 		SQLCHAR column_name[256];
 		SQLSMALLINT name_length;
@@ -230,7 +271,8 @@ void mssql_statement::get_attributes(attribute_map& attributes) {
 	}
 }
 
-attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, int column_index) {
+attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, unsigned short column_index) {
+	static_assert(std::is_same_v<SQLUSMALLINT, unsigned short>, "header declares column_index as unsigned short");
 	// Get column type
 	SQLSMALLINT data_type;
 	SQLRETURN ret = SQLDescribeCol(stmt, column_index, nullptr, 0, nullptr, &data_type, nullptr, nullptr, nullptr);
@@ -377,7 +419,15 @@ mssql_adapter::~mssql_adapter() {
 
 std::unique_ptr<statement> mssql_adapter::query(const std::string& sql, const attribute_vector& values) {
 	auto stmt{ std::make_unique<mssql_statement>(dbc_) };
-	stmt->execute(sql, values);
+	if (is_insert(sql)) {
+		// Read the new identity in the same batch: SCOPE_IDENTITY() is NULL in a later batch because
+		// the prepared INSERT is its own scope, and @@IDENTITY would return an identity inserted by
+		// a trigger instead of this row's.
+		stmt->execute(sql + ";\nSELECT CAST(SCOPE_IDENTITY() AS BIGINT)", values);
+		last_insert_id_ = stmt->read_insert_id();
+	} else {
+		stmt->execute(sql, values);
+	}
 	return stmt;
 }
 
@@ -401,36 +451,7 @@ void mssql_adapter::limit(std::string& sql, long offset, long limit) const {
 }
 
 std::size_t mssql_adapter::insert_id() const {
-	if (!dbc_) {
-		return 0;
-	}
-	SQLHSTMT stmt{ nullptr };
-	SQLRETURN ret{ SQLAllocHandle(SQL_HANDLE_STMT, dbc_, &stmt) };
-	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
-		return 0;
-	}
-
-	const char* sql = "SELECT CAST(SCOPE_IDENTITY() AS BIGINT)";
-	ret = SQLExecDirect(stmt, (SQLCHAR*)sql, SQL_NTS);
-	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
-		SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-		return 0;
-	}
-
-	SQLBIGINT id{ 0 };
-	SQLLEN indicator{ 0 };
-	ret = SQLBindCol(stmt, 1, SQL_C_SBIGINT, &id, 0, &indicator);
-	if (ret != SQL_SUCCESS && ret != SQL_SUCCESS_WITH_INFO) {
-		SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-		return 0;
-	}
-
-	ret = SQLFetch(stmt);
-	SQLFreeHandle(SQL_HANDLE_STMT, stmt);
-	if ((ret == SQL_SUCCESS || ret == SQL_SUCCESS_WITH_INFO) && indicator != SQL_NULL_DATA) {
-		return static_cast<std::size_t>(id);
-	}
-	return 0;
+	return last_insert_id_;
 }
 
 void mssql_adapter::begin_transaction() {
