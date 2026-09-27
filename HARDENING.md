@@ -25,9 +25,10 @@ Checks 2-5 build with the MySQL and PostgreSQL adapters enabled, so they need th
 **WSL / Linux:** Ubuntu 24.04 (older releases ship compilers too old for C++23):
 
 ```bash
+# libtirpc-dev ... libtool: vcpkg needs them to build libmysql / libpq; unixodbc-dev: ODBC headers for check 4
 sudo apt update && sudo apt install -y build-essential g++-14 clang clang-tidy libclang-rt-18-dev \
   cmake ninja-build pkg-config zip unzip curl git python3 \
-  libtirpc-dev bison flex autoconf autoconf-archive automake libtool   # vcpkg libmysql / libpq builds
+  libtirpc-dev bison flex autoconf autoconf-archive automake libtool unixodbc-dev
 cd /mnt/c/dev/github/activerecord/vcpkg && ./bootstrap-vcpkg.sh -disableMetrics   # once; coexists with vcpkg.exe
 ```
 
@@ -108,12 +109,14 @@ cmake --build ~/ar-build/clang && ctest --test-dir ~/ar-build/clang --output-on-
 
 ```bash
 cmake -S $R -B ~/ar-build/tidy $COMMON "$VCPKG_OPTS" -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAR_CLANG_TIDY=ON
+  -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DAR_CLANG_TIDY=ON -DAR_MSSQL=ON
 cmake --build ~/ar-build/tidy --clean-first 2>&1 | tee ~/ar-build/tidy.log
 ! grep -n "warning:" ~/ar-build/tidy.log    # must print nothing; exit status 0 means clean
 ```
 
 clang-tidy runs inline during compilation, and any finding fails the build. `set -o pipefail` (in the shared setup) keeps that failure visible through `tee`. The `grep` is a backstop for findings from checks that are not promoted to errors: it lists any it finds, and its exit status is 0 only when there are none. `--clean-first` makes sure every file is re-analyzed.
+
+Only this check adds `-DAR_MSSQL=ON`: it compiles the MS-SQL adapter, its example and the `AR_MSSQL` test code against unixODBC so clang-tidy analyzes them, and it never runs tests. Checks 2, 3 and 5 run `ctest` and leave MS-SQL out, because no SQL Server is reachable from WSL; MS-SQL behaviour is tested on Windows (check 7).
 
 Two limitations:
 - It only works with Ninja or Makefile generators. CMake's Visual Studio generator silently ignores `CMAKE_CXX_CLANG_TIDY`, so there is no Windows equivalent of this check.
@@ -218,6 +221,7 @@ Every clang-tidy suppression in the codebase, with its reason. Add new entries h
 | `include/activerecord/transaction.h` (destructor) | `bugprone-empty-catch` | A destructor must not throw; rollback errors are swallowed on purpose |
 | `tests/integration/adapter_tests.cpp` (2x) | `bugprone-empty-catch` | Best-effort `DROP TABLE` in setup/teardown |
 | `tests/unit/transaction_test.cpp` | `bugprone-empty-catch` | The exception is the point of the test |
+| `src/adapters/mssql_adapter.cpp` (`check_odbc_error`) | `bugprone-easily-swappable-parameters` | `SQLRETURN` and `SQLSMALLINT` are both `short`; internal helper whose order follows ODBC's (return code, handle type, handle) |
 
 ### Waived adapter tests
 
@@ -228,7 +232,7 @@ _None._
 ## Known gaps
 
 - Sanitizers run only on Linux/Clang. MSVC builds are compiled but not sanitized.
-- MySQL and PostgreSQL are built and tested only on Linux, MS-SQL only on Windows (MSVC). The MS-SQL adapter is therefore not analyzed by clang-tidy or run under the sanitizers.
+- MySQL and PostgreSQL are built and tested only on Linux, MS-SQL only on Windows (MSVC). clang-tidy analyzes the MS-SQL adapter only in its Linux (unixODBC) preprocessor view (check 4); it is not analyzed as MSVC compiles it, and it does not run under the sanitizers.
 - Only the shared parameterized suite (`adapter_tests.cpp`) runs against every adapter; the richer integration suites are SQLite-only.
 - `ModelSizeTest.BaseModelSize` pins `sizeof(model)` exactly per standard library (MSVC Release/Debug, libstdc++). Any growth fails on purpose; if it is intended, update the budget in [tests/unit/model_size_test.cpp](tests/unit/model_size_test.cpp).
 - Clang 18 (Ubuntu 24.04 default) cannot use libstdc++ 14's `<expected>`. If the project adopts `std::expected`, install `clang-20` and use it for checks 3-5.

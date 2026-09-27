@@ -13,18 +13,12 @@
 #include <activerecord.h>
 #include <connection.h>
 
-// Forward declarations for ODBC types (actual header included in .cpp)
-#ifdef _WIN32
-typedef void* SQLHANDLE;
-typedef void* SQLHENV;
-typedef void* SQLHDBC;
-typedef void* SQLHSTMT;
-#else
-typedef void* SQLHANDLE;
-typedef void* SQLHENV;
-typedef void* SQLHDBC;
-typedef void* SQLHSTMT;
-#endif
+// Forward declarations for ODBC types (actual header included in .cpp). Both the Windows SDK and
+// unixODBC define these handles as void*, so these redeclarations are identical to theirs.
+using SQLHANDLE = void*;
+using SQLHENV = void*;
+using SQLHDBC = void*;
+using SQLHSTMT = void*;
 
 namespace ar {
 
@@ -48,11 +42,11 @@ class mssql_statement : public statement {
   private:
 	static attribute field_as_attribute(SQLHSTMT stmt, unsigned short column_index); // SQLUSMALLINT
 
-	SQLHDBC dbc_;				// Non-owning pointer to database connection
-	SQLHSTMT stmt_;				// Owned statement handle (freed in destructor)
-	int num_columns_;			// Number of columns in result
-	bool has_data_;				// Whether we have result data
-	std::size_t affected_rows_; // Rows affected by last execute
+	SQLHDBC dbc_;					  // Non-owning pointer to database connection
+	SQLHSTMT stmt_{ nullptr };		  // Owned statement handle (freed in destructor)
+	unsigned short num_columns_{ 0 }; // Number of columns in result
+	bool has_data_{ false };		  // Whether we have result data
+	std::size_t affected_rows_{ 0 };  // Rows affected by last execute
 };
 
 /**
