@@ -3,7 +3,7 @@
   "name": "activerecord",
   "version-string": "0.1.0",
   "description": "C++ Active Record pattern implementation with multiple database adapters",
-  "homepage": "https://github.com/yourusername/activerecord",
+  "homepage": "https://github.com/indridib/activerecord",
   "license": "MIT",
   "dependencies": [
     {

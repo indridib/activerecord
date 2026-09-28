@@ -17,7 +17,7 @@ The project includes vcpkg as a submodule and automated build scripts:
 
 ```cmd
 REM Clone with submodules
-git clone --recurse-submodules https://github.com/yourusername/activerecord.git
+git clone --recurse-submodules https://github.com/indridib/activerecord.git
 cd activerecord
 
 REM Bootstrap vcpkg

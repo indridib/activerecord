@@ -206,4 +206,4 @@ Following Active Record conventions:
 
 ## License
 
-MIT — see [LICENSE.MIT](LICENSE.MIT) for details.
+MIT — see [LICENSE](LICENSE) for details.
