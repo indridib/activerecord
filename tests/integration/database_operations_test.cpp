@@ -65,8 +65,7 @@ TEST_P(DatabaseOperationsTest, CreateAndSaveUser) {
 TEST_P(DatabaseOperationsTest, UpdateUser) {
 	// First, insert a user manually
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-				{ "Jane", "jane@example.com", 25 });
+	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)", { "Jane", "jane@example.com", 25 });
 
 	// Create model with attributes (simulating a loaded model)
 	User user;
@@ -88,8 +87,7 @@ TEST_P(DatabaseOperationsTest, UpdateUser) {
 
 TEST_P(DatabaseOperationsTest, DestroyDeletesPersistedRecord) {
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-				{ "DeleteMe", "delete@example.com", 22 });
+	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)", { "DeleteMe", "delete@example.com", 22 });
 
 	auto user = query<User>().where("name = ?", "DeleteMe").first_or_throw();
 	EXPECT_FALSE(user.is_new_record());
@@ -235,8 +233,7 @@ TEST_P(DatabaseOperationsTest, QueryWithLimit) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 10; i++) {
-		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ "User" + std::to_string(i), 20 + i });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User" + std::to_string(i), 20 + i });
 	}
 
 	// Query with LIMIT
@@ -251,8 +248,7 @@ TEST_P(DatabaseOperationsTest, QueryWithLimitAndOffset) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 10; i++) {
-		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ "User" + std::to_string(i), 20 + i });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User" + std::to_string(i), 20 + i });
 	}
 
 	// Query with LIMIT and OFFSET
@@ -268,8 +264,7 @@ TEST_P(DatabaseOperationsTest, QueryCount) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 7; i++) {
-		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ "User" + std::to_string(i), 20 + i });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User" + std::to_string(i), 20 + i });
 	}
 
 	// Count all
@@ -297,8 +292,7 @@ TEST_P(DatabaseOperationsTest, QueryCountWithWhere) {
 TEST_P(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 7; i++) {
-		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ "User" + std::to_string(i), 20 + i });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User" + std::to_string(i), 20 + i });
 	}
 
 	query<User> q;
@@ -309,8 +303,7 @@ TEST_P(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
 TEST_P(DatabaseOperationsTest, QueryCountIgnoresOrder) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 5; i++) {
-		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					{ "User" + std::to_string(i), 20 + i });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User" + std::to_string(i), 20 + i });
 	}
 
 	query<User> q;
@@ -504,9 +497,8 @@ TEST_P(DatabaseOperationsTest, ComplexQuery) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 20; i++) {
-		conn->query(
-			"INSERT INTO users (name, age, active) VALUES (?, ?, ?)",
-			{ "User" + std::to_string(i), 20 + i, i % 2 == 0 }); // Even IDs are active
+		conn->query("INSERT INTO users (name, age, active) VALUES (?, ?, ?)",
+					{ "User" + std::to_string(i), 20 + i, i % 2 == 0 }); // Even IDs are active
 	}
 
 	// Complex query: active users, age > 25, ordered by age desc, limit 5
@@ -526,8 +518,7 @@ TEST_P(DatabaseOperationsTest, ComplexQuery) {
 TEST_P(DatabaseOperationsTest, ModelToJson) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
-	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-				{ "John", "john@example.com", 30 });
+	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)", { "John", "john@example.com", 30 });
 
 	// Load into model
 	query<User> q;
