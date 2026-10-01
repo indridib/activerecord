@@ -67,16 +67,17 @@ add_test(NAME AllUnitTests COMMAND unit_tests)
 # ==============================================================================
 
 if(AR_SQLITE OR AR_MYSQL OR AR_POSTGRES OR AR_MSSQL)
+  # Parameterized over every enabled adapter (see integration/test_adapters.h)
   set(INTEGRATION_TEST_SOURCES
-    integration/adapter_tests.cpp  # Parameterized tests for all adapters
+    integration/adapter_tests.cpp
+    integration/database_operations_test.cpp
+    integration/datetime_integration_test.cpp
   )
 
-  # Add adapter-specific tests
+  # SQLite-specific adapter tests
   if(AR_SQLITE)
     list(APPEND INTEGRATION_TEST_SOURCES
       integration/sqlite_adapter_test.cpp
-      integration/database_operations_test.cpp
-      integration/datetime_integration_test.cpp
     )
   endif()
 

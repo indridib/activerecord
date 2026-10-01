@@ -192,12 +192,20 @@ void mssql_statement::execute(const std::string& command, const attribute_vector
 
 		// Execute while bound parameter storage is still alive.
 		ret = SQLExecute(stmt_);
-		check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLExecute failed");
 	} else {
 		// Execute the statement
 		ret = SQLExecute(stmt_);
-		check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLExecute failed");
 	}
+
+	// SQL_NO_DATA is not an error: an UPDATE or DELETE that matched no rows. Report 0 affected
+	// rows so callers can react (e.g. model's optimistic locking throws ex::stale_record).
+	if (ret == SQL_NO_DATA) {
+		num_columns_ = 0;
+		has_data_ = false;
+		affected_rows_ = 0;
+		return;
+	}
+	check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLExecute failed");
 
 	// Get number of columns
 	SQLSMALLINT cols;

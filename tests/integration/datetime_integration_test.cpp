@@ -8,18 +8,15 @@
 // Integration tests for datetime with database adapters
 // ============================================================================
 
+#include "test_adapters.h"
+
 #include <attribute.h>
 #include <datetime.h>
 #include <gtest/gtest.h>
 #include <model.h>
 
-#ifdef AR_SQLITE
-#include <adapters/sqlite_adapter.h>
-#endif
-
 using namespace ar;
-
-#ifdef AR_SQLITE
+using namespace ar::test;
 
 // ============================================================================
 // Test Model with DateTime Fields
@@ -49,30 +46,26 @@ class Event : public model {
 // Test Fixture
 // ============================================================================
 
-class DateTimeIntegrationTest : public ::testing::Test {
+// A model over a native date/time column (not a Unix-timestamp integer)
+class NativeTime : public model {
+  public:
+	NativeTime() : model(st_table_name(), st_primary_key()) {}
+	static const char* st_table_name() { return "native_times"; }
+	static const char* st_primary_key() { return "id"; }
+};
+
+class DateTimeIntegrationTest : public AdapterTest {
   protected:
-	void SetUp() override {
-		// Use in-memory SQLite database
-		auto adapter = std::make_shared<sqlite_adapter>(":memory:");
-
-		config::connection_map connections;
-		connections["default"] = adapter;
-		config::instance().set_connections(connections, "default");
-
-		// Create events table
-		std::string create_sql = R"(
-			CREATE TABLE events (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				name TEXT NOT NULL,
-				created_at INTEGER,
-				starts_at INTEGER
-			)
-		)";
-		adapter->query(create_sql);
-	}
-
-	void TearDown() override {
-		// Clean up
+	table_list table_definitions(AdapterType type) const override {
+		const std::string ts{ timestamp_type(type) };
+		return {
+			// Datetimes stored as Unix timestamps (project convention)
+			{ "events", std::format("{}, name {} NOT NULL, created_at {}, starts_at {}", pk_column(type),
+									text_type(type), ts, ts) },
+			// A native date/time column; named without an _at/_date/_time suffix so no
+			// adapter can recognize it by name rather than by its declared type
+			{ "native_times", std::format("{}, happened {}", pk_column(type), native_datetime_type(type)) },
+		};
 	}
 };
 
@@ -80,7 +73,7 @@ class DateTimeIntegrationTest : public ::testing::Test {
 // Basic DateTime Storage and Retrieval Tests
 // ============================================================================
 
-TEST_F(DateTimeIntegrationTest, InsertRecordWithDateTime) {
+TEST_P(DateTimeIntegrationTest, InsertRecordWithDateTime) {
 	Event event;
 	event.set_name("Conference 2024");
 	event.set_created_at(datetime::now());
@@ -90,7 +83,7 @@ TEST_F(DateTimeIntegrationTest, InsertRecordWithDateTime) {
 	EXPECT_GT(event.id(), 0);
 }
 
-TEST_F(DateTimeIntegrationTest, RetrieveDateTimeFromDatabase) {
+TEST_P(DateTimeIntegrationTest, RetrieveDateTimeFromDatabase) {
 	// Insert a record
 	Event event;
 	event.set_name("Meeting");
@@ -104,8 +97,14 @@ TEST_F(DateTimeIntegrationTest, RetrieveDateTimeFromDatabase) {
 
 	EXPECT_EQ("Meeting", retrieved.name());
 
+	// Contract on every adapter: the Unix-timestamp column reads back as the same datetime
+	// through as_date() (docs/attributes.md). The attribute's type() is adapter-specific: only
+	// SQLite infers type_date for INTEGER columns named *_at / *_date / *_time; the others
+	// return the stored integer.
+	if (adapter_type() == AdapterType::SQLite) {
+		EXPECT_EQ(type_date, retrieved.get("starts_at").type());
+	}
 	datetime retrieved_time = retrieved.starts_at();
-	EXPECT_EQ(type_date, retrieved.get("starts_at").type());
 	EXPECT_EQ(2024, retrieved_time.year());
 	EXPECT_EQ(6, retrieved_time.month());
 	EXPECT_EQ(15, retrieved_time.day());
@@ -113,7 +112,7 @@ TEST_F(DateTimeIntegrationTest, RetrieveDateTimeFromDatabase) {
 	EXPECT_EQ(30, retrieved_time.minute());
 }
 
-TEST_F(DateTimeIntegrationTest, UpdateDateTimeField) {
+TEST_P(DateTimeIntegrationTest, UpdateDateTimeField) {
 	// Create event
 	Event event;
 	event.set_name("Workshop");
@@ -141,7 +140,7 @@ TEST_F(DateTimeIntegrationTest, UpdateDateTimeField) {
 // Query Tests with DateTime
 // ============================================================================
 
-TEST_F(DateTimeIntegrationTest, QueryByDateRange) {
+TEST_P(DateTimeIntegrationTest, QueryByDateRange) {
 	// Insert events at different times
 	Event event1;
 	event1.set_name("Event 1");
@@ -170,7 +169,7 @@ TEST_F(DateTimeIntegrationTest, QueryByDateRange) {
 // NULL DateTime Tests
 // ============================================================================
 
-TEST_F(DateTimeIntegrationTest, NullDateTimeField) {
+TEST_P(DateTimeIntegrationTest, NullDateTimeField) {
 	Event event;
 	event.set_name("TBD Event");
 	// Don't set starts_at - should remain NULL
@@ -188,7 +187,7 @@ TEST_F(DateTimeIntegrationTest, NullDateTimeField) {
 // DateTime Format Tests
 // ============================================================================
 
-TEST_F(DateTimeIntegrationTest, DateOnlyStorage) {
+TEST_P(DateTimeIntegrationTest, DateOnlyStorage) {
 	Event event;
 	event.set_name("Birthday Party");
 	datetime date_only{ 2024, 12, 25 }; // Christmas, no time
@@ -206,7 +205,7 @@ TEST_F(DateTimeIntegrationTest, DateOnlyStorage) {
 	EXPECT_EQ(0, retrieved_date.minute());
 }
 
-TEST_F(DateTimeIntegrationTest, RoundTripFormatting) {
+TEST_P(DateTimeIntegrationTest, RoundTripFormatting) {
 	// Test that datetime survives database round-trip
 	datetime original{ 2024, 6, 15, 14, 30, 45 };
 
@@ -231,7 +230,7 @@ TEST_F(DateTimeIntegrationTest, RoundTripFormatting) {
 // Practical Usage Examples
 // ============================================================================
 
-TEST_F(DateTimeIntegrationTest, CreatedAtTimestamp) {
+TEST_P(DateTimeIntegrationTest, CreatedAtTimestamp) {
 	// Common pattern: Set created_at when creating record
 	Event event;
 	event.set_name("New Event");
@@ -247,7 +246,7 @@ TEST_F(DateTimeIntegrationTest, CreatedAtTimestamp) {
 	EXPECT_EQ(datetime::now().year(), created.year()); // Same year as now
 }
 
-TEST_F(DateTimeIntegrationTest, ScheduleFutureEvent) {
+TEST_P(DateTimeIntegrationTest, ScheduleFutureEvent) {
 	// Schedule event for future date
 	Event event;
 	event.set_name("Future Conference");
@@ -264,4 +263,33 @@ TEST_F(DateTimeIntegrationTest, ScheduleFutureEvent) {
 	EXPECT_EQ(2025, retrieved.starts_at().year());
 }
 
-#endif // AR_SQLITE
+// ============================================================================
+// Native date/time columns (runtime contract: SQL date/time/timestamp columns
+// are read as ar::datetime)
+// ============================================================================
+
+TEST_P(DateTimeIntegrationTest, NativeColumnReadsAsDatetime) {
+	// Written as a SQL literal: ar::datetime values are bound as Unix timestamps, which a
+	// native date/time column would not accept
+	adapter_->query("INSERT INTO native_times (happened) VALUES ('2024-06-15 14:30:45')", {});
+
+	NativeTime row = query<NativeTime>().first_or_throw();
+	const attribute& happened = row.get("happened");
+	ASSERT_EQ(type_date, happened.type());
+
+	// Compare components, not the epoch value, so the result does not depend on the time zone
+	const datetime value = happened.as_date();
+	EXPECT_EQ(2024, value.year());
+	EXPECT_EQ(6, value.month());
+	EXPECT_EQ(15, value.day());
+	EXPECT_EQ(14, value.hour());
+	EXPECT_EQ(30, value.minute());
+	EXPECT_EQ(45, value.second());
+}
+
+// ============================================================================
+// Test Instantiation
+// ============================================================================
+
+INSTANTIATE_TEST_SUITE_P(AllAdapters, DateTimeIntegrationTest, ::testing::ValuesIn(enabled_adapters()),
+						 adapter_param_name);

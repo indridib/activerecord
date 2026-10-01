@@ -4,3 +4,6 @@
 InheritParentConfig: true
 Checks: >
   -bugprone-unchecked-optional-access
+# Also report findings in shared test headers (tests/integration/test_adapters.h); the root
+# filter only covers include/activerecord/. Does not match GoogleTest's headers under _deps/.
+HeaderFilterRegex: '/(include/activerecord|tests/integration)/'

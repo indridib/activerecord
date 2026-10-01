@@ -8,8 +8,9 @@
 // End-to-end integration tests with model + adapter + query builder
 // ==============================================================================
 
+#include "test_adapters.h"
+
 #include <activerecord.h>
-#include <adapters/sqlite_adapter.h>
 #include <config.h>
 #include <datetime.h>
 #include <gtest/gtest.h>
@@ -17,6 +18,7 @@
 #include <sql_builder.h>
 
 using namespace ar;
+using namespace ar::test;
 
 // ==============================================================================
 // Test Model
@@ -38,38 +40,16 @@ class User : public model {
 // Test Fixture
 // ==============================================================================
 
-class DatabaseOperationsTest : public ::testing::Test {
+class DatabaseOperationsTest : public AdapterTest {
   protected:
-	void SetUp() override {
-		// Create in-memory database
-		auto adapter = std::make_shared<sqlite_adapter>(":memory:");
-
-		// Configure global connection
-		config::connection_map connections;
-		connections["default"] = adapter;
-		config::instance().set_connections(connections, "default");
-
-		// Create table
-		adapter->query("CREATE TABLE users ("
-					   "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-					   "name TEXT NOT NULL, "
-					   "email TEXT, "
-					   "age INTEGER, "
-					   "active BOOLEAN DEFAULT 1"
-					   ")",
-					   {});
-	}
-
-	void TearDown() override {
-		// Clean up
-	}
+	table_list table_definitions(AdapterType type) const override { return { { "users", users_columns(type) } }; }
 };
 
 // ==============================================================================
 // Model CRUD Tests
 // ==============================================================================
 
-TEST_F(DatabaseOperationsTest, CreateAndSaveUser) {
+TEST_P(DatabaseOperationsTest, CreateAndSaveUser) {
 	User user;
 	user.set("name", "John Doe");
 	user.set("email", "john@example.com");
@@ -82,7 +62,7 @@ TEST_F(DatabaseOperationsTest, CreateAndSaveUser) {
 	EXPECT_TRUE(saved);
 }
 
-TEST_F(DatabaseOperationsTest, UpdateUser) {
+TEST_P(DatabaseOperationsTest, UpdateUser) {
 	// First, insert a user manually
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
@@ -106,7 +86,7 @@ TEST_F(DatabaseOperationsTest, UpdateUser) {
 	EXPECT_FALSE(user.is_dirty());
 }
 
-TEST_F(DatabaseOperationsTest, DestroyDeletesPersistedRecord) {
+TEST_P(DatabaseOperationsTest, DestroyDeletesPersistedRecord) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
 				{ "DeleteMe", "delete@example.com", 22 });
@@ -121,7 +101,7 @@ TEST_F(DatabaseOperationsTest, DestroyDeletesPersistedRecord) {
 	EXPECT_FALSE(deleted.has_value());
 }
 
-TEST_F(DatabaseOperationsTest, SetMultipleAttributes) {
+TEST_P(DatabaseOperationsTest, SetMultipleAttributes) {
 	User user;
 	attribute_map attrs;
 	attrs["name"] = "Alice";
@@ -139,7 +119,7 @@ TEST_F(DatabaseOperationsTest, SetMultipleAttributes) {
 // Query Builder Tests
 // ==============================================================================
 
-TEST_F(DatabaseOperationsTest, QueryAll) {
+TEST_P(DatabaseOperationsTest, QueryAll) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User1", 20 });
@@ -154,7 +134,7 @@ TEST_F(DatabaseOperationsTest, QueryAll) {
 	EXPECT_FALSE(users[0].is_new_record());
 }
 
-TEST_F(DatabaseOperationsTest, QueryWithWhere) {
+TEST_P(DatabaseOperationsTest, QueryWithWhere) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Young", 20 });
@@ -169,38 +149,7 @@ TEST_F(DatabaseOperationsTest, QueryWithWhere) {
 	EXPECT_EQ("Old", users[0].get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryToSqlIncludesCurrentScope) {
-	query<User> q;
-	q.select("id, name").where("age > ?", 18).order("name ASC").limit(5).offset(2);
-
-	const std::string sql = q.to_sql();
-	EXPECT_NE(std::string::npos, sql.find("SELECT id, name FROM users"));
-	EXPECT_NE(std::string::npos, sql.find("WHERE age > ?"));
-	EXPECT_NE(std::string::npos, sql.find("ORDER BY name ASC"));
-	EXPECT_NE(std::string::npos, sql.find("LIMIT 5"));
-	EXPECT_NE(std::string::npos, sql.find("OFFSET 2"));
-}
-
-TEST_F(DatabaseOperationsTest, QueryBindValuesExposeWhereParameters) {
-	query<User> q;
-	q.where("age > ? AND active = ?", { 18, true });
-
-	const auto& values = q.bind_values();
-	ASSERT_EQ(2u, values.size());
-	EXPECT_EQ(18, values[0].as_integer());
-	EXPECT_TRUE(values[1].as_bool());
-}
-
-TEST_F(DatabaseOperationsTest, QueryOrderReplacesPreviousOrder) {
-	query<User> q;
-	q.order("name ASC").order("id DESC");
-
-	const std::string sql = q.to_sql();
-	EXPECT_NE(std::string::npos, sql.find("ORDER BY id DESC"));
-	EXPECT_EQ(std::string::npos, sql.find("ORDER BY name ASC"));
-}
-
-TEST_F(DatabaseOperationsTest, QueryWithOrder) {
+TEST_P(DatabaseOperationsTest, QueryWithOrder) {
 	// Insert test data in random order
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "C", 30 });
@@ -218,7 +167,7 @@ TEST_F(DatabaseOperationsTest, QueryWithOrder) {
 	EXPECT_EQ("C", users[2].get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryWhereInFiltersRows) {
+TEST_P(DatabaseOperationsTest, QueryWhereInFiltersRows) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Age20", 20 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Age30", 30 });
@@ -232,7 +181,7 @@ TEST_F(DatabaseOperationsTest, QueryWhereInFiltersRows) {
 	EXPECT_EQ("Age40", users[1].get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryWhereInEmptyReturnsNoRows) {
+TEST_P(DatabaseOperationsTest, QueryWhereInEmptyReturnsNoRows) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "OnlyUser", 33 });
 
@@ -243,7 +192,7 @@ TEST_F(DatabaseOperationsTest, QueryWhereInEmptyReturnsNoRows) {
 	EXPECT_TRUE(users.empty());
 }
 
-TEST_F(DatabaseOperationsTest, QueryWhereNotFiltersRows) {
+TEST_P(DatabaseOperationsTest, QueryWhereNotFiltersRows) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Young", 18 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Adult", 35 });
@@ -255,7 +204,7 @@ TEST_F(DatabaseOperationsTest, QueryWhereNotFiltersRows) {
 	EXPECT_EQ("Adult", users[0].get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryChainedWhereHelpersAreCombinedWithAnd) {
+TEST_P(DatabaseOperationsTest, QueryChainedWhereHelpersAreCombinedWithAnd) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age, active) VALUES (?, ?, ?)", { "A", 20, true });
 	conn->query("INSERT INTO users (name, age, active) VALUES (?, ?, ?)", { "B", 40, true });
@@ -268,7 +217,7 @@ TEST_F(DatabaseOperationsTest, QueryChainedWhereHelpersAreCombinedWithAnd) {
 	EXPECT_EQ("B", users[0].get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryDistinctReturnsUniqueValues) {
+TEST_P(DatabaseOperationsTest, QueryDistinctReturnsUniqueValues) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A1", 21 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A2", 21 });
@@ -282,7 +231,7 @@ TEST_F(DatabaseOperationsTest, QueryDistinctReturnsUniqueValues) {
 	EXPECT_EQ(35, rows[1].get("age").as_integer());
 }
 
-TEST_F(DatabaseOperationsTest, QueryWithLimit) {
+TEST_P(DatabaseOperationsTest, QueryWithLimit) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 10; i++) {
@@ -298,7 +247,7 @@ TEST_F(DatabaseOperationsTest, QueryWithLimit) {
 	EXPECT_EQ(3, users.size());
 }
 
-TEST_F(DatabaseOperationsTest, QueryWithLimitAndOffset) {
+TEST_P(DatabaseOperationsTest, QueryWithLimitAndOffset) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 10; i++) {
@@ -315,7 +264,7 @@ TEST_F(DatabaseOperationsTest, QueryWithLimitAndOffset) {
 	// Should get users at index 3 and 4
 }
 
-TEST_F(DatabaseOperationsTest, QueryCount) {
+TEST_P(DatabaseOperationsTest, QueryCount) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 7; i++) {
@@ -330,7 +279,7 @@ TEST_F(DatabaseOperationsTest, QueryCount) {
 	EXPECT_EQ(7, count);
 }
 
-TEST_F(DatabaseOperationsTest, QueryCountWithWhere) {
+TEST_P(DatabaseOperationsTest, QueryCountWithWhere) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Young1", 20 });
@@ -345,7 +294,7 @@ TEST_F(DatabaseOperationsTest, QueryCountWithWhere) {
 	EXPECT_EQ(2, count);
 }
 
-TEST_F(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
+TEST_P(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 7; i++) {
 		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
@@ -357,7 +306,7 @@ TEST_F(DatabaseOperationsTest, QueryCountIgnoresLimitAndOffset) {
 	EXPECT_EQ(7, q.count());
 }
 
-TEST_F(DatabaseOperationsTest, QueryCountIgnoresOrder) {
+TEST_P(DatabaseOperationsTest, QueryCountIgnoresOrder) {
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 5; i++) {
 		conn->query("INSERT INTO users (name, age) VALUES (?, ?)",
@@ -369,7 +318,7 @@ TEST_F(DatabaseOperationsTest, QueryCountIgnoresOrder) {
 	EXPECT_EQ(5, q.count());
 }
 
-TEST_F(DatabaseOperationsTest, QueryExists) {
+TEST_P(DatabaseOperationsTest, QueryExists) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Test", 25 });
@@ -384,7 +333,7 @@ TEST_F(DatabaseOperationsTest, QueryExists) {
 	EXPECT_FALSE(q2.exists());
 }
 
-TEST_F(DatabaseOperationsTest, QueryDeleteAllWithWhere) {
+TEST_P(DatabaseOperationsTest, QueryDeleteAllWithWhere) {
 	auto conn{ config::instance().get_connection() };
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 20 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 35 });
@@ -400,7 +349,7 @@ TEST_F(DatabaseOperationsTest, QueryDeleteAllWithWhere) {
 	EXPECT_EQ("A", first.get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryFind) {
+TEST_P(DatabaseOperationsTest, QueryFind) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "FindMe", 25 });
@@ -421,7 +370,7 @@ TEST_F(DatabaseOperationsTest, QueryFind) {
 	EXPECT_FALSE(user.is_new_record());
 }
 
-TEST_F(DatabaseOperationsTest, QueryFindMultipleIds) {
+TEST_P(DatabaseOperationsTest, QueryFindMultipleIds) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "FindA", 21 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "FindB", 22 });
@@ -444,13 +393,13 @@ TEST_F(DatabaseOperationsTest, QueryFindMultipleIds) {
 	EXPECT_TRUE(has_c);
 }
 
-TEST_F(DatabaseOperationsTest, QueryFindMultipleIdsEmptyInputReturnsEmpty) {
+TEST_P(DatabaseOperationsTest, QueryFindMultipleIdsEmptyInputReturnsEmpty) {
 	query<User> q;
 	auto users = q.find(std::vector<long>{});
 	EXPECT_TRUE(users.empty());
 }
 
-TEST_F(DatabaseOperationsTest, QueryFirst) {
+TEST_P(DatabaseOperationsTest, QueryFirst) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "First", 10 });
@@ -465,27 +414,27 @@ TEST_F(DatabaseOperationsTest, QueryFirst) {
 	EXPECT_EQ("First", first->get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryFirstReturnsNulloptWhenEmpty) {
+TEST_P(DatabaseOperationsTest, QueryFirstReturnsNulloptWhenEmpty) {
 	query<User> q;
 	EXPECT_FALSE(q.first().has_value());
 }
 
-TEST_F(DatabaseOperationsTest, QueryLastReturnsNulloptWhenEmpty) {
+TEST_P(DatabaseOperationsTest, QueryLastReturnsNulloptWhenEmpty) {
 	query<User> q;
 	EXPECT_FALSE(q.last().has_value());
 }
 
-TEST_F(DatabaseOperationsTest, QueryFirstOrThrowThrowsWhenEmpty) {
+TEST_P(DatabaseOperationsTest, QueryFirstOrThrowThrowsWhenEmpty) {
 	query<User> q;
 	EXPECT_THROW(q.first_or_throw(), ex::item_not_found);
 }
 
-TEST_F(DatabaseOperationsTest, QueryLastOrThrowThrowsWhenEmpty) {
+TEST_P(DatabaseOperationsTest, QueryLastOrThrowThrowsWhenEmpty) {
 	query<User> q;
 	EXPECT_THROW(q.last_or_throw(), ex::item_not_found);
 }
 
-TEST_F(DatabaseOperationsTest, QueryLastUsesPrimaryKeyDescWhenNoOrder) {
+TEST_P(DatabaseOperationsTest, QueryLastUsesPrimaryKeyDescWhenNoOrder) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "First", 10 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Last", 20 });
@@ -496,7 +445,7 @@ TEST_F(DatabaseOperationsTest, QueryLastUsesPrimaryKeyDescWhenNoOrder) {
 	EXPECT_EQ("Last", last->get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryLastRespectsReversedOrder) {
+TEST_P(DatabaseOperationsTest, QueryLastRespectsReversedOrder) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 10 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 20 });
@@ -509,7 +458,7 @@ TEST_F(DatabaseOperationsTest, QueryLastRespectsReversedOrder) {
 	EXPECT_EQ("C", last->get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QueryFirstOrThrowAndLastOrThrowReturnRecords) {
+TEST_P(DatabaseOperationsTest, QueryFirstOrThrowAndLastOrThrowReturnRecords) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 10 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 20 });
@@ -525,7 +474,7 @@ TEST_F(DatabaseOperationsTest, QueryFirstOrThrowAndLastOrThrowReturnRecords) {
 	EXPECT_EQ("B", last.get("name").as_string());
 }
 
-TEST_F(DatabaseOperationsTest, QuerySupportsRangeBasedIteration) {
+TEST_P(DatabaseOperationsTest, QuerySupportsRangeBasedIteration) {
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "A", 10 });
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "B", 20 });
@@ -551,7 +500,7 @@ TEST_F(DatabaseOperationsTest, QuerySupportsRangeBasedIteration) {
 // Complex Query Tests
 // ==============================================================================
 
-TEST_F(DatabaseOperationsTest, ComplexQuery) {
+TEST_P(DatabaseOperationsTest, ComplexQuery) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	for (int i = 0; i < 20; i++) {
@@ -574,7 +523,7 @@ TEST_F(DatabaseOperationsTest, ComplexQuery) {
 // Model Serialization Tests
 // ==============================================================================
 
-TEST_F(DatabaseOperationsTest, ModelToJson) {
+TEST_P(DatabaseOperationsTest, ModelToJson) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
@@ -592,7 +541,7 @@ TEST_F(DatabaseOperationsTest, ModelToJson) {
 	EXPECT_NE(std::string::npos, json.find("\"email\""));
 }
 
-TEST_F(DatabaseOperationsTest, ModelToXml) {
+TEST_P(DatabaseOperationsTest, ModelToXml) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, email) VALUES (?, ?)", { "Jane", "jane@example.com" });
@@ -613,7 +562,7 @@ TEST_F(DatabaseOperationsTest, ModelToXml) {
 // Dirty Tracking Integration Tests
 // ==============================================================================
 
-TEST_F(DatabaseOperationsTest, DirtyTrackingAfterLoad) {
+TEST_P(DatabaseOperationsTest, DirtyTrackingAfterLoad) {
 	// Insert test data
 	auto conn = config::instance().get_connection();
 	conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Test", 25 });
@@ -635,6 +584,52 @@ TEST_F(DatabaseOperationsTest, DirtyTrackingAfterLoad) {
 	user->save();
 	EXPECT_FALSE(user->is_dirty());
 }
+
+#ifdef AR_SQLITE
+// ==============================================================================
+// Generated-SQL tests (SQLite only): they assert query-builder output, which is
+// adapter-specific text (e.g. MS-SQL uses OFFSET ... FETCH instead of LIMIT)
+// ==============================================================================
+
+class QueryBuilderSqlTest : public ::testing::Test {
+  protected:
+	void SetUp() override {
+		config::instance().set_connections({ { "default", create_connection(AdapterType::SQLite) } }, "default");
+	}
+	void TearDown() override { config::instance().set_connections({}); }
+};
+
+TEST_F(QueryBuilderSqlTest, QueryToSqlIncludesCurrentScope) {
+	query<User> q;
+	q.select("id, name").where("age > ?", 18).order("name ASC").limit(5).offset(2);
+
+	const std::string sql = q.to_sql();
+	EXPECT_NE(std::string::npos, sql.find("SELECT id, name FROM users"));
+	EXPECT_NE(std::string::npos, sql.find("WHERE age > ?"));
+	EXPECT_NE(std::string::npos, sql.find("ORDER BY name ASC"));
+	EXPECT_NE(std::string::npos, sql.find("LIMIT 5"));
+	EXPECT_NE(std::string::npos, sql.find("OFFSET 2"));
+}
+
+TEST_F(QueryBuilderSqlTest, QueryBindValuesExposeWhereParameters) {
+	query<User> q;
+	q.where("age > ? AND active = ?", { 18, true });
+
+	const auto& values = q.bind_values();
+	ASSERT_EQ(2u, values.size());
+	EXPECT_EQ(18, values[0].as_integer());
+	EXPECT_TRUE(values[1].as_bool());
+}
+
+TEST_F(QueryBuilderSqlTest, QueryOrderReplacesPreviousOrder) {
+	query<User> q;
+	q.order("name ASC").order("id DESC");
+
+	const std::string sql = q.to_sql();
+	EXPECT_NE(std::string::npos, sql.find("ORDER BY id DESC"));
+	EXPECT_EQ(std::string::npos, sql.find("ORDER BY name ASC"));
+}
+#endif
 
 // ==============================================================================
 // Timestamp & Version Model
@@ -661,32 +656,21 @@ class PlainItem : public model {
 // Timestamp & Version Test Fixture
 // ==============================================================================
 
-class TimestampVersionTest : public ::testing::Test {
+class TimestampVersionTest : public AdapterTest {
   protected:
-	void SetUp() override {
-		auto adapter = std::make_shared<sqlite_adapter>(":memory:");
-
-		config::connection_map connections;
-		connections["default"] = adapter;
-		config::instance().set_connections(connections, "default");
-
-		// Table with timestamp and version columns
-		adapter->query("CREATE TABLE timestamped_users ("
-					   "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-					   "name TEXT NOT NULL, "
-					   "email TEXT, "
-					   "created_at DATETIME, "
-					   "updated_at DATETIME, "
-					   "version INTEGER"
-					   ")",
-					   {});
-
-		// Table without timestamp/version columns
-		adapter->query("CREATE TABLE plain_items ("
-					   "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-					   "name TEXT NOT NULL"
-					   ")",
-					   {});
+	table_list table_definitions(AdapterType type) const override {
+		const std::string text{ text_type(type) };
+		const std::string ts{ timestamp_type(type) };
+		return {
+			// Table with timestamp and version columns (timestamps stored as Unix time)
+			{ "timestamped_users",
+			  std::format("{}, name {} NOT NULL, email {}, created_at {}, updated_at {}, version INTEGER",
+						  pk_column(type), text, text, ts, ts) },
+			// Table without timestamp/version columns
+			{ "plain_items", std::format("{}, name {} NOT NULL", pk_column(type), text) },
+			// Table with only created_at (no updated_at, no version)
+			{ "partial_items", std::format("{}, name {} NOT NULL, created_at {}", pk_column(type), text, ts) },
+		};
 	}
 };
 
@@ -694,7 +678,7 @@ class TimestampVersionTest : public ::testing::Test {
 // Timestamp & Version Integration Tests
 // ==============================================================================
 
-TEST_F(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
+TEST_P(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Alice");
@@ -719,7 +703,7 @@ TEST_F(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
 	EXPECT_LE(updated, before_ts + 2);
 }
 
-TEST_F(TimestampVersionTest, InsertSetsVersionToOne) {
+TEST_P(TimestampVersionTest, InsertSetsVersionToOne) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Bob");
@@ -729,7 +713,7 @@ TEST_F(TimestampVersionTest, InsertSetsVersionToOne) {
 	EXPECT_EQ(1, loaded.get("version").as_integer());
 }
 
-TEST_F(TimestampVersionTest, UpdateIncrementsVersion) {
+TEST_P(TimestampVersionTest, UpdateIncrementsVersion) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Charlie");
@@ -747,7 +731,7 @@ TEST_F(TimestampVersionTest, UpdateIncrementsVersion) {
 	EXPECT_EQ("charlie@example.com", reloaded.get("email").as_string());
 }
 
-TEST_F(TimestampVersionTest, UpdateRefreshesUpdatedAtButNotCreatedAt) {
+TEST_P(TimestampVersionTest, UpdateRefreshesUpdatedAtButNotCreatedAt) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Diana");
@@ -768,7 +752,7 @@ TEST_F(TimestampVersionTest, UpdateRefreshesUpdatedAtButNotCreatedAt) {
 	EXPECT_FALSE(reloaded.get("updated_at").is_null());
 }
 
-TEST_F(TimestampVersionTest, VersionInWhereClauseEnsuresOptimisticLocking) {
+TEST_P(TimestampVersionTest, VersionInWhereClauseEnsuresOptimisticLocking) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Eve");
@@ -795,7 +779,7 @@ TEST_F(TimestampVersionTest, VersionInWhereClauseEnsuresOptimisticLocking) {
 	EXPECT_EQ(2, final_record.get("version").as_integer());
 }
 
-TEST_F(TimestampVersionTest, StaleRecordRestoresInMemoryVersion) {
+TEST_P(TimestampVersionTest, StaleRecordRestoresInMemoryVersion) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Grace");
@@ -815,7 +799,7 @@ TEST_F(TimestampVersionTest, StaleRecordRestoresInMemoryVersion) {
 	EXPECT_TRUE(copy2.attribute_is_dirty("version"));
 }
 
-TEST_F(TimestampVersionTest, DestroyWithStaleVersionThrows) {
+TEST_P(TimestampVersionTest, DestroyWithStaleVersionThrows) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Heidi");
@@ -833,7 +817,7 @@ TEST_F(TimestampVersionTest, DestroyWithStaleVersionThrows) {
 	EXPECT_TRUE(still_there.has_value());
 }
 
-TEST_F(TimestampVersionTest, MultipleUpdatesIncrementVersionSequentially) {
+TEST_P(TimestampVersionTest, MultipleUpdatesIncrementVersionSequentially) {
 	TimestampedUser user;
 	user.init_record_tracking(true);
 	user.set("name", "Frank");
@@ -850,7 +834,7 @@ TEST_F(TimestampVersionTest, MultipleUpdatesIncrementVersionSequentially) {
 	EXPECT_EQ("frank4@example.com", final_record.get("email").as_string());
 }
 
-TEST_F(TimestampVersionTest, NoTimestampColumnsDoesNotCrash) {
+TEST_P(TimestampVersionTest, NoTimestampColumnsDoesNotCrash) {
 	PlainItem item;
 	item.set("name", "Widget");
 
@@ -867,15 +851,8 @@ TEST_F(TimestampVersionTest, NoTimestampColumnsDoesNotCrash) {
 	EXPECT_EQ("Updated Widget", reloaded.get("name").as_string());
 }
 
-TEST_F(TimestampVersionTest, MetadataTrackingOffWorksWithPartialTrackingColumns) {
-	// Create a table with only created_at (no updated_at, no version)
-	auto conn = config::instance().get_connection();
-	conn->query("CREATE TABLE partial_items ("
-				"id INTEGER PRIMARY KEY AUTOINCREMENT, "
-				"name TEXT NOT NULL, "
-				"created_at DATETIME"
-				")",
-				{});
+TEST_P(TimestampVersionTest, MetadataTrackingOffWorksWithPartialTrackingColumns) {
+	// partial_items (created_at only, no updated_at or version) is created by the fixture
 
 	class PartialItem : public model {
 	  public:
@@ -899,3 +876,12 @@ TEST_F(TimestampVersionTest, MetadataTrackingOffWorksWithPartialTrackingColumns)
 	auto reloaded = query<PartialItem>().where("name = ?", "Updated Partial").first_or_throw();
 	EXPECT_EQ("Updated Partial", reloaded.get("name").as_string());
 }
+
+// ==============================================================================
+// Test Instantiation
+// ==============================================================================
+
+INSTANTIATE_TEST_SUITE_P(AllAdapters, DatabaseOperationsTest, ::testing::ValuesIn(enabled_adapters()),
+						 adapter_param_name);
+INSTANTIATE_TEST_SUITE_P(AllAdapters, TimestampVersionTest, ::testing::ValuesIn(enabled_adapters()),
+						 adapter_param_name);
