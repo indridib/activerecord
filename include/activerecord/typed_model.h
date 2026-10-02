@@ -143,9 +143,7 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 		return T::primary_key;
 	}
 
-	typed_model() : model(st_table_name(), st_primary_key()) {
-		this->set_record_tracking_policy(TrackRecordMetadata);
-	}
+	typed_model() : model(st_table_name(), st_primary_key()) { this->set_record_tracking_policy(TrackRecordMetadata); }
 
 	bool save(bool should_validate = true) {
 		sync_to_attributes();
@@ -167,21 +165,13 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 
 	void sync_from_attributes() {
 		auto& self = static_cast<T&>(*this);
-		std::apply(
-			[&](auto... c) {
-				(sync_from_column(self, c), ...);
-			},
-			T::columns());
+		std::apply([&](auto... c) { (sync_from_column(self, c), ...); }, T::columns());
 		refresh_snapshot();
 	}
 
 	void sync_to_attributes() {
 		auto& self = static_cast<T&>(*this);
-		std::apply(
-			[&](auto... c) {
-				(sync_to_column(self, c), ...);
-			},
-			T::columns());
+		std::apply([&](auto... c) { (sync_to_column(self, c), ...); }, T::columns());
 	}
 
   private:

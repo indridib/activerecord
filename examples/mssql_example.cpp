@@ -31,7 +31,8 @@ int main() {
 
 		// Option 1: Connect using server/database/user/password
 		ar::config::instance().set_connections(
-			{ { "default", std::make_shared<ar::mssql_adapter>(server, database, username, password, port) } }, "default");
+			{ { "default", std::make_shared<ar::mssql_adapter>(server, database, username, password, port) } },
+			"default");
 
 		// Option 2: Connect using connection string
 		// ar::config::instance().set_connections({

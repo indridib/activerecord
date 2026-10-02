@@ -69,8 +69,7 @@ TEST_F(SQLiteAdapterTest, InsertSingleRow) {
 
 TEST_F(SQLiteAdapterTest, InsertMultipleRows) {
 	for (int i = 0; i < 5; i++) {
-		attribute_vector values = { "User " + std::to_string(i), 20 + i,
-									"user" + std::to_string(i) + "@example.com" };
+		attribute_vector values = { "User " + std::to_string(i), 20 + i, "user" + std::to_string(i) + "@example.com" };
 
 		adapter->query("INSERT INTO users (name, age, email) VALUES (?, ?, ?)", values);
 	}
@@ -191,8 +190,7 @@ TEST_F(SQLiteAdapterTest, BindDoubleParameter) {
 }
 
 TEST_F(SQLiteAdapterTest, BindMultipleParameters) {
-	adapter->query("INSERT INTO users (name, age, email) VALUES (?, ?, ?)",
-				   { "Test", 25, "test@example.com" });
+	adapter->query("INSERT INTO users (name, age, email) VALUES (?, ?, ?)", { "Test", 25, "test@example.com" });
 
 	auto stmt = adapter->query("SELECT * FROM users WHERE name = ? AND age = ?", { "Test", 25 });
 	EXPECT_TRUE(stmt->fetch());
@@ -226,8 +224,7 @@ TEST_F(SQLiteAdapterTest, UpdateRow) {
 TEST_F(SQLiteAdapterTest, UpdateNonMatchingRowHasZeroAffectedRows) {
 	adapter->query("INSERT INTO users (name, age) VALUES (?, ?)", { "John", 30 });
 
-	auto update_stmt =
-		adapter->query("UPDATE users SET age = ? WHERE name = ?", { 31, "NoMatch" });
+	auto update_stmt = adapter->query("UPDATE users SET age = ? WHERE name = ?", { 31, "NoMatch" });
 	EXPECT_EQ(0u, update_stmt->affected_rows());
 }
 
@@ -254,8 +251,7 @@ TEST_F(SQLiteAdapterTest, DeleteRow) {
 }
 
 TEST_F(SQLiteAdapterTest, SelectHasZeroAffectedRows) {
-	auto insert_stmt =
-		adapter->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Alice", 25 });
+	auto insert_stmt = adapter->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Alice", 25 });
 	EXPECT_EQ(1u, insert_stmt->affected_rows());
 
 	auto select_stmt = adapter->query("SELECT * FROM users WHERE name = ?", { "Alice" });
@@ -286,8 +282,7 @@ TEST_F(SQLiteAdapterTest, LimitWithOffset) {
 TEST_F(SQLiteAdapterTest, LimitInQuery) {
 	// Insert 10 rows
 	for (int i = 0; i < 10; i++) {
-		adapter->query("INSERT INTO users (name, age) VALUES (?, ?)",
-					   { "User" + std::to_string(i), 20 + i });
+		adapter->query("INSERT INTO users (name, age) VALUES (?, ?)", { "User" + std::to_string(i), 20 + i });
 	}
 
 	// Query with LIMIT

@@ -6,9 +6,9 @@
 // See file LICENSE.MIT for detail
 // ==============================================================================
 
+#include <algorithm>
 #include <config.h>
 #include <gtest/gtest.h>
-#include <algorithm>
 #include <regex>
 #include <typed_model.h>
 #include <validations.h>
@@ -72,9 +72,10 @@ struct validated_user : typed_model<validated_user> {
 	}
 
 	static auto validations() {
-		return ar::validate(ar::presence("name"), ar::presence("email"), ar::length("name", { .min = 2, .max = 20 }),
-							ar::format("email", std::regex{ R"(^.+@.+$)" }),
-							ar::numericality("age", { .greater_than = 0, .less_than_or_equal_to = 150, .only_integer = true }));
+		return ar::validate(
+			ar::presence("name"), ar::presence("email"), ar::length("name", { .min = 2, .max = 20 }),
+			ar::format("email", std::regex{ R"(^.+@.+$)" }),
+			ar::numericality("age", { .greater_than = 0, .less_than_or_equal_to = 150, .only_integer = true }));
 	}
 };
 

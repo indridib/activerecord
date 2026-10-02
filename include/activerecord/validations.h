@@ -98,8 +98,8 @@ struct numericality_rule {
 			validation_errors.add(attribute, std::format("must be greater than {}", *options.greater_than));
 		}
 		if (options.greater_than_or_equal_to && numeric_value < *options.greater_than_or_equal_to) {
-			validation_errors.add(attribute,
-								  std::format("must be greater than or equal to {}", *options.greater_than_or_equal_to));
+			validation_errors.add(
+				attribute, std::format("must be greater than or equal to {}", *options.greater_than_or_equal_to));
 		}
 		if (options.less_than && numeric_value >= *options.less_than) {
 			validation_errors.add(attribute, std::format("must be less than {}", *options.less_than));
@@ -132,7 +132,9 @@ struct format_rule {
 	}
 };
 
-constexpr auto presence(std::string_view attribute) { return presence_rule{ attribute }; }
+constexpr auto presence(std::string_view attribute) {
+	return presence_rule{ attribute };
+}
 
 constexpr auto length(std::string_view attribute, length_options options) {
 	return length_rule{ attribute, options };
@@ -152,15 +154,11 @@ template <class... Rules> constexpr auto validate(Rules... rules) {
 
 namespace detail {
 
-template <class Record, class RuleTuple> void run_validation_rules(const Record& record, errors& out, RuleTuple&& rules) {
-	std::apply(
-		[&](const auto&... rule) {
-			(rule.validate(record, out), ...);
-		},
-		std::forward<RuleTuple>(rules));
+template <class Record, class RuleTuple>
+void run_validation_rules(const Record& record, errors& out, RuleTuple&& rules) {
+	std::apply([&](const auto&... rule) { (rule.validate(record, out), ...); }, std::forward<RuleTuple>(rules));
 }
 
 } // namespace detail
 
 } // namespace ar
-

@@ -57,7 +57,7 @@ TEST_F(ModelSizeTest, BaseModelSize) {
 #else
 	constexpr size_t expected_max = 168; // libstdc++; libc++ is uncalibrated
 #endif
-	constexpr size_t phase0_size = 224;	 // Original size before optimization
+	constexpr size_t phase0_size = 224; // Original size before optimization
 
 	size_t actual = sizeof(model);
 

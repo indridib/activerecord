@@ -41,8 +41,8 @@ class model {
 
 	model(const model& other)
 		: connection_(other.connection_), table_name_(other.table_name_), primary_key_(other.primary_key_),
-		  attributes_(other.attributes_), new_record_(other.new_record_), dirty_(other.dirty_), readonly_(other.readonly_),
-		  track_record_metadata_(other.track_record_metadata_),
+		  attributes_(other.attributes_), new_record_(other.new_record_), dirty_(other.dirty_),
+		  readonly_(other.readonly_), track_record_metadata_(other.track_record_metadata_),
 		  errors_(other.errors_ ? std::make_unique<ar::errors>(*other.errors_) : nullptr) {}
 
 	model& operator=(const model& other) {
@@ -333,9 +333,8 @@ class model {
 		}
 
 		const attribute& pk_value{ get(primary_key_) };
-		const bool has_version{
-			track_record_metadata_ && attributes_.find("version") != attributes_.end() && !attributes_["version"].is_null()
-		};
+		const bool has_version{ track_record_metadata_ && attributes_.find("version") != attributes_.end() &&
+								!attributes_["version"].is_null() };
 
 		std::string where{ std::string(primary_key_) + " = ?" };
 		attribute_vector values{ pk_value };
@@ -591,8 +590,8 @@ class model {
 		set_timestamps_for_update();
 
 		// Optimistic locking: capture old version before incrementing
-		const bool has_version =
-			track_record_metadata_ && (attributes_.find("version") != attributes_.end() && !attributes_["version"].is_null());
+		const bool has_version = track_record_metadata_ && (attributes_.find("version") != attributes_.end() &&
+															!attributes_["version"].is_null());
 		int64_t old_version{ 0 };
 		if (has_version) {
 			old_version = get("version").as_integer();

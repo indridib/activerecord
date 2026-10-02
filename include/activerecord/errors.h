@@ -60,4 +60,3 @@ class errors {
 };
 
 } // namespace ar
-

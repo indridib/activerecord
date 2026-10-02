@@ -57,20 +57,19 @@ int main() {
 											   "default");
 		auto conn = ar::config::instance().get_connection();
 
-		conn->query(
-			"CREATE TABLE accounts ("
-			"id INTEGER PRIMARY KEY AUTOINCREMENT, "
-			"username TEXT NOT NULL, "
-			"age INTEGER NOT NULL, "
-			"active INTEGER NOT NULL, "
-			"credit REAL NOT NULL, "
-			"joined_at INTEGER NOT NULL, "
-			"nickname TEXT NULL, "
-			"created_at INTEGER, "
-			"updated_at INTEGER, "
-			"version INTEGER"
-			")",
-			{});
+		conn->query("CREATE TABLE accounts ("
+					"id INTEGER PRIMARY KEY AUTOINCREMENT, "
+					"username TEXT NOT NULL, "
+					"age INTEGER NOT NULL, "
+					"active INTEGER NOT NULL, "
+					"credit REAL NOT NULL, "
+					"joined_at INTEGER NOT NULL, "
+					"nickname TEXT NULL, "
+					"created_at INTEGER, "
+					"updated_at INTEGER, "
+					"version INTEGER"
+					")",
+					{});
 
 		Account acc;
 		acc.username = "sigrun";
@@ -87,7 +86,7 @@ int main() {
 		auto loaded = ar::query<Account>().find(acc.id);
 		std::cout << "Loaded: " << loaded.username << ", age " << loaded.age << ", credit " << loaded.credit << "\n";
 		std::cout << "Joined at: " << loaded.joined_at.to_string() << "\n";
-		std::cout << "Nickname: " << (loaded.nickname.has_value() ? *loaded.nickname : std::string{"<null>"}) << "\n";
+		std::cout << "Nickname: " << (loaded.nickname.has_value() ? *loaded.nickname : std::string{ "<null>" }) << "\n";
 
 		loaded.credit = 1500.25;
 		loaded.nickname = std::nullopt; // Optional -> SQL NULL
@@ -96,7 +95,7 @@ int main() {
 		auto updated = ar::query<Account>().find(acc.id);
 		std::cout << "Updated credit: " << updated.credit << "\n";
 		std::cout << "Updated nickname: "
-				  << (updated.nickname.has_value() ? *updated.nickname : std::string{"<null>"}) << "\n";
+				  << (updated.nickname.has_value() ? *updated.nickname : std::string{ "<null>" }) << "\n";
 		std::cout << "Version after update: " << updated.version << "\n";
 		std::cout << "updated_at: " << updated.updated_at.to_string() << "\n";
 
