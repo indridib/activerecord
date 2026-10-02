@@ -6,6 +6,17 @@ set(ACTIVERECORD_BASE_SOURCES
 
 add_library(activerecord ${ACTIVERECORD_BASE_SOURCES})
 add_library(activerecord::activerecord ALIAS activerecord)
+# Debug and Release install to the same lib/ directory; without a postfix the second
+# install overwrites the first (activerecord.lib), and MSVC consumers then link a
+# library with the wrong runtime and iterator-debug level.
+set_target_properties(activerecord PROPERTIES DEBUG_POSTFIX "d")
+
+# Records a find_dependency() call for the installed package config
+# (cmake/activerecord-config.cmake.in): one per dependency package this build links,
+# so a consumer's find_package(activerecord) recreates every exported link target.
+function(ar_package_dependency call)
+  set_property(GLOBAL APPEND PROPERTY AR_PACKAGE_DEPENDENCIES "${call}")
+endfunction()
 
 include(${PROJECT_SOURCE_DIR}/cmake/Warnings.cmake)
 ar_set_default_warnings(activerecord)
@@ -28,10 +39,12 @@ if(AR_SQLITE)
   find_package(unofficial-sqlite3 CONFIG)
   if(unofficial-sqlite3_FOUND)
     target_link_libraries(activerecord PRIVATE unofficial::sqlite3::sqlite3)
+    ar_package_dependency("find_dependency(unofficial-sqlite3 CONFIG)")
   else()
     # Fallback to FindSQLite3
     find_package(SQLite3 REQUIRED)
     target_link_libraries(activerecord PRIVATE SQLite::SQLite3)
+    ar_package_dependency("find_dependency(SQLite3)")
   endif()
 
   target_compile_definitions(activerecord PUBLIC AR_SQLITE=1)
@@ -45,10 +58,12 @@ if(AR_MYSQL)
   find_package(unofficial-libmysql CONFIG)
   if(unofficial-libmysql_FOUND)
     target_link_libraries(activerecord PRIVATE unofficial::libmysql::libmysql)
+    ar_package_dependency("find_dependency(unofficial-libmysql CONFIG)")
   else()
-    # Fallback to FindMySQL
+    # Fallback: a caller-supplied FindMySQL.cmake or MySQLConfig.cmake
     find_package(MySQL REQUIRED)
     target_link_libraries(activerecord PRIVATE MySQL::MySQL)
+    ar_package_dependency("find_dependency(MySQL)")
   endif()
 
   target_compile_definitions(activerecord PUBLIC AR_MYSQL=1)
@@ -61,6 +76,7 @@ if(AR_POSTGRES)
   # Install: vcpkg install libpq
   find_package(PostgreSQL REQUIRED)
   target_link_libraries(activerecord PRIVATE PostgreSQL::PostgreSQL)
+  ar_package_dependency("find_dependency(PostgreSQL)")
 
   target_compile_definitions(activerecord PUBLIC AR_POSTGRES=1)
 endif()
@@ -74,6 +90,7 @@ if(AR_MSSQL)
   else()
     find_package(ODBC REQUIRED)
     target_link_libraries(activerecord PRIVATE ODBC::ODBC)
+    ar_package_dependency("find_dependency(ODBC)")
   endif()
 
   target_compile_definitions(activerecord PUBLIC AR_MSSQL=1)

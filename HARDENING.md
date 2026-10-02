@@ -15,6 +15,7 @@ This implements the project rule "We don't like warnings in our compiled code" (
 | 5 | ASan + UBSan | WSL / Linux | `ctest` 100%, no sanitizer report in the output |
 | 6 | MySQL + PostgreSQL adapter runs | WSL / Linux | Adapter tests ran against the real servers; only documented waivers skipped |
 | 7 | MS-SQL (MSVC Release + Debug) | Windows | Builds (warnings are errors), `ctest` 100%, MS-SQL tests ran; only documented waivers skipped |
+| 8 | Installed package | WSL / Linux and Windows | `find_package(activerecord)` works from an install: the in-repo consumer configures, builds (warnings are errors) and runs; the config requires only the enabled adapters' packages |
 
 Checks 2-5 build with the MySQL and PostgreSQL adapters enabled, so they need the WSL database servers below. SQLite is always on. Do not run the Windows and WSL checks at the same time: both use the repo's `vcpkg/`, which allows one install at a time (the second waits on `vcpkg/.vcpkg-root`).
 
@@ -190,6 +191,57 @@ try {
   if ($rc -ne 0 -and $out -match "Cannot connect to MSSQL" -and $out -match "\[  PASSED  \] 0 tests") { "outage OK" } else { "outage check FAILED" }
 } finally { Start-Service MSSQLSERVER }
 ```
+
+### 8. Installed package (`find_package`)
+
+Installs the library, then builds [tests/package_consumer](tests/package_consumer) against the install: a separate CMake project that calls `find_package(activerecord CONFIG REQUIRED)`, saves and reloads one model through SQLite, and prints `package consumer OK`. The consumer uses the vcpkg toolchain in classic mode, pointed at the library build's `vcpkg_installed` tree, so it finds the same dependency packages (and vcpkg's package wrappers) a downstream vcpkg user would. Each variant also checks that the generated config does not ask for packages of adapters that were off.
+
+**WSL** (after the shared setup; it does not use `COMMON`):
+
+```bash
+for variant in sqlite db; do
+  B=~/ar-build/pkg-$variant; P=~/ar-build/pkg-$variant-prefix; C=~/ar-build/pkg-$variant-consumer
+  rm -rf "$B" "$P" "$C"
+  if [ $variant = db ]; then extra="-DAR_MYSQL=ON -DAR_POSTGRES=ON"; absent="ODBC"
+  else extra=""; absent="libmysql|MySQL|PostgreSQL|ODBC"; fi
+  cmake -S $R -B $B -G Ninja -DCMAKE_TOOLCHAIN_FILE=$TC "$VCPKG_OPTS" -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 -DAR_BUILD_EXAMPLES=OFF -DAR_SQLITE=ON $extra
+  cmake --build $B && cmake --install $B --prefix $P
+  ! grep -En "find_dependency\((unofficial-)?($absent)" $P/lib/cmake/activerecord/activerecord-config.cmake
+  cmake -S $R/tests/package_consumer -B $C -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_COMPILER=g++-14 -DCMAKE_TOOLCHAIN_FILE=$TC \
+    -DVCPKG_MANIFEST_MODE=OFF "-DVCPKG_INSTALLED_DIR=$B/vcpkg_installed" "-DCMAKE_PREFIX_PATH=$P"
+  cmake --build $C && $C/package_consumer
+done
+```
+
+**Windows** (PowerShell, from the repo root; not at the same time as WSL checks):
+
+```powershell
+$TC = "$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake"
+foreach ($variant in "sqlite", "mssql") {
+  $B = "C:\ar-build\pkg-$variant"; $P = "$B-prefix"; $C = "$B-consumer"
+  foreach ($d in $B, $P, $C) { if (Test-Path $d) { cmd /c "rd /s /q `"$d`"" } }
+  $extra = @(); if ($variant -eq "mssql") { $extra += "-DAR_MSSQL=ON" }   # array, so @extra splats whole arguments
+  $absent = if ($variant -eq "mssql") { "libmysql|MySQL|PostgreSQL" } else { "libmysql|MySQL|PostgreSQL|ODBC" }
+  cmake -S . -B $B -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$TC" -DAR_BUILD_EXAMPLES=OFF -DAR_SQLITE=ON @extra
+  if ($LASTEXITCODE) { throw "configure $variant failed" }
+  foreach ($cfg in "Release", "Debug") {
+    cmake --build $B --config $cfg; if ($LASTEXITCODE) { throw "build $variant $cfg failed" }
+    cmake --install $B --config $cfg --prefix $P; if ($LASTEXITCODE) { throw "install $variant $cfg failed" }
+  }
+  if (Select-String -Path "$P\lib\cmake\activerecord\activerecord-config.cmake" -Pattern "find_dependency\((unofficial-)?($absent)") { throw "config $variant requires a disabled adapter" }
+  cmake -S tests\package_consumer -B $C -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$TC" `
+    -DVCPKG_TARGET_TRIPLET=x64-windows-static -DVCPKG_MANIFEST_MODE=OFF "-DVCPKG_INSTALLED_DIR=$B\vcpkg_installed" "-DCMAKE_PREFIX_PATH=$P"
+  if ($LASTEXITCODE) { throw "consumer configure $variant failed" }
+  foreach ($cfg in "Release", "Debug") {
+    cmake --build $C --config $cfg; if ($LASTEXITCODE) { throw "consumer build $variant $cfg failed" }
+    & "$C\$cfg\package_consumer.exe"; if ($LASTEXITCODE) { throw "consumer run $variant $cfg failed" }
+  }
+}
+```
+
+The library is static and links the database client libraries privately, so the installed `activerecord-config.cmake` calls `find_dependency()` for exactly the packages the build used (recorded in `src/CMakeLists.txt` with `ar_package_dependency()`, including the `FindSQLite3` and caller-supplied `FindMySQL` fallbacks). On Windows a consumer must use the same static runtime (`CMAKE_MSVC_RUNTIME_LIBRARY` `MultiThreaded$<$<CONFIG:Debug>:Debug>`) and the `x64-windows-static` triplet. Debug builds are named `activerecordd` (`DEBUG_POSTFIX`), so Release and Debug installs can share one prefix.
 
 ## Waived findings
 

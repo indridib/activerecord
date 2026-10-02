@@ -79,6 +79,10 @@ write_basic_package_version_file(
   COMPATIBILITY SameMajorVersion
 )
 
+# find_dependency() calls recorded by src/CMakeLists.txt for the enabled adapters
+get_property(_ar_dependency_calls GLOBAL PROPERTY AR_PACKAGE_DEPENDENCIES)
+list(JOIN _ar_dependency_calls "\n" AR_PACKAGE_DEPENDENCIES)
+
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/activerecord-config.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/activerecord-config.cmake"
