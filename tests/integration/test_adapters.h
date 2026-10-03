@@ -11,9 +11,9 @@
 
 #pragma once
 
-#include <activerecord.h>
-#include <config.h>
-#include <connection.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/config.h>
+#include <activerecord/connection.h>
 #include <cstdint>
 #include <format>
 #include <gtest/gtest.h>
@@ -25,16 +25,16 @@
 #include <vector>
 
 #ifdef AR_SQLITE
-#include <adapters/sqlite_adapter.h>
+#include <activerecord/adapters/sqlite_adapter.h>
 #endif
 #ifdef AR_MYSQL
-#include <adapters/mysql_adapter.h>
+#include <activerecord/adapters/mysql_adapter.h>
 #endif
 #ifdef AR_POSTGRES
-#include <adapters/postgres_adapter.h>
+#include <activerecord/adapters/postgres_adapter.h>
 #endif
 #ifdef AR_MSSQL
-#include <adapters/mssql_adapter.h>
+#include <activerecord/adapters/mssql_adapter.h>
 #endif
 
 namespace ar::test {

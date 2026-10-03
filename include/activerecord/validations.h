@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include <attribute.h>
-#include <errors.h>
+#include <activerecord/attribute.h>
+#include <activerecord/errors.h>
 #include <optional>
 #include <regex>
 #include <tuple>

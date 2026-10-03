@@ -4,11 +4,11 @@
 // Tests for model memory footprint tracking
 // ============================================================================
 
+#include <activerecord/attribute.h>
+#include <activerecord/config.h>
+#include <activerecord/model.h>
 #include <array>
-#include <attribute.h>
-#include <config.h>
 #include <gtest/gtest.h>
-#include <model.h>
 
 namespace ar {
 

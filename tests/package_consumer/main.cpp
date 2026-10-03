@@ -4,16 +4,16 @@
 // SPDX-License-Identifier: MIT
 //
 // Smoke test for the installed package: save and reload one model through SQLite.
-// Exits 0 on success. Uses the library's public include style (<model.h>).
+// Exits 0 on success. Uses the library's public include style (<activerecord/model.h>).
 // ==============================================================================
 
-#include <adapters/sqlite_adapter.h>
-#include <config.h>
+#include <activerecord/adapters/sqlite_adapter.h>
+#include <activerecord/config.h>
+#include <activerecord/model.h>
+#include <activerecord/sql_builder.h>
 #include <exception>
 #include <iostream>
 #include <memory>
-#include <model.h>
-#include <sql_builder.h>
 
 namespace {
 

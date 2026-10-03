@@ -8,10 +8,10 @@
 // Unit tests for the attribute class
 // ==============================================================================
 
-#include <activerecord.h>
-#include <attribute.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/attribute.h>
+#include <activerecord/datetime.h>
 #include <ctime>
-#include <datetime.h>
 #include <gtest/gtest.h>
 
 using namespace ar;

@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <activerecord.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/attribute.h>
 #include <algorithm>
-#include <attribute.h>
 #include <cctype>
 #include <charconv>
 #include <map>

@@ -6,12 +6,12 @@
 // See file LICENSE.MIT for detail
 // ==============================================================================
 
+#include <activerecord/config.h>
+#include <activerecord/typed_model.h>
+#include <activerecord/validations.h>
 #include <algorithm>
-#include <config.h>
 #include <gtest/gtest.h>
 #include <regex>
-#include <typed_model.h>
-#include <validations.h>
 
 using namespace ar;
 

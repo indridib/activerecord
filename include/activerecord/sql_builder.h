@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include <activerecord.h>
-#include <attribute.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/attribute.h>
+#include <activerecord/config.h>
 #include <cassert>
 #include <cctype>
-#include <config.h>
 #include <format>
 #include <iterator>
 #include <memory>

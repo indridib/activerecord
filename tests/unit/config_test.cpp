@@ -8,9 +8,9 @@
 // Unit tests for the config class
 // ==============================================================================
 
-#include <activerecord.h>
-#include <config.h>
-#include <connection.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/config.h>
+#include <activerecord/connection.h>
 #include <gtest/gtest.h>
 
 using namespace ar;

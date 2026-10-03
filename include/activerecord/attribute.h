@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <activerecord.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/datetime.h>
 #include <concepts>
-#include <datetime.h>
 #include <map>
 #include <variant>
 

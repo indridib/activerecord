@@ -6,10 +6,10 @@
 // See file LICENSE.MIT for detail
 // ==============================================================================
 
-#include <config.h>
+#include <activerecord/config.h>
+#include <activerecord/sql_builder.h>
+#include <activerecord/typed_model.h>
 #include <gtest/gtest.h>
-#include <sql_builder.h>
-#include <typed_model.h>
 
 using namespace ar;
 

@@ -5,13 +5,13 @@
 // Change the connection setup in main() to use another adapter.
 // ============================================================================
 
-#include <adapters/sqlite_adapter.h>
-#include <config.h>
-#include <datetime.h>
+#include <activerecord/adapters/sqlite_adapter.h>
+#include <activerecord/config.h>
+#include <activerecord/datetime.h>
+#include <activerecord/sql_builder.h>
+#include <activerecord/typed_model.h>
 #include <iostream>
 #include <optional>
-#include <sql_builder.h>
-#include <typed_model.h>
 
 struct Account : ar::typed_model<Account> {
 	static constexpr auto table_name{ "accounts" };

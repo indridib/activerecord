@@ -26,7 +26,7 @@ Embedded database, no server needed. Good for testing, prototyping, and single-u
 ### Setup
 
 ```cpp
-#include <adapters/sqlite_adapter.h>
+#include <activerecord/adapters/sqlite_adapter.h>
 
 // In-memory database (lost when connection closes)
 auto conn = std::make_shared<ar::sqlite_adapter>(":memory:");
@@ -59,7 +59,7 @@ sqlite://windows(c*/path/to/file.db)
 ### Setup
 
 ```cpp
-#include <adapters/mysql_adapter.h>
+#include <activerecord/adapters/mysql_adapter.h>
 
 auto conn = std::make_shared<ar::mysql_adapter>(
     "localhost",  // host
@@ -93,7 +93,7 @@ mysql://root:password@unix(/var/run/mysqld/mysqld.sock)/mydb
 ### Setup
 
 ```cpp
-#include <adapters/postgres_adapter.h>
+#include <activerecord/adapters/postgres_adapter.h>
 
 auto conn = std::make_shared<ar::postgres_adapter>(
     "localhost",  // host
@@ -126,7 +126,7 @@ Three connection styles are available.
 ### Setup via Server/Database
 
 ```cpp
-#include <adapters/mssql_adapter.h>
+#include <activerecord/adapters/mssql_adapter.h>
 
 auto conn = std::make_shared<ar::mssql_adapter>(
     "localhost",  // server

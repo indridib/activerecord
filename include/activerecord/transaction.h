@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <config.h>
-#include <connection.h>
+#include <activerecord/config.h>
+#include <activerecord/connection.h>
 
 namespace ar {
 

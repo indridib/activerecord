@@ -8,14 +8,14 @@
 // Tests for SQL injection prevention mechanisms
 // ============================================================================
 
-#include <attribute.h>
-#include <connection.h>
+#include <activerecord/attribute.h>
+#include <activerecord/connection.h>
 #include <gtest/gtest.h>
 
 #ifdef AR_SQLITE
-#include <adapters/sqlite_adapter.h>
-#include <config.h>
-#include <model.h>
+#include <activerecord/adapters/sqlite_adapter.h>
+#include <activerecord/config.h>
+#include <activerecord/model.h>
 #endif
 
 using namespace ar;

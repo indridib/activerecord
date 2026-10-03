@@ -4,8 +4,8 @@
 // Unit tests for make_connection(URL)
 // ==============================================================================
 
-#include <config.h>
-#include <connection_factory.h>
+#include <activerecord/config.h>
+#include <activerecord/connection_factory.h>
 #include <gtest/gtest.h>
 
 using namespace ar;

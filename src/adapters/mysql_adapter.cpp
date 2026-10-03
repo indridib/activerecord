@@ -8,8 +8,8 @@
 // Implementation of MySQL adapter
 // ============================================================================
 
-#include <activerecord.h>
-#include <adapters/mysql_adapter.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/adapters/mysql_adapter.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>

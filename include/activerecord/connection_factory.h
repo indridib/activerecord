@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <connection.h>
+#include <activerecord/connection.h>
 #include <memory>
 #include <string_view>
 

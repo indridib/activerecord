@@ -8,8 +8,8 @@
 // Implementation of PostgreSQL adapter
 // ============================================================================
 
-#include <activerecord.h>
-#include <adapters/postgres_adapter.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/adapters/postgres_adapter.h>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>

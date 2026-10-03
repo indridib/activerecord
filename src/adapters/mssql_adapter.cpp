@@ -8,8 +8,8 @@
 // Implementation of MS-SQL Server adapter using ODBC
 // ============================================================================
 
-#include <activerecord.h>
-#include <adapters/mssql_adapter.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/adapters/mssql_adapter.h>
 
 #ifdef _WIN32
 #include <windows.h>

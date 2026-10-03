@@ -11,8 +11,8 @@ Models without a `validations()` method are unaffected — they save without any
 Add a `static validations()` method that returns `ar::validate(...)` with one or more rules:
 
 ```cpp
-#include <typed_model.h>
-#include <validations.h>
+#include <activerecord/typed_model.h>
+#include <activerecord/validations.h>
 
 struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};

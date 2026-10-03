@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include <activerecord.h>
+#include <activerecord/activerecord.h>
 #include <ctime>
 #include <string>
 

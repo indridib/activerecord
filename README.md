@@ -89,8 +89,8 @@ A quick taste of both model styles. For full details, see the [documentation](do
 ### Classic Model
 
 ```cpp
-#include <model.h>
-#include <sql_builder.h>
+#include <activerecord/model.h>
+#include <activerecord/sql_builder.h>
 
 class User : public ar::model {
   public:
@@ -111,8 +111,8 @@ std::cout << user.get("name").as_string() << '\n';
 ### typed_model\<T\>
 
 ```cpp
-#include <typed_model.h>
-#include <sql_builder.h>
+#include <activerecord/typed_model.h>
+#include <activerecord/sql_builder.h>
 
 struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};

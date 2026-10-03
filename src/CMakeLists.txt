@@ -27,8 +27,8 @@ target_compile_features(activerecord PUBLIC cxx_std_23)
 
 target_include_directories(activerecord
   PUBLIC
-    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include/activerecord>
-    $<INSTALL_INTERFACE:include/activerecord>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 if(AR_SQLITE)

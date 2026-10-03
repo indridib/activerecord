@@ -10,10 +10,10 @@
 
 #include "test_adapters.h"
 
-#include <attribute.h>
-#include <datetime.h>
+#include <activerecord/attribute.h>
+#include <activerecord/datetime.h>
+#include <activerecord/model.h>
 #include <gtest/gtest.h>
-#include <model.h>
 
 using namespace ar;
 using namespace ar::test;

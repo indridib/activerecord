@@ -8,13 +8,13 @@
 // Unit tests for transaction RAII wrapper
 // ============================================================================
 
-#include <config.h>
+#include <activerecord/config.h>
+#include <activerecord/model.h>
+#include <activerecord/transaction.h>
 #include <gtest/gtest.h>
-#include <model.h>
-#include <transaction.h>
 
 #ifdef AR_SQLITE
-#include <adapters/sqlite_adapter.h>
+#include <activerecord/adapters/sqlite_adapter.h>
 
 using namespace ar;
 

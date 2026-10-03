@@ -4,19 +4,19 @@
 // DSN/URL driven connection construction
 // ============================================================================
 
-#include <connection_factory.h>
+#include <activerecord/connection_factory.h>
 
 #ifdef AR_SQLITE
-#include <adapters/sqlite_adapter.h>
+#include <activerecord/adapters/sqlite_adapter.h>
 #endif
 #ifdef AR_MYSQL
-#include <adapters/mysql_adapter.h>
+#include <activerecord/adapters/mysql_adapter.h>
 #endif
 #ifdef AR_POSTGRES
-#include <adapters/postgres_adapter.h>
+#include <activerecord/adapters/postgres_adapter.h>
 #endif
 #ifdef AR_MSSQL
-#include <adapters/mssql_adapter.h>
+#include <activerecord/adapters/mssql_adapter.h>
 #endif
 
 #include <string>

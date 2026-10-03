@@ -4,7 +4,7 @@
 // Unit tests for connection::parse_connection_url
 // ==============================================================================
 
-#include <connection.h>
+#include <activerecord/connection.h>
 #include <gtest/gtest.h>
 
 using namespace ar;

@@ -7,8 +7,8 @@ All database connections are managed through a singleton `ar::config` instance. 
 ## Basic Setup
 
 ```cpp
-#include <config.h>
-#include <adapters/sqlite_adapter.h>
+#include <activerecord/config.h>
+#include <activerecord/adapters/sqlite_adapter.h>
 
 ar::config::instance().set_connections({
     {"default", std::make_shared<ar::sqlite_adapter>(":memory:")}

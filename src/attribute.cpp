@@ -6,7 +6,7 @@
 // See file LICENSE.MIT for detail
 //
 
-#include <attribute.h>
+#include <activerecord/attribute.h>
 #include <format>
 
 namespace ar {

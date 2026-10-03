@@ -8,10 +8,10 @@
 // Unit tests for the model class
 // ==============================================================================
 
-#include <activerecord.h>
-#include <config.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/config.h>
+#include <activerecord/model.h>
 #include <gtest/gtest.h>
-#include <model.h>
 
 using namespace ar;
 

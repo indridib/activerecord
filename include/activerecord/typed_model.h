@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include <attribute.h>
-#include <model.h>
+#include <activerecord/attribute.h>
+#include <activerecord/model.h>
+#include <activerecord/validations.h>
 #include <optional>
 #include <tuple>
 #include <type_traits>
-#include <validations.h>
 
 namespace ar {
 

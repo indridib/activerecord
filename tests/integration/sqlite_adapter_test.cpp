@@ -8,8 +8,8 @@
 // Integration tests for SQLite adapter
 // ==============================================================================
 
-#include <activerecord.h>
-#include <adapters/sqlite_adapter.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/adapters/sqlite_adapter.h>
 #include <gtest/gtest.h>
 
 using namespace ar;

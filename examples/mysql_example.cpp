@@ -4,11 +4,11 @@
 // Example demonstrating MySQL adapter usage with ActiveRecord
 // ============================================================================
 
-#include <adapters/mysql_adapter.h>
-#include <config.h>
+#include <activerecord/adapters/mysql_adapter.h>
+#include <activerecord/config.h>
+#include <activerecord/model.h>
+#include <activerecord/sql_builder.h>
 #include <iostream>
-#include <model.h>
-#include <sql_builder.h>
 
 // Define a User model
 class User : public ar::model {

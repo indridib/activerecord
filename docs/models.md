@@ -14,8 +14,8 @@ Pick `model` when schema is dynamic or unknown at compile time. Pick `typed_mode
 ### Defining a Model
 
 ```cpp
-#include <model.h>
-#include <sql_builder.h>
+#include <activerecord/model.h>
+#include <activerecord/sql_builder.h>
 
 class User : public ar::model {
   public:
@@ -145,8 +145,8 @@ user.update_attribute("name", "Charlie");  // updates and saves, no new attribut
 ### Defining a Typed Model
 
 ```cpp
-#include <sql_builder.h>
-#include <typed_model.h>
+#include <activerecord/sql_builder.h>
+#include <activerecord/typed_model.h>
 
 struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};

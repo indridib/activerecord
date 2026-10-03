@@ -8,8 +8,8 @@
 // Implementation of SQLite adapter
 // ============================================================================
 
-#include <activerecord.h>
-#include <adapters/sqlite_adapter.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/adapters/sqlite_adapter.h>
 #include <cctype>
 #include <sqlite3.h>
 #include <string>

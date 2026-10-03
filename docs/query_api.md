@@ -3,7 +3,7 @@
 All queries start with `ar::query<T>()`, where `T` is a model class. The query builder returns a chainable object — build up the query, then execute it with a terminal method.
 
 ```cpp
-#include <sql_builder.h>
+#include <activerecord/sql_builder.h>
 
 auto users = ar::query<User>()
     .where("active = ?", true)

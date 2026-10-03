@@ -8,8 +8,8 @@
 // Unit tests for ar::datetime class
 // ============================================================================
 
-#include <attribute.h>
-#include <datetime.h>
+#include <activerecord/attribute.h>
+#include <activerecord/datetime.h>
 #include <gtest/gtest.h>
 
 using namespace ar;

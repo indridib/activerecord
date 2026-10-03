@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <activerecord.h>
-#include <connection.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/connection.h>
 
 // Forward declarations for ODBC types (actual header included in .cpp). Both the Windows SDK and
 // unixODBC define these handles as void*, so these redeclarations are identical to theirs.

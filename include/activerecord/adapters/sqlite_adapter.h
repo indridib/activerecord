@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include <activerecord.h>
-#include <connection.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/connection.h>
 
 // Forward declarations for SQLite types (actual header included in .cpp)
 struct sqlite3;

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <activerecord.h>
+#include <activerecord/activerecord.h>
 #include <map>
 
 namespace ar {

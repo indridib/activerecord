@@ -8,15 +8,15 @@
 
 #pragma once
 
-#include <activerecord.h>
-#include <attribute.h>
-#include <config.h>
-#include <connection.h>
-#include <errors.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/attribute.h>
+#include <activerecord/config.h>
+#include <activerecord/connection.h>
+#include <activerecord/errors.h>
+#include <activerecord/sql_builder.h>
 #include <map>
 #include <memory>
 #include <set>
-#include <sql_builder.h>
 
 namespace ar {
 

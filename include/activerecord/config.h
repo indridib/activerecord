@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include <activerecord.h>
-#include <connection.h>
-#include <connection_factory.h>
+#include <activerecord/activerecord.h>
+#include <activerecord/connection.h>
+#include <activerecord/connection_factory.h>
 #include <map>
 #include <memory>
 

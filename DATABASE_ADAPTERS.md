@@ -98,9 +98,9 @@ cmake --build build --config Release
 ### SQLite Example
 
 ```cpp
-#include <config.h>
-#include <adapters/sqlite_adapter.h>
-#include <model.h>
+#include <activerecord/config.h>
+#include <activerecord/adapters/sqlite_adapter.h>
+#include <activerecord/model.h>
 
 int main() {
     // Setup SQLite (in-memory or file-based)
@@ -125,9 +125,9 @@ int main() {
 ### MySQL Example
 
 ```cpp
-#include <config.h>
-#include <adapters/mysql_adapter.h>
-#include <model.h>
+#include <activerecord/config.h>
+#include <activerecord/adapters/mysql_adapter.h>
+#include <activerecord/model.h>
 
 int main() {
     // Setup MySQL
@@ -157,9 +157,9 @@ int main() {
 ### PostgreSQL Example
 
 ```cpp
-#include <config.h>
-#include <adapters/postgres_adapter.h>
-#include <model.h>
+#include <activerecord/config.h>
+#include <activerecord/adapters/postgres_adapter.h>
+#include <activerecord/model.h>
 
 int main() {
     // Setup PostgreSQL
@@ -189,9 +189,9 @@ int main() {
 ### MS-SQL Server Example
 
 ```cpp
-#include <config.h>
-#include <adapters/mssql_adapter.h>
-#include <model.h>
+#include <activerecord/config.h>
+#include <activerecord/adapters/mssql_adapter.h>
+#include <activerecord/model.h>
 
 int main() {
     // Setup MS-SQL Server (multiple connection options)
