@@ -100,7 +100,7 @@ class model {
 	 * @return - true if the attribute exist.
 	 */
 	bool isset(std::string_view name) const noexcept {
-		std::string key(name);
+		std::string key{ name };
 		const auto& aliases = alias_attributes();
 		return attributes_.find(key) != attributes_.end() || aliases.find(key) != aliases.end();
 	}
@@ -112,7 +112,7 @@ class model {
 	 * @return - real name of the attribute or empty if attribute can not be found.
 	 */
 	std::string get_real_attribute_name(std::string_view name) const noexcept {
-		std::string key(name);
+		std::string key{ name };
 		if (attributes_.find(key) != attributes_.end())
 			return key;
 		const auto& aliases = alias_attributes();
