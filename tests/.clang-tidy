@@ -1,4 +1,4 @@
-# Disabled for tests (see HARDENING.md "Waived findings"):
+# Disabled for tests (see docs/hardening.md "Waived findings"):
 #   bugprone-unchecked-optional-access: the check does not model gtest ASSERT_TRUE(opt) /
 #   ASSERT_TRUE(opt.has_value()) as a guard, so every guarded *opt in tests is a false positive
 InheritParentConfig: true

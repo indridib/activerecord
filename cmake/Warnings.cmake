@@ -1,5 +1,5 @@
 function(ar_set_default_warnings target)
-  # Warnings are errors: the project keeps a 0-warning baseline (see HARDENING.md)
+  # Warnings are errors: the project keeps a 0-warning baseline (see docs/hardening.md)
   if(MSVC)
     target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc /MP)
   else()

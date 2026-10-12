@@ -1,5 +1,5 @@
 #!/bin/bash
-# Quick build script for ActiveRecord on Linux/macOS
+# Quick build script for ActiveRecord on Linux
 # Usage: ./build.sh [Release|Debug]
 
 set -e  # Exit on error

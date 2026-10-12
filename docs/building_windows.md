@@ -1,7 +1,10 @@
 # Building ActiveRecord on Windows
 
+> The supported way to build is the [Quick Start](#quick-start-easiest) below (`setup.bat` + `build.bat`, see also the [README](../README.md)).
+> The manual options predate the vcpkg submodule and are kept as alternatives; they are not part of the tested workflow.
+
 ## Prerequisites
-- **Visual Studio 2022 17.7+** (required for C++23 support)
+- **Visual Studio 2022** (required for C++23 support)
 - CMake 3.20+
 - Git
 
@@ -36,37 +39,36 @@ That's it! The scripts handle everything automatically.
 ### Step 1: Install vcpkg (one-time setup)
 
 ```powershell
-# In your preferred location (e.g., C:\dev)
-cd C:\dev
+# In a directory of your choice
 git clone https://github.com/Microsoft/vcpkg.git
 cd vcpkg
 .\bootstrap-vcpkg.bat
 
 # Add vcpkg to PATH (optional, makes it easier to use)
-# Or remember the full path: C:\dev\vcpkg\vcpkg.exe
+# Or remember the full path: <vcpkg-root>\vcpkg.exe
 ```
 
 ### Step 2: Install SQLite3 via vcpkg
 
 ```powershell
 # For 64-bit Windows
-C:\dev\vcpkg\vcpkg install sqlite3:x64-windows
+<vcpkg-root>\vcpkg install sqlite3:x64-windows
 
 # For 32-bit Windows
-C:\dev\vcpkg\vcpkg install sqlite3:x86-windows
+<vcpkg-root>\vcpkg install sqlite3:x86-windows
 
 # (Optional) For testing
-C:\dev\vcpkg\vcpkg install gtest:x64-windows
+<vcpkg-root>\vcpkg install gtest:x64-windows
 ```
 
 ### Step 3: Build ActiveRecord with vcpkg
 
 ```cmd
-cd C:\dev\github\activerecord
+cd path\to\activerecord
 
 REM Configure with vcpkg toolchain
 cmake -B build ^
-  -DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+  -DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake ^
   -DAR_BUILD_TESTS=ON ^
   -DAR_SQLITE=ON
 
@@ -87,7 +89,6 @@ With manifest mode, vcpkg automatically installs dependencies when you configure
 ### Step 1: Install vcpkg (same as Option 1)
 
 ```cmd
-cd C:\dev
 git clone https://github.com/Microsoft/vcpkg.git
 cd vcpkg
 bootstrap-vcpkg.bat
@@ -96,11 +97,11 @@ bootstrap-vcpkg.bat
 ### Step 2: Configure and Build (dependencies install automatically!)
 
 ```cmd
-cd C:\dev\github\activerecord
+cd path\to\activerecord
 
 REM The vcpkg.json in the project tells vcpkg what to install
 cmake -B build ^
-  -DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake ^
+  -DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake ^
   -DAR_BUILD_TESTS=ON
 
 REM Build (vcpkg installed dependencies during configure!)
@@ -118,16 +119,16 @@ If you prefer not to use vcpkg:
 
 1. Go to https://www.sqlite.org/download.html
 2. Download "sqlite-amalgamation" (source) and "sqlite-dll" (precompiled binaries) for Windows
-3. Extract to `C:\dev\sqlite3`
+3. Extract to `<sqlite-dir>`
 
 ### Step 2: Create CMake Config
 
-Create `C:\dev\sqlite3\sqlite3-config.cmake`:
+Create `<sqlite-dir>\sqlite3-config.cmake`:
 
 ```cmake
 set(SQLite3_FOUND TRUE)
-set(SQLite3_INCLUDE_DIR "C:/dev/sqlite3")
-set(SQLite3_LIBRARY "C:/dev/sqlite3/sqlite3.lib")
+set(SQLite3_INCLUDE_DIR "<sqlite-dir>")
+set(SQLite3_LIBRARY "<sqlite-dir>/sqlite3.lib")
 
 if(NOT TARGET SQLite::SQLite3)
   add_library(SQLite::SQLite3 UNKNOWN IMPORTED)
@@ -141,10 +142,10 @@ endif()
 ### Step 3: Build with Manual SQLite
 
 ```cmd
-cd C:\dev\github\activerecord
+cd path\to\activerecord
 
 cmake -B build ^
-  -DSQLite3_DIR=C:/dev/sqlite3 ^
+  -DSQLite3_DIR=<sqlite-dir> ^
   -DAR_BUILD_TESTS=ON ^
   -DAR_SQLITE=ON
 
@@ -158,7 +159,7 @@ cmake --build build --config Release
 **Solution:** Make sure you specified the correct vcpkg toolchain file path:
 ```powershell
 # Check vcpkg location
-dir C:\dev\vcpkg\scripts\buildsystems\vcpkg.cmake
+dir <vcpkg-root>\scripts\buildsystems\vcpkg.cmake
 
 # Use that path in CMAKE_TOOLCHAIN_FILE
 ```
@@ -167,19 +168,19 @@ dir C:\dev\vcpkg\scripts\buildsystems\vcpkg.cmake
 
 **Solution:** This is normal - it falls back to FindSQLite3. Make sure SQLite3 is installed:
 ```powershell
-C:\dev\vcpkg\vcpkg list | findstr sqlite
+<vcpkg-root>\vcpkg list | findstr sqlite
 ```
 
 If not installed:
 ```powershell
-C:\dev\vcpkg\vcpkg install sqlite3:x64-windows
+<vcpkg-root>\vcpkg install sqlite3:x64-windows
 ```
 
 ### GoogleTest Not Found
 
 **Solution:** Install via vcpkg:
 ```cmd
-C:\dev\vcpkg\vcpkg install gtest:x64-windows
+<vcpkg-root>\vcpkg install gtest:x64-windows
 ```
 
 Or disable tests:
@@ -194,11 +195,11 @@ If CMake picks the wrong generator, specify explicitly:
 ```cmd
 REM For Visual Studio 2022
 cmake -B build -G "Visual Studio 17 2022" -A x64 ^
-  -DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake
+  -DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake
 
 REM For MinGW
 cmake -B build -G "MinGW Makefiles" ^
-  -DCMAKE_TOOLCHAIN_FILE=C:/dev/vcpkg/scripts/buildsystems/vcpkg.cmake
+  -DCMAKE_TOOLCHAIN_FILE=<vcpkg-root>/scripts/buildsystems/vcpkg.cmake
 ```
 
 ## Environment Variables (Optional)
@@ -207,7 +208,7 @@ To avoid typing the vcpkg path every time, set an environment variable:
 
 **Command Prompt (current session):**
 ```cmd
-set VCPKG_ROOT=C:\dev\vcpkg
+set VCPKG_ROOT=<vcpkg-root>
 
 REM Then use:
 cmake -B build ^
@@ -219,7 +220,7 @@ cmake -B build ^
 2. Go to Advanced → Environment Variables
 3. Add new User or System variable:
    - Variable name: `VCPKG_ROOT`
-   - Variable value: `C:\dev\vcpkg`
+   - Variable value: `<vcpkg-root>`
 
 Then in CMakeLists.txt you can use:
 ```cmake
@@ -250,4 +251,4 @@ cmake -B build -DAR_MYSQL=ON -DAR_POSTGRES=ON -DAR_MSSQL=ON
 cmake --build build --config Release
 ```
 
-See [DATABASE_ADAPTERS.md](DATABASE_ADAPTERS.md) for detailed setup instructions for each database.
+See [database_setup.md](database_setup.md) for detailed setup instructions for each database.

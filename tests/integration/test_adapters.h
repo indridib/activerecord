@@ -78,7 +78,7 @@ inline std::vector<AdapterType> enabled_adapters() {
 	return adapters;
 }
 
-// Test servers and credentials: see HARDENING.md ("WSL database servers", "Windows SQL Server")
+// Test servers and credentials: see docs/hardening.md ("WSL database servers", "Windows SQL Server")
 inline std::shared_ptr<connection> create_connection(AdapterType type) {
 	switch (type) {
 #ifdef AR_SQLITE

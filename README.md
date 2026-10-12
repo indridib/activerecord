@@ -22,7 +22,7 @@ The library offers two model styles: a classic dynamic model with string-based a
 - **Type-safe attribute system** — string, integer, float, bool, datetime, null
 - **Dirty tracking** — only changed attributes are included in UPDATE statements
 - **Typed model validations** — declarative rules with per-attribute error collection
-- **Cross-platform** — Windows (MSVC, static linking), Linux (GCC), macOS (Clang)
+- **Cross-platform** — Windows (MSVC, static linking), Linux (GCC, Clang)
 - **Comprehensive test suite** — unit and integration tests via GoogleTest
 
 ## Quick Start
@@ -40,7 +40,7 @@ cd activerecord
 # Windows
 setup.bat
 
-# Linux/macOS
+# Linux
 chmod +x setup.sh && ./setup.sh
 ```
 
@@ -49,10 +49,10 @@ chmod +x setup.sh && ./setup.sh
 # Windows
 build.bat
 
-# Linux/macOS
+# Linux
 chmod +x build.sh && ./build.sh
 
-# Or manual CMake (all platforms)
+# Or manual CMake (Windows and Linux)
 cmake -B build -DAR_BUILD_TESTS=ON
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
@@ -64,7 +64,7 @@ ctest --test-dir build -C Release --output-on-failure
 .\build\examples\Release\sqlite_example.exe
 .\build\examples\Release\typed_model_showcase.exe
 
-# Linux/macOS
+# Linux
 ./build/examples/sqlite_example
 ./build/examples/typed_model_showcase
 ```
@@ -144,9 +144,11 @@ See the [documentation](docs/) for the full query API, validations, timestamps, 
 
 - CMake 3.20+
 - C++23 compiler:
-  - **MSVC** 19.39+ (Visual Studio 2022 17.9+)
-  - **GCC** 14+ (minimum GCC 13)
-  - **Clang** 17+ (latest stable recommended)
+  - **MSVC**: Visual Studio 2022 (Windows)
+  - **GCC** 14+ (Linux)
+  - **Clang** 18+ (Linux)
+
+  These are the tested combinations; see [docs/compilers.md](docs/compilers.md).
 - Git
 
 ### Running Tests
@@ -181,7 +183,7 @@ Use `-DCMAKE_CXX_COMPILER=clang++` for Clang. The `UBSAN_OPTIONS` setting is req
 
 ### Hardening Checks
 
-Compiler warnings and clang-tidy findings are errors in every build. [HARDENING.md](HARDENING.md) is the runbook for the full set of pre-release checks: MSVC, GCC and Clang builds, clang-tidy, and ASan + UBSan. It also logs every waived finding.
+Compiler warnings and clang-tidy findings are errors in every build. [docs/hardening.md](docs/hardening.md) is the runbook for the full set of pre-release checks: MSVC, GCC and Clang builds, clang-tidy, and ASan + UBSan. It also logs every waived finding.
 
 ## Conventions
 

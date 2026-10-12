@@ -39,7 +39,7 @@ datetime::datetime(const std::string& date_str) {
 	*this = parse(date_str);
 }
 
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- public API; see HARDENING.md
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters) -- public API; see docs/hardening.md
 datetime::datetime(int year, int month, int day, int hour, int min, int sec) {
 	std::tm timeinfo{};
 	timeinfo.tm_year = year - 1900; // Years since 1900

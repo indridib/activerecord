@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Check a gtest XML report from an adapter test run (HARDENING.md check 6/7).
+"""Check a gtest XML report from an adapter test run (docs/hardening.md check 6/7).
 
-Usage: check_adapter_tests.py <gtest.xml> <HARDENING.md>
+Usage: check_adapter_tests.py <gtest.xml> <docs/hardening.md>
 
 Passes only if at least one test case ran to completion and every skipped case is a
 documented waiver: its skip message contains "WAIVED:" and its full name
 (e.g. AllAdapters/DatabaseAdapterTest.UpdateRecord/MySQL) is listed in backticks in
-the "Waived adapter tests" section of HARDENING.md. Test failures are reported by
+the "Waived adapter tests" section of docs/hardening.md. Test failures are reported by
 the test executable's exit status, not by this script.
 """
 
@@ -43,7 +43,7 @@ def main():
             if "WAIVED:" not in message:
                 problems.append(f"unwaived skip: {name}")
             elif name not in waived:
-                problems.append(f"waiver not listed in HARDENING.md: {name}")
+                problems.append(f"waiver not listed in docs/hardening.md: {name}")
         else:
             problems.append(f"unexpected result '{result}': {name}")
 

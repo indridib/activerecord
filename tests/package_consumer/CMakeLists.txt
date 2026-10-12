@@ -2,7 +2,7 @@
 # tests/package_consumer/CMakeLists.txt
 #
 # A separate project that uses an *installed* ActiveRecord through
-# find_package(activerecord), the way a downstream user would (HARDENING.md check 8).
+# find_package(activerecord), the way a downstream user would (docs/hardening.md check 8).
 # It is not part of the main build.
 # ==============================================================================
 

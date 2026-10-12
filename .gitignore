@@ -43,10 +43,5 @@ vcpkg_installed/
 # Claude Code
 /.claude/
 
-# Local agent notes
-AGENTS.md
-claude_review.md
-CPP23_MIGRATION.md
-php_research.md
-todo/
-/_tmp_php_ar/
+# Private notes (not published)
+/.private/

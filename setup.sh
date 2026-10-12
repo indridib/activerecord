@@ -1,5 +1,5 @@
 #!/bin/bash
-# Setup script for ActiveRecord C++ project (Linux/macOS)
+# Setup script for ActiveRecord C++ project (Linux)
 # This script initializes vcpkg and bootstraps it if needed
 
 set -e

@@ -2,7 +2,7 @@
 
 Recurring checks that keep the codebase warning-free and free of memory and undefined-behavior errors. Run them all before a release and after any change to build flags, compilers, or low-level code (adapters, `attribute`, `datetime`).
 
-This implements the project rule "We don't like warnings in our compiled code" ([AGENTS.md](AGENTS.md#core-principle-simplicity-first)). Compiler warnings are errors in every build (`/WX`, `-Werror` in [cmake/Warnings.cmake](cmake/Warnings.cmake)), and so are clang-tidy findings (`WarningsAsErrors: '*'` in [.clang-tidy](.clang-tidy)). A new warning fails the build instead of accumulating.
+This implements the project rule "We don't like warnings in our compiled code" ([AGENTS.md](../AGENTS.md#core-principle-simplicity-first)). Compiler warnings are errors in every build (`/WX`, `-Werror` in [cmake/Warnings.cmake](../cmake/Warnings.cmake)), and so are clang-tidy findings (`WarningsAsErrors: '*'` in [.clang-tidy](../.clang-tidy)). A new warning fails the build instead of accumulating.
 
 ## Checks
 
@@ -30,10 +30,10 @@ Checks 2-5 build with the MySQL and PostgreSQL adapters enabled, so they need th
 sudo apt update && sudo apt install -y build-essential g++-14 clang clang-tidy libclang-rt-18-dev \
   cmake ninja-build pkg-config zip unzip curl git python3 \
   libtirpc-dev bison flex autoconf autoconf-archive automake libtool unixodbc-dev
-cd /mnt/c/dev/github/activerecord/vcpkg && ./bootstrap-vcpkg.sh -disableMetrics   # once; coexists with vcpkg.exe
+cd vcpkg && ./bootstrap-vcpkg.sh -disableMetrics && cd ..   # from the repo root, once; coexists with vcpkg.exe
 ```
 
-Keep WSL build directories on the Linux filesystem (`~/ar-build/...`). Building from `/mnt/c` works but is several times slower. For the same reason, and because renaming directories on `/mnt/c` can fail with `Permission denied`, vcpkg's buildtrees and packages go under `~/ar-build` (see `VCPKG_OPTS` below). The first adapter-enabled configure builds `libmysql` and `libpq` with their dependencies from source (95 ports, including Boost); later configures reuse the cache.
+Keep WSL build directories on the Linux filesystem (`~/ar-build/...` below; any directory there works). Building from `/mnt/c` works but is several times slower. For the same reason, and because renaming directories on `/mnt/c` can fail with `Permission denied`, vcpkg's buildtrees and packages go under `~/ar-build` (see `VCPKG_OPTS` below). The first adapter-enabled configure builds `libmysql` and `libpq` with their dependencies from source (95 ports, including Boost); later configures reuse the cache.
 
 **WSL database servers** (once). Enable systemd so the servers start with WSL: put `[boot]` / `systemd=true` in `/etc/wsl.conf`, run `wsl --shutdown` from Windows, reopen Ubuntu. Then:
 
@@ -81,7 +81,7 @@ Debug matters: MSVC reports some warnings (e.g. C4702 unreachable code) only in 
 ### Shared WSL setup (checks 2-6)
 
 ```bash
-R=/mnt/c/dev/github/activerecord                           # repo as seen from WSL
+R=$(git rev-parse --show-toplevel)                         # run inside the clone (a Windows clone under /mnt/c works)
 TC=$R/vcpkg/scripts/buildsystems/vcpkg.cmake
 VCPKG_OPTS="-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$HOME/ar-build/vcpkg-buildtrees;--x-packages-root=$HOME/ar-build/vcpkg-packages"
 COMMON="-G Ninja -DCMAKE_TOOLCHAIN_FILE=$TC -DAR_BUILD_TESTS=ON -DAR_BUILD_EXAMPLES=ON -DAR_SQLITE=ON -DAR_MYSQL=ON -DAR_POSTGRES=ON"
@@ -145,7 +145,7 @@ The options are required. By default UBSan prints a report and keeps running, so
 T=~/ar-build/clang/tests/integration_tests; failed=0
 for A in MySQL PostgreSQL; do
   "$T" --gtest_filter="AllAdapters/*/$A" --gtest_output=xml:$HOME/ar-build/$A.xml &&
-  python3 $R/tools/check_adapter_tests.py ~/ar-build/$A.xml $R/HARDENING.md || { echo "FAILED: $A"; failed=1; }
+  python3 $R/tools/check_adapter_tests.py ~/ar-build/$A.xml $R/docs/hardening.md || { echo "FAILED: $A"; failed=1; }
 done
 test $failed -eq 0
 ```
@@ -170,21 +170,23 @@ For PostgreSQL use the unit `postgresql@16-main` and `PostgreSQL` in the filter 
 `build.bat` stays SQLite-only. The MS-SQL build uses its own directory outside the repo:
 
 ```powershell
-cmake -S . -B C:\ar-build\mssql -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake" `
+$AR = "C:\ar-build"   # any build directory outside the repo
+cmake -S . -B "$AR\mssql" -G "Visual Studio 17 2022" -A x64 "-DCMAKE_TOOLCHAIN_FILE=$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake" `
   -DAR_BUILD_TESTS=ON -DAR_SQLITE=ON -DAR_MSSQL=ON
 foreach ($cfg in "Release", "Debug") {
-  cmake --build C:\ar-build\mssql --config $cfg; if ($LASTEXITCODE) { throw "build $cfg failed" }
-  ctest --test-dir C:\ar-build\mssql -C $cfg --output-on-failure; if ($LASTEXITCODE) { throw "ctest $cfg failed" }
-  & "C:\ar-build\mssql\tests\$cfg\integration_tests.exe" --gtest_filter="AllAdapters/*/MSSQL" "--gtest_output=xml:C:\ar-build\MSSQL-$cfg.xml"
+  cmake --build "$AR\mssql" --config $cfg; if ($LASTEXITCODE) { throw "build $cfg failed" }
+  ctest --test-dir "$AR\mssql" -C $cfg --output-on-failure; if ($LASTEXITCODE) { throw "ctest $cfg failed" }
+  & "$AR\mssql\tests\$cfg\integration_tests.exe" --gtest_filter="AllAdapters/*/MSSQL" "--gtest_output=xml:$AR\MSSQL-$cfg.xml"
   if ($LASTEXITCODE) { throw "MSSQL tests $cfg failed" }
-  python tools\check_adapter_tests.py "C:\ar-build\MSSQL-$cfg.xml" HARDENING.md; if ($LASTEXITCODE) { throw "MSSQL check $cfg failed" }
+  python tools\check_adapter_tests.py "$AR\MSSQL-$cfg.xml" docs\hardening.md; if ($LASTEXITCODE) { throw "MSSQL check $cfg failed" }
 }
 ```
 
 **Outage proof** (elevated PowerShell, from the repo root):
 
 ```powershell
-$T = "C:\ar-build\mssql\tests\Release\integration_tests.exe"; if (-not (Test-Path $T)) { throw "build check 7 first" }
+$AR = "C:\ar-build"   # as in check 7
+$T = "$AR\mssql\tests\Release\integration_tests.exe"; if (-not (Test-Path $T)) { throw "build check 7 first" }
 try {
   Stop-Service MSSQLSERVER -Force
   $out = & $T --gtest_filter="AllAdapters/*/MSSQL" 2>&1 | Out-String; $rc = $LASTEXITCODE
@@ -194,7 +196,7 @@ try {
 
 ### 8. Installed package (`find_package`)
 
-Installs the library, then builds [tests/package_consumer](tests/package_consumer) against the install: a separate CMake project that calls `find_package(activerecord CONFIG REQUIRED)`, saves and reloads one model through SQLite, and prints `package consumer OK`. The consumer uses the vcpkg toolchain in classic mode, pointed at the library build's `vcpkg_installed` tree, so it finds the same dependency packages (and vcpkg's package wrappers) a downstream vcpkg user would. Each variant also checks that the generated config does not ask for packages of adapters that were off.
+Installs the library, then builds [tests/package_consumer](../tests/package_consumer) against the install: a separate CMake project that calls `find_package(activerecord CONFIG REQUIRED)`, saves and reloads one model through SQLite, and prints `package consumer OK`. The consumer uses the vcpkg toolchain in classic mode, pointed at the library build's `vcpkg_installed` tree, so it finds the same dependency packages (and vcpkg's package wrappers) a downstream vcpkg user would. Each variant also checks that the generated config does not ask for packages of adapters that were off.
 
 **WSL** (after the shared setup; it does not use `COMMON`):
 
@@ -218,9 +220,10 @@ done
 **Windows** (PowerShell, from the repo root; not at the same time as WSL checks):
 
 ```powershell
+$AR = "C:\ar-build"   # any build directory outside the repo
 $TC = "$PWD\vcpkg\scripts\buildsystems\vcpkg.cmake"
 foreach ($variant in "sqlite", "mssql") {
-  $B = "C:\ar-build\pkg-$variant"; $P = "$B-prefix"; $C = "$B-consumer"
+  $B = "$AR\pkg-$variant"; $P = "$B-prefix"; $C = "$B-consumer"
   foreach ($d in $B, $P, $C) { if (Test-Path $d) { cmd /c "rd /s /q `"$d`"" } }
   $extra = @(); if ($variant -eq "mssql") { $extra += "-DAR_MSSQL=ON" }   # array, so @extra splats whole arguments
   $absent = if ($variant -eq "mssql") { "libmysql|MySQL|PostgreSQL" } else { "libmysql|MySQL|PostgreSQL|ODBC" }
@@ -247,16 +250,16 @@ The library is static and links the database client libraries privately, so the 
 
 Every clang-tidy suppression in the codebase, with its reason. Add new entries here when adding a `NOLINT` or relaxing a check.
 
-### Checks disabled in [.clang-tidy](.clang-tidy)
+### Checks disabled in [.clang-tidy](../.clang-tidy)
 
 | Check | Reason |
 |-------|--------|
 | `modernize-use-trailing-return-type` | Style-only; the codebase uses leading return types throughout |
-| `modernize-use-nodiscard` | Project convention: no `[[nodiscard]]` ([AGENTS.md](AGENTS.md#code-style-preferences)) |
+| `modernize-use-nodiscard` | Project convention: no `[[nodiscard]]` ([AGENTS.md](../AGENTS.md#code-style-preferences)) |
 
 `HeaderFilterRegex` is `'/include/activerecord/'`. clang-tidy matches it against absolute paths, so a regex anchored with `^` silently hides every finding in the headers.
 
-### Checks disabled in [tests/.clang-tidy](tests/.clang-tidy)
+### Checks disabled in [tests/.clang-tidy](../tests/.clang-tidy)
 
 | Check | Reason |
 |-------|--------|
@@ -287,5 +290,5 @@ _None._
 - MySQL and PostgreSQL are built and tested only on Linux, MS-SQL only on Windows (MSVC). clang-tidy analyzes the MS-SQL adapter only in its Linux (unixODBC) preprocessor view (check 4); it is not analyzed as MSVC compiles it, and it does not run under the sanitizers.
 - The integration suites (`adapter_tests.cpp`, `database_operations_test.cpp`, `datetime_integration_test.cpp`) run on every enabled adapter. Still SQLite-only: `sqlite_adapter_test.cpp` (SQLite-specific behaviour) and `QueryBuilderSqlTest` (asserts generated SQL text, which differs per adapter).
 - `ar::datetime` is always written as a Unix timestamp (INTEGER/BIGINT columns). Reading native DATETIME/TIMESTAMP columns is tested on every adapter; writing to them is not supported or tested (backlog).
-- `ModelSizeTest.BaseModelSize` pins `sizeof(model)` exactly per standard library (MSVC Release/Debug, libstdc++). Any growth fails on purpose; if it is intended, update the budget in [tests/unit/model_size_test.cpp](tests/unit/model_size_test.cpp).
+- `ModelSizeTest.BaseModelSize` pins `sizeof(model)` exactly per standard library (MSVC Release/Debug, libstdc++). Any growth fails on purpose; if it is intended, update the budget in [tests/unit/model_size_test.cpp](../tests/unit/model_size_test.cpp).
 - Clang 18 (Ubuntu 24.04 default) cannot use libstdc++ 14's `<expected>`. If the project adopts `std::expected`, install `clang-20` and use it for checks 3-5.
