@@ -1,8 +1,12 @@
-// ==============================================================================
+// ============================================================================
 // connection_factory_test.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Unit tests for make_connection(URL)
-// ==============================================================================
+//
 
 #include <activerecord/config.h>
 #include <activerecord/connection_factory.h>

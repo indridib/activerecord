@@ -22,8 +22,8 @@ fi
 
 echo "Using project vcpkg at: $VCPKG_PATH"
 echo ""
-echo "Note: Dependencies (SQLite3, GoogleTest) will be installed automatically"
-echo "      via vcpkg.json manifest mode when CMake configures"
+echo "Note: SQLite3 is installed automatically via vcpkg.json manifest mode when CMake"
+echo "      configures; GoogleTest is downloaded by CMake"
 echo ""
 
 # Configure with vcpkg toolchain (auto-detected by CMakeLists.txt)

@@ -1,9 +1,11 @@
 // ============================================================================
 // model.h
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
+//
+// Classic model: string-keyed attributes, CRUD, dirty tracking, timestamps and optimistic locking
 //
 
 #pragma once
@@ -97,7 +99,7 @@ class model {
 	 * Determines if an attribute exists for this model.
 	 *
 	 * @param name - attribute name.
-	 * @return - true if the attribute exist.
+	 * @return - true if the attribute exists.
 	 */
 	bool isset(std::string_view name) const noexcept {
 		std::string key{ name };
@@ -109,7 +111,7 @@ class model {
 	 * Returns the actual attribute name if name is aliased.
 	 *
 	 * @param name - attribute name.
-	 * @return - real name of the attribute or empty if attribute can not be found.
+	 * @return - real name of the attribute or empty if attribute cannot be found.
 	 */
 	std::string get_real_attribute_name(std::string_view name) const noexcept {
 		std::string key{ name };
@@ -204,7 +206,7 @@ class model {
 	 * Sets a single attribute.
 	 *
 	 * @param name - attribute name.
-	 * @param value - attributes value.
+	 * @param value - attribute value.
 	 * @param bool allow_new_attributes - if true will allow creating new attributes,
 	 *									  if false will throw an exception if the attribute does not already exist.
 	 */
@@ -244,7 +246,7 @@ class model {
 	 * Sets a single attribute (move semantics overload).
 	 *
 	 * @param name - attribute name.
-	 * @param value - attributes value (moved).
+	 * @param value - attribute value (moved).
 	 * @param bool allow_new_attributes - if true will allow creating new attributes,
 	 *									  if false will throw an exception if the attribute does not already exist.
 	 */
@@ -284,7 +286,7 @@ class model {
 	 * Updates a single attribute and saves the record without going through the normal validation procedure.
 	 *
 	 * @param name - attribute name.
-	 * @param value - attributes value.
+	 * @param value - attribute value.
 	 * @return bool - true if successful otherwise false.
 	 */
 	bool update_attribute(const std::string_view name, const attribute& value) {
@@ -388,7 +390,7 @@ class model {
 	/**
 	 * Returns true if the model has been modified.
 	 *
-	 * @return - true if he model has been modified
+	 * @return - true if the model has been modified
 	 */
 	bool is_dirty() const noexcept { return !dirty_.empty(); }
 
@@ -469,7 +471,7 @@ class model {
 	// - __clone()
 
 	/**
-	 * Run validations on model and returns whether or not model passed validation.
+	 * Runs validations on model and returns whether or not model passed validation.
 	 *
 	 * @see is_invalid()
 	 * @return - true if the model is valid
@@ -519,7 +521,7 @@ class model {
 	}
 
 	/**
-	 * Returns a XML representation of this model.
+	 * Returns an XML representation of this model.
 	 *
 	 * @param obj_name - name of the object, if empty table name will be used
 	 * @param only - if not empty names of attributes that will be included
@@ -555,7 +557,7 @@ class model {
 	//	after_validation
 
 	/**
-	 * Issue an UPDATE sql statement for this model's dirty attributes.
+	 * Issue an UPDATE SQL statement for this model's dirty attributes.
 	 *
 	 * @see save
 	 * @param bool should_validate - set to true or false depending on if you want the validators to run or not
@@ -624,7 +626,7 @@ class model {
 	}
 
 	/**
-	 * Issue an INSERT sql statement for this model's attribute.
+	 * Issue an INSERT SQL statement for this model's attributes.
 	 *
 	 * @see save
 	 * @param bool inValidate - set to true or false depending on if you want the validators to run or not
@@ -647,7 +649,7 @@ class model {
 		string_vector names;
 		attribute_vector values;
 		for (const auto& attrib : dirty_attributes()) {
-			// Make sure that primary keys isn't set
+			// Make sure that primary key isn't set
 			if (attrib != primary_key_) {
 				names.emplace_back(attrib);
 				values.emplace_back(get(attrib));
@@ -742,7 +744,7 @@ class model {
 
   public:					   // ###JWD
 	attribute_map attributes_; // values as column_name => value
-	bool new_record_{ true };  // wether this is a fresh copy not from database.
+	bool new_record_{ true };  // whether this is a fresh copy not from database.
 							   // Note: we could also test if the primary key is valid
   protected:
 	string_set dirty_;		 // attributes that are dirty

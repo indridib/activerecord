@@ -1,6 +1,6 @@
 @echo off
 REM Build with MSVC for static linking support
-REM Usage: build_msvc.bat [Release|Debug]
+REM Usage: build.bat [Release|Debug]
 
 setlocal
 

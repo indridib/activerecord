@@ -3,7 +3,9 @@
 //
 // SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
+//
+// typed_model<T>: CRTP model whose struct members map to table columns
 //
 
 #pragma once

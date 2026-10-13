@@ -1,13 +1,15 @@
-// ==============================================================================
+// ============================================================================
 // test_adapters.h
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
+// See file LICENSE for details
 //
 // Shared support for integration tests that run against every enabled adapter:
 // connection settings, per-adapter DDL fragments, and a parameterized fixture that
 // connects (failing, not skipping, when an enabled adapter is unreachable), creates
 // the fixture's tables and drops them afterwards.
-// ==============================================================================
+//
 
 #pragma once
 

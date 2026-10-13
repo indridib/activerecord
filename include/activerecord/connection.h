@@ -3,7 +3,9 @@
 //
 // SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
+//
+// Base classes for database adapters: connection and statement
 //
 
 #pragma once
@@ -71,7 +73,7 @@ class connection {
 
 	/**
 	 * Use this for any adapters that can take connection info in the form below
-	 * to set the adapters connection info.
+	 * to set the adapter's connection info.
 	 *
 	 * <code>
 	 * protocol://username:password@host[:port]/dbname
@@ -79,7 +81,7 @@ class connection {
 	 * protocol://username:password@unix(/some/file/path)/dbname
 	 * </code>
 	 *
-	 * Sqlite has a special syntax, as it does not need a database name or user authentication:
+	 * SQLite has a special syntax, as it does not need a database name or user authentication:
 	 *
 	 * <code>
 	 * sqlite://file.db
@@ -160,7 +162,7 @@ class connection {
 	virtual void commit() = 0;
 
 	/**
-	 * Rollback the current transaction.
+	 * Roll back the current transaction.
 	 */
 	virtual void rollback() = 0;
 

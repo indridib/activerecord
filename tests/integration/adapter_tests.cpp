@@ -1,9 +1,13 @@
 // ============================================================================
 // adapter_tests.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Parameterized integration tests that run against multiple database adapters
 // This ensures all adapters behave consistently
-// ============================================================================
+//
 
 #include "test_adapters.h"
 

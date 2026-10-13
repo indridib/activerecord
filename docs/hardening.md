@@ -117,7 +117,7 @@ cmake --build ~/ar-build/tidy --clean-first 2>&1 | tee ~/ar-build/tidy.log
 
 clang-tidy runs inline during compilation, and any finding fails the build. `set -o pipefail` (in the shared setup) keeps that failure visible through `tee`. The `grep` is a backstop for findings from checks that are not promoted to errors: it lists any it finds, and its exit status is 0 only when there are none. `--clean-first` makes sure every file is re-analyzed.
 
-Only this check adds `-DAR_MSSQL=ON`: it compiles the MS-SQL adapter, its example and the `AR_MSSQL` test code against unixODBC so clang-tidy analyzes them, and it never runs tests. Checks 2, 3 and 5 run `ctest` and leave MS-SQL out, because no SQL Server is reachable from WSL; MS-SQL behaviour is tested on Windows (check 7).
+Only this check adds `-DAR_MSSQL=ON`: it compiles the MS-SQL adapter, its example and the `AR_MSSQL` test code against unixODBC so clang-tidy analyzes them, and it never runs tests. Checks 2, 3 and 5 run `ctest` and leave MS-SQL out, because no SQL Server is reachable from WSL; MS-SQL behavior is tested on Windows (check 7).
 
 Two limitations:
 - It only works with Ninja or Makefile generators. CMake's Visual Studio generator silently ignores `CMAKE_CXX_CLANG_TIDY`, so there is no Windows equivalent of this check.
@@ -288,7 +288,7 @@ _None._
 
 - Sanitizers run only on Linux/Clang. MSVC builds are compiled but not sanitized.
 - MySQL and PostgreSQL are built and tested only on Linux, MS-SQL only on Windows (MSVC). clang-tidy analyzes the MS-SQL adapter only in its Linux (unixODBC) preprocessor view (check 4); it is not analyzed as MSVC compiles it, and it does not run under the sanitizers.
-- The integration suites (`adapter_tests.cpp`, `database_operations_test.cpp`, `datetime_integration_test.cpp`) run on every enabled adapter. Still SQLite-only: `sqlite_adapter_test.cpp` (SQLite-specific behaviour) and `QueryBuilderSqlTest` (asserts generated SQL text, which differs per adapter).
+- The integration suites (`adapter_tests.cpp`, `database_operations_test.cpp`, `datetime_integration_test.cpp`) run on every enabled adapter. Still SQLite-only: `sqlite_adapter_test.cpp` (SQLite-specific behavior) and `QueryBuilderSqlTest` (asserts generated SQL text, which differs per adapter).
 - `ar::datetime` is always written as a Unix timestamp (INTEGER/BIGINT columns). Reading native DATETIME/TIMESTAMP columns is tested on every adapter; writing to them is not supported or tested (backlog).
 - `ModelSizeTest.BaseModelSize` pins `sizeof(model)` exactly per standard library (MSVC Release/Debug, libstdc++). Any growth fails on purpose; if it is intended, update the budget in [tests/unit/model_size_test.cpp](../tests/unit/model_size_test.cpp).
 - Clang 18 (Ubuntu 24.04 default) cannot use libstdc++ 14's `<expected>`. If the project adopts `std::expected`, install `clang-20` and use it for checks 3-5.

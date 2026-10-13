@@ -3,10 +3,10 @@
 //
 // SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
 //
 // Tests for SQL injection prevention mechanisms
-// ============================================================================
+//
 
 #include <activerecord/attribute.h>
 #include <activerecord/connection.h>

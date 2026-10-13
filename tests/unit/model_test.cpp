@@ -1,12 +1,12 @@
-// ==============================================================================
+// ============================================================================
 // model_test.cpp
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
 //
 // Unit tests for the model class
-// ==============================================================================
+//
 
 #include <activerecord/activerecord.h>
 #include <activerecord/config.h>
@@ -256,7 +256,7 @@ TEST_F(ModelTest, VerifyNotReadonlyThrowsWhenReadonly) {
 TEST_F(ModelTest, CannotModifyPrimaryKeyOnPersistedRecord) {
 	TestModel m;
 	m.new_record_ = false;
-	m.attributes_["id"] = 1; // setup persisted PK directly
+	m.attributes_["id"] = 1; // set up persisted PK directly
 	m.reset_dirty();
 
 	EXPECT_THROW(m.set("id", 2, false), ex::readonly);

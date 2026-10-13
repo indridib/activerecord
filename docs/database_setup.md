@@ -94,7 +94,7 @@ cmake --build build --config Release
 #include <activerecord/model.h>
 
 int main() {
-    // Setup SQLite (in-memory or file-based)
+    // Set up SQLite (in-memory or file-based)
     ar::config::instance().set_connections({
         { "default", std::make_shared<ar::sqlite_adapter>(":memory:") }
         // or use a file: std::make_shared<ar::sqlite_adapter>("database.db")
@@ -121,7 +121,7 @@ int main() {
 #include <activerecord/model.h>
 
 int main() {
-    // Setup MySQL
+    // Set up MySQL
     ar::config::instance().set_connections({
         { "default", std::make_shared<ar::mysql_adapter>(
             "localhost",  // host
@@ -153,7 +153,7 @@ int main() {
 #include <activerecord/model.h>
 
 int main() {
-    // Setup PostgreSQL
+    // Set up PostgreSQL
     ar::config::instance().set_connections({
         { "default", std::make_shared<ar::postgres_adapter>(
             "localhost",  // host
@@ -185,7 +185,7 @@ int main() {
 #include <activerecord/model.h>
 
 int main() {
-    // Setup MS-SQL Server (multiple connection options)
+    // Set up MS-SQL Server (multiple connection options)
 
     // Option 1: Server, database, user, password
     ar::config::instance().set_connections({

@@ -1,9 +1,11 @@
 // ============================================================================
 // attribute.h
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
+//
+// Dynamic attribute value (string, integer, float, bool, datetime or null) and its conversions
 //
 
 #pragma once
@@ -38,7 +40,7 @@ using attribute_storage = std::variant<std::monostate, // 0 = type_null
 									   >;
 
 /**
- * a single attribute can be of a different type and can have different type of values
+ * a single attribute can be of a different type and can have different types of values
  */
 class attribute {
   public:
@@ -85,7 +87,7 @@ class attribute {
 	}
 
 	/**
-	 * Returns a numberic value of the attribute if possible
+	 * Returns a numeric value of the attribute if possible
 	 * Value types that can be converted to numeric are: null, bool, integer, double, date
 	 * @throws std::invalid_argument if it is unable to convert the value
 	 */
@@ -141,8 +143,8 @@ using attribute_map = std::map<std::string, attribute>;
 using attribute_vector = std::vector<attribute>;
 
 /**
- * Return all keys from attributes. If only is definied contains only those keys else we will select all keys
- * excluding those definied in excluded.
+ * Return all keys from attributes. If only is defined contains only those keys else we will select all keys
+ * excluding those defined in excluded.
  *
  * @param attributes - attributes to use.
  * @param only - if not empty names of attributes that will be included.

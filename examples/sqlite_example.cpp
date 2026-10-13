@@ -1,9 +1,13 @@
 // ============================================================================
 // sqlite_example.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Example demonstrating SQLite adapter usage with ActiveRecord
 // Showcases: all data types, lazy iteration, std::optional, timestamps, version
-// ============================================================================
+//
 
 #include <activerecord/adapters/sqlite_adapter.h>
 #include <activerecord/config.h>
@@ -23,7 +27,7 @@ class User : public ar::model {
 
 int main() {
 	try {
-		// 1. Setup database connection (using in-memory database for example)
+		// 1. Set up database connection (using in-memory database for example)
 		ar::config::instance().set_connections({ { "default", std::make_shared<ar::sqlite_adapter>(":memory:") } },
 											   "default");
 

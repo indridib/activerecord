@@ -1,11 +1,13 @@
-// ==============================================================================
-// tests/package_consumer/main.cpp
+// ============================================================================
+// main.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
+// See file LICENSE for details
 //
 // Smoke test for the installed package: save and reload one model through SQLite.
 // Exits 0 on success. Uses the library's public include style (<activerecord/model.h>).
-// ==============================================================================
+//
 
 #include <activerecord/adapters/sqlite_adapter.h>
 #include <activerecord/config.h>

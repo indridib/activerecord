@@ -2,6 +2,8 @@
 
 A C++ implementation of the [Active Record pattern](https://en.wikipedia.org/wiki/Active_record_pattern), influenced by [Ruby on Rails](https://guides.rubyonrails.org/active_record_basics.html) and [PHP ActiveRecord](https://github.com/jpfuentes2/php-activerecord).
 
+> **Status:** alpha (0.9.1), the first public release. The API may change before 1.0. Tested on Windows (MSVC) and Linux (GCC, Clang).
+
 ## Overview
 
 ActiveRecord maps database rows to C++ objects. Each model knows its table and can query, insert, update, and delete itself — keeping domain data and persistence logic together instead of scattering raw SQL across your codebase.
@@ -18,7 +20,7 @@ The library offers two model styles: a classic dynamic model with string-based a
 - **`std::optional` results** — `first()` returns optional, `first_or_throw()` for strict access
 - **`std::ranges` compatible** — compose queries with views and pipelines
 - **Auto-timestamps & optimistic locking** — convention-based `created_at`, `updated_at`, `version`
-- **Full parameter binding** — prevents SQL injection across all adapters
+- **Parameter binding** — values are bound, never spliced into SQL, on every adapter. Pass untrusted input through `?` placeholders; `where()` fragments themselves are written as SQL
 - **Type-safe attribute system** — string, integer, float, bool, datetime, null
 - **Dirty tracking** — only changed attributes are included in UPDATE statements
 - **Typed model validations** — declarative rules with per-attribute error collection
@@ -69,7 +71,7 @@ ctest --test-dir build -C Release --output-on-failure
 ./build/examples/typed_model_showcase
 ```
 
-Dependencies (SQLite3, GoogleTest) install automatically via the `vcpkg.json` manifest.
+SQLite3 installs via the `vcpkg.json` manifest; GoogleTest is downloaded by CMake when tests are enabled.
 
 ## Database Adapters
 
@@ -205,6 +207,14 @@ Following Active Record conventions:
 - **Validation:** uniqueness checks, validation contexts (`on_create`/`on_update`), and richer custom validators.
 
 - **Indexed storage:** migrate internal storage from `std::map<string, attribute>` to `std::vector<attribute>` with a shared column index, reducing per-instance memory and enabling bitset-based dirty tracking.
+
+## Contributing
+
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+
+## Security
+
+Please report vulnerabilities privately; see [SECURITY.md](SECURITY.md).
 
 ## License
 

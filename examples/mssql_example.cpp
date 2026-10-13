@@ -1,8 +1,12 @@
 // ============================================================================
 // mssql_example.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Example demonstrating MS-SQL Server adapter usage with ActiveRecord
-// ============================================================================
+//
 
 #include <activerecord/adapters/mssql_adapter.h>
 #include <activerecord/config.h>
@@ -21,7 +25,7 @@ class User : public ar::model {
 
 int main() {
 	try {
-		// 1. Setup database connection
+		// 1. Set up database connection
 		// Note: Update these credentials for your MS-SQL Server
 		std::string server = "localhost";
 		std::string database = "activerecord_test";

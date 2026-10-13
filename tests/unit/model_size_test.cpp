@@ -1,8 +1,12 @@
 // ============================================================================
 // model_size_test.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Tests for model memory footprint tracking
-// ============================================================================
+//
 
 #include <activerecord/attribute.h>
 #include <activerecord/config.h>

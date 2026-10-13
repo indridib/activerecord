@@ -3,7 +3,9 @@
 //
 // SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
+//
+// Declarative validation rules (presence, length, numericality, format) for typed_model<T>
 //
 
 #pragma once

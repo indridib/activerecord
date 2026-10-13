@@ -1,9 +1,13 @@
 // ============================================================================
 // typed_model_showcase.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Demonstrates typed_model<T> with mixed field types on SQLite in-memory DB.
 // Change the connection setup in main() to use another adapter.
-// ============================================================================
+//
 
 #include <activerecord/adapters/sqlite_adapter.h>
 #include <activerecord/config.h>

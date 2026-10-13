@@ -3,10 +3,10 @@
 //
 // SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
 //
 // Unit tests for transaction RAII wrapper
-// ============================================================================
+//
 
 #include <activerecord/config.h>
 #include <activerecord/model.h>

@@ -1,9 +1,11 @@
 // ============================================================================
 // sql_builder.h
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
+//
+// SQL builder and query<T>: conditions, ordering, limits, finders and lazy iteration
 //
 
 #pragma once
@@ -21,7 +23,7 @@
 namespace ar {
 
 /**
- * Helper class for building sql statements progmatically
+ * Helper class for building SQL statements programmatically
  */
 class sql_builder {
 
@@ -338,7 +340,7 @@ template <class T> class query : public sql_builder {
 	}
 
 	/*
-	 * Returns a count number of items matching the query
+	 * Returns the number of items matching the query
 	 */
 	long count() {
 		query<T> count_query{ *this };

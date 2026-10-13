@@ -1,10 +1,12 @@
-// ==============================================================================
+// ============================================================================
 // validation_test.cpp
 //
 // SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
-// ==============================================================================
+// See file LICENSE for details
+//
+// Unit tests for typed_model<T> validations
+//
 
 #include <activerecord/config.h>
 #include <activerecord/typed_model.h>

@@ -1,8 +1,12 @@
 // ============================================================================
 // mysql_example.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Example demonstrating MySQL adapter usage with ActiveRecord
-// ============================================================================
+//
 
 #include <activerecord/adapters/mysql_adapter.h>
 #include <activerecord/config.h>
@@ -21,7 +25,7 @@ class User : public ar::model {
 
 int main() {
 	try {
-		// 1. Setup database connection
+		// 1. Set up database connection
 		// Note: Update these credentials for your MySQL server
 		std::string host = "localhost";
 		std::string username = "root";

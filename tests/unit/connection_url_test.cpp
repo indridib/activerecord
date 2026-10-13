@@ -1,8 +1,12 @@
-// ==============================================================================
+// ============================================================================
 // connection_url_test.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // Unit tests for connection::parse_connection_url
-// ==============================================================================
+//
 
 #include <activerecord/connection.h>
 #include <gtest/gtest.h>

@@ -1,12 +1,12 @@
-// ==============================================================================
+// ============================================================================
 // sqlite_adapter_test.cpp
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
 //
 // Integration tests for SQLite adapter
-// ==============================================================================
+//
 
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/sqlite_adapter.h>

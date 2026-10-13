@@ -1,8 +1,12 @@
 // ============================================================================
 // connection_factory.cpp
 //
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
+// SPDX-License-Identifier: MIT
+// See file LICENSE for details
+//
 // DSN/URL driven connection construction
-// ============================================================================
+//
 
 #include <activerecord/connection_factory.h>
 

@@ -1,12 +1,12 @@
 // ============================================================================
 // postgres_adapter.h
 //
-// SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+// SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 // SPDX-License-Identifier: MIT
-// See file LICENSE.MIT for detail
+// See file LICENSE for details
 //
 // A PostgreSQL adapter class using libpq
-// ============================================================================
+//
 
 #pragma once
 

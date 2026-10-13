@@ -1,9 +1,9 @@
 # ==============================================================================
 # tests/CMakeLists.txt
 #
-# SPDX-FileCopyrightText: 2020-2023 Indridi Bjornsson
+# SPDX-FileCopyrightText: 2020-2026 Indridi Bjornsson
 # SPDX-License-Identifier: MIT
-# See file LICENSE.MIT for detail
+# See file LICENSE for details
 #
 # GoogleTest-based testing for ActiveRecord library
 # ==============================================================================
