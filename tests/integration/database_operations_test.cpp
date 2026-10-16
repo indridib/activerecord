@@ -32,6 +32,9 @@ class User : public model {
 	static const char* st_primary_key() { return "id"; }
 
 	User() : model(st_table_name(), st_primary_key()) {}
+
+	using model::attributes_;
+	using model::new_record_;
 };
 
 } // namespace

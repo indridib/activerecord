@@ -27,6 +27,7 @@ namespace ar {
  */
 class model {
 	friend class sql_builder;
+	template <class T> friend class query;
 
   public:
 	/**
@@ -741,14 +742,11 @@ class model {
 	config::connection_ptr connection_; // a reference to the database connection to use
 	std::string_view table_name_;		// name of the database table (expected static lifetime)
 	std::string_view primary_key_;		// name of primary key, default id
-
-  public:					   // ###JWD
-	attribute_map attributes_; // values as column_name => value
-	bool new_record_{ true };  // whether this is a fresh copy not from database.
-							   // Note: we could also test if the primary key is valid
-  protected:
-	string_set dirty_;		 // attributes that are dirty
-	bool readonly_{ false }; // no writing
+	attribute_map attributes_;			// values as column_name => value
+	bool new_record_{ true };			// whether this is a fresh copy not from database.
+										// Note: we could also test if the primary key is valid
+	string_set dirty_;					// attributes that are dirty
+	bool readonly_{ false };			// no writing
 	bool track_record_metadata_{ true };
 	mutable std::unique_ptr<ar::errors> errors_{};
 };

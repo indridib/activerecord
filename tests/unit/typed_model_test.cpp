@@ -82,6 +82,9 @@ struct typed_user : typed_model<typed_user> {
 	static constexpr auto table_name{ "users" };
 	static constexpr auto primary_key{ "id" };
 
+	using model::attributes_;
+	using model::new_record_;
+
 	long id{};
 	std::string name{};
 	std::string email{};
@@ -95,6 +98,9 @@ struct typed_user : typed_model<typed_user> {
 struct typed_user_tracking_off : typed_model<typed_user_tracking_off, false> {
 	static constexpr auto table_name{ "users" };
 	static constexpr auto primary_key{ "id" };
+
+	using model::attributes_;
+	using model::new_record_;
 
 	long id{};
 	std::string name{};
@@ -114,6 +120,9 @@ enum class task_state : int32_t { pending = 0, running = 1, done = 2 };
 struct typed_task : typed_model<typed_task> {
 	static constexpr auto table_name{ "tasks" };
 	static constexpr auto primary_key{ "id" };
+
+	using model::attributes_;
+	using model::new_record_;
 
 	long id{};
 	task_state state{ task_state::pending };

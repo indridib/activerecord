@@ -222,7 +222,6 @@ class connection {
 	 * @param limit - maximum number of rows to return.
 	 * @return on return sql will contain a SQL query that will limit results to specified parameters
 	 */
-	// ####JWD virtual void limit(std::string& sql, std::size_t inOffset, std::size_t inLimit) const = 0;
 	virtual void limit(std::string& sql, long offset, long limit) const = 0;
 
 	// - query_column_info

@@ -44,6 +44,9 @@ class mock_connection : public connection {
 class TestModel : public model {
   public:
 	TestModel() : model("test_table", "id") {}
+
+	using model::attributes_;
+	using model::new_record_;
 };
 
 // Test fixture to set up mock connection
