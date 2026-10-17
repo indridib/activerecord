@@ -15,6 +15,7 @@
 #include <activerecord/datetime.h>
 #include <activerecord/model.h>
 #include <activerecord/sql_builder.h>
+#include <activerecord/typed_model.h>
 #include <gtest/gtest.h>
 
 using namespace ar;
@@ -871,6 +872,250 @@ TEST_P(TimestampVersionTest, MetadataTrackingOffWorksWithPartialTrackingColumns)
 	EXPECT_EQ("Updated Partial", reloaded.get("name").as_string());
 }
 
+TEST_P(TimestampVersionTest, NullVersionPlaceholderDoesNotLock) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO timestamped_users (name) VALUES (?)", { "NoVersion" });
+
+	auto user = query<TimestampedUser>().where("name = ?", "NoVersion").first_or_throw();
+	ASSERT_TRUE(user.get("version").is_null());
+	user.set("email", "nv@example.com");
+	EXPECT_TRUE(user.save());
+	EXPECT_TRUE(user.get("version").is_null());
+
+	auto reloaded = query<TimestampedUser>().where("name = ?", "NoVersion").first_or_throw();
+	EXPECT_EQ("nv@example.com", reloaded.get("email").as_string());
+	EXPECT_TRUE(user.destroy());
+}
+
+// ==============================================================================
+// Record identity and UPDATE/DELETE bounds
+// ==============================================================================
+
+namespace {
+
+class Account : public model {
+  public:
+	static const char* st_table_name() { return "accounts"; }
+	static const char* st_primary_key() { return "uid"; }
+
+	Account() : model(st_table_name(), st_primary_key()) {}
+};
+
+struct TypedAccount : typed_model<TypedAccount> {
+	static constexpr auto table_name{ "accounts" };
+	static constexpr auto primary_key{ "uid" };
+
+	long uid{};
+	std::string name{};
+
+	static constexpr auto columns() {
+		return ar::columns(ar::col<&TypedAccount::uid>("uid"), ar::col<&TypedAccount::name>("name"));
+	}
+};
+
+// Tables whose primary key has the name of an automatically managed metadata column
+class PkCreatedAt : public model {
+  public:
+	static const char* st_table_name() { return "pk_created_at"; }
+	static const char* st_primary_key() { return "created_at"; }
+
+	PkCreatedAt() : model(st_table_name(), st_primary_key()) {}
+};
+
+class PkUpdatedAt : public model {
+  public:
+	static const char* st_table_name() { return "pk_updated_at"; }
+	static const char* st_primary_key() { return "updated_at"; }
+
+	PkUpdatedAt() : model(st_table_name(), st_primary_key()) {}
+};
+
+class PkVersion : public model {
+  public:
+	static const char* st_table_name() { return "pk_version"; }
+	static const char* st_primary_key() { return "version"; }
+
+	PkVersion() : model(st_table_name(), st_primary_key()) {}
+};
+
+} // namespace
+
+class IdentityAndBoundsTest : public AdapterTest {
+  protected:
+	table_list table_definitions(AdapterType type) const override {
+		const std::string text{ text_type(type) };
+		const std::string ts{ timestamp_type(type) };
+		return {
+			{ "users", users_columns(type) },
+			{ "accounts", std::format("uid INT PRIMARY KEY, name {} NOT NULL", text) },
+			{ "pk_created_at",
+			  std::format("created_at {} PRIMARY KEY, name {} NOT NULL, updated_at {}, version INTEGER", ts, text,
+						  ts) },
+			{ "pk_updated_at",
+			  std::format("updated_at {} PRIMARY KEY, name {} NOT NULL, created_at {}, version INTEGER", ts, text,
+						  ts) },
+			{ "pk_version", std::format("version INTEGER PRIMARY KEY, name {} NOT NULL, created_at {}, updated_at {}",
+										text, ts, ts) },
+		};
+	}
+
+	static void insert_users() {
+		auto conn = config::instance().get_connection();
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "U1", 20 });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "U2", 30 });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "U3", 40 });
+		conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "U4", 50 });
+	}
+
+	static std::vector<std::string> names(const std::vector<User>& users) {
+		std::vector<std::string> result;
+		result.reserve(users.size());
+		for (const auto& user : users) {
+			result.push_back(user.get("name").as_string());
+		}
+		return result;
+	}
+
+	static std::string account_name(int uid) {
+		return query<Account>().where("uid = ?", uid).first_or_throw().get("name").as_string();
+	}
+};
+
+TEST_P(IdentityAndBoundsTest, CustomPrimaryKeyAliasCannotOverwriteAnotherRow) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO accounts (uid, name) VALUES (?, ?)", { 1, "A" });
+	conn->query("INSERT INTO accounts (uid, name) VALUES (?, ?)", { 2, "B" });
+
+	auto account = query<Account>().where("uid = ?", 1).first_or_throw();
+	EXPECT_THROW(account.set("id", 2), ex::readonly);
+	account.set("name", "overwritten");
+	EXPECT_TRUE(account.save());
+
+	EXPECT_EQ(1, account.get("uid").as_integer());
+	EXPECT_EQ("overwritten", account_name(1));
+	EXPECT_EQ("B", account_name(2));
+}
+
+TEST_P(IdentityAndBoundsTest, TypedRecordWithoutLoadedPrimaryKeyCannotBeSaved) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO accounts (uid, name) VALUES (?, ?)", { 1, "A" });
+	conn->query("INSERT INTO accounts (uid, name) VALUES (?, ?)", { 2, "B" });
+
+	auto account = query<TypedAccount>().select("name").where("uid = ?", 1).first_or_throw();
+	account.uid = 2;
+	account.name = "overwritten";
+	EXPECT_THROW(account.save(), ex::readonly);
+
+	EXPECT_EQ("A", account_name(1));
+	EXPECT_EQ("B", account_name(2));
+}
+
+TEST_P(IdentityAndBoundsTest, CreatedAtPrimaryKeyIsNotManaged) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO pk_created_at (created_at, name, version) VALUES (?, ?, ?)", { 100, "A", 1 });
+	conn->query("INSERT INTO pk_created_at (created_at, name, version) VALUES (?, ?, ?)", { 200, "B", 1 });
+
+	auto row = query<PkCreatedAt>().where("created_at = ?", 100).first_or_throw();
+	row.set("name", "Changed");
+	EXPECT_TRUE(row.save());
+	EXPECT_EQ(100, row.get("created_at").as_date().timestamp());
+	EXPECT_EQ(2, row.get("version").as_integer()); // ordinary metadata is still managed
+
+	auto other = query<PkCreatedAt>().where("created_at = ?", 200).first_or_throw();
+	EXPECT_EQ("B", other.get("name").as_string());
+	EXPECT_EQ(1, other.get("version").as_integer());
+
+	EXPECT_TRUE(row.destroy());
+	EXPECT_EQ(1, query<PkCreatedAt>().count());
+}
+
+TEST_P(IdentityAndBoundsTest, UpdatedAtPrimaryKeyIsNotManaged) {
+	// The second row is keyed by the current time: an update that set updated_at = now would hit it
+	const std::time_t now{ datetime::now().timestamp() };
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO pk_updated_at (updated_at, name, version) VALUES (?, ?, ?)", { 100, "A", 1 });
+	conn->query("INSERT INTO pk_updated_at (updated_at, name, version) VALUES (?, ?, ?)",
+				{ static_cast<int64_t>(now), "B", 1 });
+
+	auto row = query<PkUpdatedAt>().where("updated_at = ?", 100).first_or_throw();
+	row.set("name", "Changed");
+	EXPECT_TRUE(row.save());
+	EXPECT_EQ(100, row.get("updated_at").as_date().timestamp());
+
+	auto changed = query<PkUpdatedAt>().where("updated_at = ?", 100).first_or_throw();
+	EXPECT_EQ("Changed", changed.get("name").as_string());
+	auto other = query<PkUpdatedAt>().where("name = ?", "B").first_or_throw();
+	EXPECT_EQ(now, other.get("updated_at").as_date().timestamp());
+	EXPECT_EQ(1, other.get("version").as_integer());
+
+	EXPECT_TRUE(row.destroy());
+	EXPECT_EQ(1, query<PkUpdatedAt>().count());
+	EXPECT_TRUE(query<PkUpdatedAt>().where("name = ?", "B").exists());
+}
+
+TEST_P(IdentityAndBoundsTest, VersionPrimaryKeyIsNotManaged) {
+	auto conn = config::instance().get_connection();
+	conn->query("INSERT INTO pk_version (version, name) VALUES (?, ?)", { 1, "A" });
+	conn->query("INSERT INTO pk_version (version, name) VALUES (?, ?)", { 2, "B" });
+
+	auto row = query<PkVersion>().where("version = ?", 1).first_or_throw();
+	row.set("name", "Changed");
+	EXPECT_TRUE(row.save());
+	EXPECT_EQ(1, row.get("version").as_integer());
+
+	EXPECT_EQ("Changed", query<PkVersion>().where("version = ?", 1).first_or_throw().get("name").as_string());
+	EXPECT_EQ("B", query<PkVersion>().where("version = ?", 2).first_or_throw().get("name").as_string());
+
+	EXPECT_TRUE(row.destroy());
+	EXPECT_EQ(1, query<PkVersion>().count());
+	EXPECT_TRUE(query<PkVersion>().where("version = ?", 2).exists());
+}
+
+TEST_P(IdentityAndBoundsTest, OrderedDeleteAllDeletesOnlyMatchingRows) {
+	insert_users();
+
+	EXPECT_EQ(3, query<User>().where("age >= ?", 30).order("age DESC").delete_all());
+	EXPECT_EQ(std::vector<std::string>{ "U1" }, names(query<User>().all()));
+}
+
+TEST_P(IdentityAndBoundsTest, DeleteAllLimitAppliesOnMysqlOnly) {
+	insert_users();
+
+	if (adapter_type() == AdapterType::MySQL) {
+		EXPECT_EQ(0, query<User>().limit(0).delete_all());
+		EXPECT_EQ(1, query<User>().order("age DESC").limit(1).delete_all());
+		EXPECT_EQ((std::vector<std::string>{ "U1", "U2", "U3" }), names(query<User>().order("id").all()));
+	} else {
+		EXPECT_THROW(query<User>().limit(1).delete_all(), ex::activerecord);
+		EXPECT_THROW(query<User>().limit(0).delete_all(), ex::activerecord);
+		EXPECT_EQ(4, query<User>().count());
+	}
+}
+
+TEST_P(IdentityAndBoundsTest, DeleteAllOffsetThrowsOnEveryAdapter) {
+	insert_users();
+
+	EXPECT_THROW(query<User>().offset(1).delete_all(), ex::activerecord);
+	EXPECT_THROW(query<User>().offset(0).delete_all(), ex::activerecord);
+	EXPECT_THROW(query<User>().order("age").limit(1).offset(1).delete_all(), ex::activerecord);
+	EXPECT_EQ(4, query<User>().count());
+}
+
+TEST_P(IdentityAndBoundsTest, GroupedCountAndExistsThrow) {
+	insert_users();
+
+	EXPECT_THROW(query<User>().group("active").count(), ex::activerecord);
+	EXPECT_THROW(query<User>().group("active").exists(), ex::activerecord);
+}
+
+TEST_P(IdentityAndBoundsTest, OffsetWithoutLimitSkipsRows) {
+	insert_users();
+
+	EXPECT_EQ((std::vector<std::string>{ "U3", "U4" }), names(query<User>().order("id").offset(2).all()));
+	EXPECT_EQ((std::vector<std::string>{ "U1", "U2", "U3", "U4" }), names(query<User>().order("id").offset(0).all()));
+	EXPECT_TRUE(query<User>().order("id").offset(10).all().empty());
+}
+
 // ==============================================================================
 // Test Instantiation
 // ==============================================================================
@@ -878,4 +1123,6 @@ TEST_P(TimestampVersionTest, MetadataTrackingOffWorksWithPartialTrackingColumns)
 INSTANTIATE_TEST_SUITE_P(AllAdapters, DatabaseOperationsTest, ::testing::ValuesIn(enabled_adapters()),
 						 adapter_param_name);
 INSTANTIATE_TEST_SUITE_P(AllAdapters, TimestampVersionTest, ::testing::ValuesIn(enabled_adapters()),
+						 adapter_param_name);
+INSTANTIATE_TEST_SUITE_P(AllAdapters, IdentityAndBoundsTest, ::testing::ValuesIn(enabled_adapters()),
 						 adapter_param_name);

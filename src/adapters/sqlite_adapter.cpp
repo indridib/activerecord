@@ -254,9 +254,11 @@ void sqlite_adapter::limit(std::string& sql, long offset, long limit) const {
 	// SQLite LIMIT syntax: LIMIT number_rows OFFSET offset_value
 	if (limit >= 0) {
 		sql += " LIMIT " + std::to_string(limit);
-		if (offset >= 0) {
-			sql += " OFFSET " + std::to_string(offset);
-		}
+	} else if (offset >= 0) {
+		sql += " LIMIT -1"; // SQLite needs LIMIT before OFFSET; negative means no limit
+	}
+	if (offset >= 0) {
+		sql += " OFFSET " + std::to_string(offset);
 	}
 }
 

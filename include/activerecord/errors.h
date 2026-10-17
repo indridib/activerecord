@@ -33,7 +33,7 @@ class errors {
 		return total;
 	}
 
-	const string_vector& on(std::string_view attribute) const noexcept {
+	const string_vector& on(std::string_view attribute) const {
 		const auto iter = messages_.find(std::string(attribute));
 		if (iter == messages_.end()) {
 			return empty_messages_;

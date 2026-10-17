@@ -74,7 +74,6 @@ class mssql_adapter : public connection {
 	void rollback() override;
 	std::string escape(std::string_view str) const override;
 
-	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
   private:
 	void connect(const std::string& connection_string);

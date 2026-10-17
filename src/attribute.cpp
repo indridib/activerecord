@@ -85,8 +85,7 @@ std::string escape_xml(std::string_view value) {
 }
 } // namespace
 
-string_vector get_attrib_keys(const attribute_map& attributes, const string_vector& only,
-							  const string_set& exclude) noexcept {
+string_vector get_attrib_keys(const attribute_map& attributes, const string_vector& only, const string_set& exclude) {
 	string_vector attrib_names{ only };
 	if (attrib_names.empty()) {
 		// use all keys

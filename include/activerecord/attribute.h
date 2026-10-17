@@ -152,7 +152,7 @@ using attribute_vector = std::vector<attribute>;
  * @return - vector of keys to use.
  */
 string_vector get_attrib_keys(const attribute_map& attributes, const string_vector& only = {},
-							  const string_set& exclude = {}) noexcept;
+							  const string_set& exclude = {});
 
 /**
  * Return attributes as JSON string.

@@ -209,6 +209,38 @@ TEST_F(TypedModelTest, PersistedPrimaryKeyMutationThrowsOnSave) {
 	EXPECT_THROW(user.save(false), ex::readonly);
 }
 
+TEST_F(TypedModelTest, PersistedRecordWithoutLoadedPrimaryKeyCannotBeSaved) {
+	attribute_map row;
+	row["name"] = "Jane";
+	row["email"] = "jane@example.com";
+	connection_->queue(std::make_unique<typed_test_statement>(std::vector<attribute_map>{ row }));
+
+	auto user = query<typed_user>().select("name, email").first_or_throw();
+	EXPECT_FALSE(user.is_new_record());
+
+	user.id = 2;
+	user.name = "Changed";
+	EXPECT_NO_THROW(user.sync_to_attributes());
+	EXPECT_FALSE(user.attributes_.contains("id"));
+	EXPECT_TRUE(user.is_valid());
+	EXPECT_THROW(user.save(false), ex::readonly);
+	EXPECT_FALSE(user.attributes_.contains("id"));
+}
+
+TEST_F(TypedModelTest, LoadedUnchangedPrimaryKeySavesNormally) {
+	attribute_map row;
+	row["id"] = 5;
+	row["name"] = "Jane";
+	row["email"] = "jane@example.com";
+	connection_->queue(std::make_unique<typed_test_statement>(std::vector<attribute_map>{ row }));
+
+	auto user = query<typed_user>().first_or_throw();
+	user.name = "Changed";
+	EXPECT_TRUE(user.save(false));
+	EXPECT_EQ(5, user.id);
+	EXPECT_EQ(5, user.get("id").as_integer());
+}
+
 TEST_F(TypedModelTest, SaveSyncsGeneratedPrimaryKeyBackToMembers) {
 	typed_user user;
 	user.name = "New User";

@@ -62,7 +62,6 @@ class postgres_adapter : public connection {
 	void rollback() override;
 	std::string escape(std::string_view str) const override;
 
-	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
   private:
 	PGconn* db_{ nullptr }; // Owned database connection (closed in destructor)

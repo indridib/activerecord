@@ -53,18 +53,18 @@ class sql_builder {
 
 	const attribute_vector& get_bind_values() const noexcept { return bind_values_; }
 
-	void add_order(std::string_view order) noexcept { order_ = order; }
-	void add_group(std::string_view group) noexcept { group_ = group; }
-	void add_having(std::string_view having) noexcept { having_ = having; }
-	void add_select(std::string_view select) noexcept {
+	void add_order(std::string_view order) { order_ = order; }
+	void add_group(std::string_view group) { group_ = group; }
+	void add_having(std::string_view having) { having_ = having; }
+	void add_select(std::string_view select) {
 		operation_ = sql_select;
 		select_ = select;
 	}
-	void add_joins(std::string_view joins) noexcept { joins_ = joins; }
+	void add_joins(std::string_view joins) { joins_ = joins; }
 	void set_limit(long limit) noexcept { limit_ = limit; }
 	void set_offset(long offset) noexcept { offset_ = offset; }
 
-	void add_where(std::string_view str_where, const attribute_vector& values) noexcept {
+	void add_where(std::string_view str_where, const attribute_vector& values) {
 		if (str_where.empty()) {
 			return;
 		}
@@ -79,13 +79,13 @@ class sql_builder {
 		bind_values_ = where_bind_values_;
 	}
 
-	void update(const string_vector& names, const attribute_vector& values) noexcept {
+	void update(const string_vector& names, const attribute_vector& values) {
 		operation_ = sql_update;
 		keys_ = names;
 		data_ = values;
 	}
 
-	void insert(const string_vector& names, const attribute_vector& values) noexcept {
+	void insert(const string_vector& names, const attribute_vector& values) {
 		operation_ = sql_insert;
 		keys_ = names;
 		data_ = values;
@@ -167,11 +167,7 @@ class sql_builder {
 			sql += std::format(" WHERE {}", where_);
 		}
 
-		if (connection_->accepts_limit_and_order_for_update_and_delete()) {
-			if ((offset_ >= 0) || (limit_ >= 0)) {
-				connection_->limit(sql, offset_, limit_);
-			}
-		}
+		append_dml_order_and_limit(sql);
 
 		attribute_vector where_values{ where_bind_values_ };
 		bind_values_.clear();
@@ -187,18 +183,32 @@ class sql_builder {
 			sql += std::format(" WHERE {}", where_);
 		}
 
-		if (!order_.empty()) {
-			sql += std::format(" ORDER BY {}", order_);
-		}
-
-		if (connection_->accepts_limit_and_order_for_update_and_delete()) {
-			if ((offset_ >= 0) || (limit_ >= 0)) {
-				connection_->limit(sql, offset_, limit_);
-			}
-		}
+		append_dml_order_and_limit(sql);
 
 		bind_values_ = where_bind_values_;
 		return sql;
+	}
+
+	// UPDATE/DELETE never get OFFSET, and LIMIT only where the adapter accepts it; both throw instead of being
+	// dropped, which would widen the statement to every matching row. Without LIMIT, ORDER BY does not change
+	// which rows match, so it is left out where unsupported.
+	void append_dml_order_and_limit(std::string& sql) const {
+		if (offset_ >= 0) {
+			throw ex::activerecord("OFFSET is not supported in UPDATE/DELETE");
+		}
+		const bool accepts{ connection_->accepts_limit_and_order_for_update_and_delete() };
+		if (limit_ >= 0 && !accepts) {
+			throw ex::activerecord("LIMIT is not supported in UPDATE/DELETE by this adapter");
+		}
+		if (!accepts) {
+			return;
+		}
+		if (!order_.empty()) {
+			sql += std::format(" ORDER BY {}", order_);
+		}
+		if (limit_ >= 0) {
+			connection_->limit(sql, offset_, limit_);
+		}
 	}
 
 	config::connection_ptr connection_; ///< a reference to the database connection to use
@@ -340,9 +350,12 @@ template <class T> class query : public sql_builder {
 	}
 
 	/*
-	 * Returns the number of items matching the query
+	 * Returns the number of items matching the query. Throws ex::activerecord if the query has group().
 	 */
 	long count() {
+		if (!group_.empty()) {
+			throw ex::activerecord("count() and exists() are not supported with group()");
+		}
 		query<T> count_query{ *this };
 		count_query.select("COUNT(*)");
 		count_query.set_limit(-1);
@@ -374,7 +387,7 @@ template <class T> class query : public sql_builder {
 	}
 
 	/*
-	 * Returns true if a record matching the query exists
+	 * Returns true if a record matching the query exists. Throws ex::activerecord if the query has group().
 	 */
 	bool exists() { return count() > 0; }
 

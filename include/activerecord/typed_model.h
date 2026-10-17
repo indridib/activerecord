@@ -147,7 +147,15 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 
 	typed_model() : model(st_table_name(), st_primary_key()) { this->set_record_tracking_policy(TrackRecordMetadata); }
 
+	/**
+	 * Saves the record. Throws ex::readonly for a persisted record whose primary key was not loaded
+	 * (e.g. queried with select() without it), since its row cannot be identified.
+	 */
 	bool save(bool should_validate = true) {
+		if (!new_record_ && !attributes_.contains(std::string(get_primary_key()))) {
+			throw ex::readonly("Persisted {} cannot be saved without its primary key \"{}\"", table_name(),
+							   get_primary_key());
+		}
 		sync_to_attributes();
 		if (should_validate && !run_validations()) {
 			return false;
@@ -197,7 +205,10 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 
 		if (!new_record_ && column_name == std::string(get_primary_key())) {
 			const auto current = attributes_.find(column_name);
-			if (current != attributes_.end() && !detail::attribute_equal(current->second, next_value)) {
+			if (current == attributes_.end()) {
+				return;
+			}
+			if (!detail::attribute_equal(current->second, next_value)) {
 				throw ex::readonly("Primary key \"{}\" cannot be modified on persisted {}", get_primary_key(),
 								   table_name());
 			}

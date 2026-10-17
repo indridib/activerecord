@@ -131,7 +131,10 @@ ar::query<User>()
 
 ```cpp
 ar::query<User>().order("id").limit(10).offset(20)
+ar::query<User>().order("id").offset(20)  // every row after the first 20
 ```
+
+`offset()` works without `limit()` on every adapter. Use `order()` with both, so the rows skipped are well defined.
 
 ---
 
@@ -195,6 +198,8 @@ long total = ar::query<User>().where("active = ?", true).count();
 
 `count()` strips any ORDER BY, LIMIT, and OFFSET from the query — it always counts all matching rows.
 
+`count()` and `exists()` throw `ar::ex::activerecord` if the query has `group()`. To count per group, select the count yourself: `select("role, COUNT(*) AS n").group("role")`.
+
 ### exists()
 
 Returns `true` if at least one record matches:
@@ -211,6 +216,16 @@ Deletes all records matching the current query scope. Returns the number of rows
 
 ```cpp
 long deleted = ar::query<User>().where("active = ?", false).delete_all();
+```
+
+Scope rules, checked before any SQL is sent:
+
+- `order()` is ignored, except on MySQL, where it decides which rows a `limit()` removes.
+- `limit()` works on MySQL only; other adapters throw `ar::ex::activerecord`.
+- `offset()` throws on every adapter.
+
+```cpp
+ar::query<User>().order("created_at").limit(100).delete_all();  // MySQL: the 100 oldest rows
 ```
 
 ---

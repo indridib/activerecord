@@ -25,4 +25,6 @@ The first public release. The API may change before 1.0.
 - Validations do not yet support uniqueness or validation contexts.
 - MS-SQL is tested on Windows only.
 - `ar::datetime` is always written as a Unix timestamp; on MySQL, PostgreSQL and MS-SQL, native DATETIME/TIMESTAMP columns can be read but not written.
+- `count()` and `exists()` do not support `group()`; they throw.
+- `delete_all()` supports `limit()` on MySQL only and `offset()` on no adapter; both throw where unsupported.
 - Thread safety of the `ar::config` singleton is not specified.

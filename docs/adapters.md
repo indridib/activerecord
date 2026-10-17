@@ -178,7 +178,10 @@ Most differences are handled internally by the library. For reference:
 | Datetime storage | INTEGER (Unix timestamp) | BIGINT (Unix timestamp) | BIGINT (Unix timestamp) | BIGINT (Unix timestamp) |
 | Native date/time columns | None (a DATETIME column stores the integer) | Read only | Read only | Read only |
 | Auto-increment | AUTOINCREMENT | AUTO_INCREMENT | SERIAL | IDENTITY |
-| LIMIT/OFFSET in UPDATE/DELETE | Adapter-dependent (only when adapter explicitly enables it) | Adapter-dependent (only when adapter explicitly enables it) | Adapter-dependent (only when adapter explicitly enables it) | Adapter-dependent (only when adapter explicitly enables it) |
+| ORDER BY and LIMIT in UPDATE/DELETE | Throws on LIMIT; ORDER BY ignored | Yes | Throws on LIMIT; ORDER BY ignored | Throws on LIMIT; ORDER BY ignored |
+| OFFSET in UPDATE/DELETE | Throws | Throws | Throws | Throws |
+
+A custom adapter reports UPDATE/DELETE support through `accepts_limit_and_order_for_update_and_delete()`, which is `false` by default. Then a `limit()` on `delete_all()` throws instead of being dropped, so a bounded delete can never remove every matching row.
 
 The query builder generates adapter-appropriate SQL for pagination. You don't need to handle these differences in your code.
 

@@ -38,6 +38,42 @@ class mock_connection : public connection {
 	void rollback() override {}
 };
 
+// Counts query() calls, to prove that rejected queries never reach the database
+class counting_connection : public mock_connection {
+  public:
+	std::unique_ptr<statement> query(const std::string&, const attribute_vector&) override {
+		++calls;
+		return nullptr;
+	}
+
+	int calls{ 0 };
+};
+
+// Records the last SQL and reports one affected row, so update() and destroy() can run
+class one_row_statement : public statement {
+  public:
+	void execute(const std::string&, const attribute_vector&) override {}
+	std::size_t affected_rows() const noexcept override { return 1; }
+};
+
+class recording_connection : public mock_connection {
+  public:
+	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector&) override {
+		last_sql = sql;
+		return std::make_unique<one_row_statement>();
+	}
+
+	std::string last_sql{};
+};
+
+class preflight_item : public model {
+  public:
+	static const char* st_table_name() { return "items"; }
+	static const char* st_primary_key() { return "id"; }
+
+	preflight_item() : model(st_table_name(), st_primary_key()) {}
+};
+
 } // namespace
 
 // Test model class
@@ -47,6 +83,22 @@ class TestModel : public model {
 
 	using model::attributes_;
 	using model::new_record_;
+};
+
+// Model whose primary key is not named "id"
+class UidModel : public model {
+  public:
+	explicit UidModel(std::string_view primary_key = "uid") : model("accounts", primary_key) {}
+
+	using model::attributes_;
+	using model::new_record_;
+
+	void make_persisted(const std::string& pk_name, const attribute& pk_value) {
+		attributes_[pk_name] = pk_value;
+		attributes_["name"] = "Alice";
+		new_record_ = false;
+		reset_dirty();
+	}
 };
 
 // Test fixture to set up mock connection
@@ -265,6 +317,60 @@ TEST_F(ModelTest, CannotModifyPrimaryKeyOnPersistedRecord) {
 	EXPECT_THROW(m.set("id", 2, false), ex::readonly);
 }
 
+TEST_F(ModelTest, CustomPrimaryKeyCannotBeChangedOnPersistedRecord) {
+	UidModel m;
+	m.make_persisted("uid", 1);
+	const attribute two{ 2 };
+
+	EXPECT_THROW(m.set("id", two), ex::readonly);
+	EXPECT_THROW(m.set("id", attribute{ 2 }), ex::readonly);
+	EXPECT_THROW(m.set("uid", two), ex::readonly);
+	EXPECT_THROW(m.set("uid", attribute{ 2 }), ex::readonly);
+	const attribute_map by_alias{ { "id", 2 } };
+	EXPECT_THROW(m.set_attributes(by_alias), ex::readonly);
+	EXPECT_THROW(m.set_attributes(attribute_map{ { "id", 2 } }), ex::readonly);
+	EXPECT_THROW(m.update_attributes(by_alias), ex::readonly);
+	EXPECT_THROW(m.update_attribute("id", two), ex::readonly);
+
+	EXPECT_EQ(1, m.get("uid").as_integer());
+	EXPECT_FALSE(m.isset("id"));
+	EXPECT_FALSE(m.is_dirty());
+}
+
+TEST_F(ModelTest, PersistedPrimaryKeyNotLoadedCannotBeSet) {
+	UidModel m;
+	m.make_persisted("uid", 1);
+	m.attributes_.erase("uid");
+
+	EXPECT_THROW(m.set("uid", 2), ex::readonly);
+	EXPECT_FALSE(m.isset("uid"));
+}
+
+TEST_F(ModelTest, RealIdColumnNextToCustomPrimaryKeyStaysEditable) {
+	UidModel m;
+	m.make_persisted("uid", 1);
+	m.attributes_["id"] = 10;
+
+	m.set("id", 11);
+
+	EXPECT_EQ(11, m.get("id").as_integer());
+	EXPECT_EQ(1, m.get("uid").as_integer());
+	EXPECT_TRUE(m.attribute_is_dirty("id"));
+}
+
+TEST_F(ModelTest, NewRecordSetIdWithCustomPrimaryKey) {
+	UidModel without_pk;
+	without_pk.set("id", 5);
+	EXPECT_EQ(5, without_pk.attributes_.at("id").as_integer());
+	EXPECT_FALSE(without_pk.isset("uid"));
+
+	UidModel with_pk;
+	with_pk.attributes_["uid"] = 1;
+	with_pk.set("id", 5);
+	EXPECT_EQ(5, with_pk.get("uid").as_integer());
+	EXPECT_FALSE(with_pk.attributes_.contains("id"));
+}
+
 // ==============================================================================
 // Validation Tests
 // ==============================================================================
@@ -422,6 +528,20 @@ TEST_F(ModelTest, InitRecordTrackingIdempotent) {
 	EXPECT_TRUE(m.get("version").is_null());
 }
 
+TEST_F(ModelTest, InitRecordTrackingSkipsPrimaryKeyName) {
+	UidModel absent{ "version" };
+	absent.init_record_tracking(true);
+	EXPECT_TRUE(absent.isset("created_at"));
+	EXPECT_TRUE(absent.isset("updated_at"));
+	EXPECT_FALSE(absent.attributes_.contains("version"));
+
+	UidModel present{ "updated_at" };
+	present.attributes_["updated_at"] = 7;
+	present.init_record_tracking(true);
+	EXPECT_EQ(7, present.get("updated_at").as_integer());
+	EXPECT_TRUE(present.get("version").is_null());
+}
+
 TEST_F(ModelTest, InitRecordTrackingOffDoesNotCreatePlaceholders) {
 	TestModel m;
 	m.init_record_tracking(false);
@@ -429,4 +549,93 @@ TEST_F(ModelTest, InitRecordTrackingOffDoesNotCreatePlaceholders) {
 	EXPECT_FALSE(m.isset("created_at"));
 	EXPECT_FALSE(m.isset("updated_at"));
 	EXPECT_FALSE(m.isset("version"));
+}
+
+// ==============================================================================
+// Query preflight Tests: rejected before any SQL is sent
+// ==============================================================================
+
+class QueryPreflightTest : public ::testing::Test {
+  protected:
+	void SetUp() override {
+		config::connection_map connections;
+		connections["default"] = connection_;
+		config::instance().set_connections(connections, "default");
+	}
+
+	std::shared_ptr<counting_connection> connection_{ std::make_shared<counting_connection>() };
+};
+
+TEST_F(QueryPreflightTest, DeleteAllWithBoundsSendsNoSql) {
+	EXPECT_THROW(query<preflight_item>().limit(1).delete_all(), ex::activerecord);
+	EXPECT_THROW(query<preflight_item>().offset(0).delete_all(), ex::activerecord);
+	EXPECT_THROW(query<preflight_item>().limit(1).offset(1).delete_all(), ex::activerecord);
+	EXPECT_EQ(0, connection_->calls);
+}
+
+TEST_F(QueryPreflightTest, GroupedCountAndExistsSendNoSql) {
+	EXPECT_THROW(query<preflight_item>().group("name").count(), ex::activerecord);
+	EXPECT_THROW(query<preflight_item>().group("name").exists(), ex::activerecord);
+	EXPECT_EQ(0, connection_->calls);
+}
+
+// ==============================================================================
+// Metadata columns used as primary key
+// ==============================================================================
+
+class MetadataPrimaryKeyTest : public ::testing::Test {
+  protected:
+	void SetUp() override {
+		config::connection_map connections;
+		connections["default"] = connection_;
+		config::instance().set_connections(connections, "default");
+	}
+
+	std::shared_ptr<recording_connection> connection_{ std::make_shared<recording_connection>() };
+};
+
+TEST_F(MetadataPrimaryKeyTest, VersionPrimaryKeyUpdateAndDeleteHaveNoLockingClause) {
+	UidModel m{ "version" };
+	m.make_persisted("version", 1);
+
+	m.set("name", "Bob");
+	EXPECT_TRUE(m.save());
+	EXPECT_EQ(1, m.get("version").as_integer());
+	EXPECT_TRUE(connection_->last_sql.ends_with(" WHERE version = ?")) << connection_->last_sql;
+
+	EXPECT_TRUE(m.destroy());
+	EXPECT_EQ("DELETE FROM accounts WHERE version = ?", connection_->last_sql);
+}
+
+TEST_F(MetadataPrimaryKeyTest, OrdinaryVersionStillLocks) {
+	UidModel m;
+	m.make_persisted("uid", 1);
+	m.attributes_["version"] = 3;
+
+	m.set("name", "Bob");
+	EXPECT_TRUE(m.save());
+	EXPECT_EQ(4, m.get("version").as_integer());
+	EXPECT_TRUE(connection_->last_sql.ends_with(" WHERE uid = ? AND version = ?")) << connection_->last_sql;
+
+	EXPECT_TRUE(m.destroy());
+	EXPECT_EQ("DELETE FROM accounts WHERE uid = ? AND version = ?", connection_->last_sql);
+}
+
+TEST_F(MetadataPrimaryKeyTest, InsertKeepsSuppliedMetadataPrimaryKey) {
+	for (const char* pk : { "created_at", "updated_at", "version" }) {
+		UidModel m{ pk };
+		m.init_record_tracking(true);
+		m.set(pk, 7);
+		m.set("name", "Bob");
+		EXPECT_TRUE(m.save()) << pk;
+		EXPECT_EQ(7, m.get(pk).as_integer()) << pk; // the mock reports no insert id, so nothing replaces it
+	}
+
+	UidModel m{ "version" };
+	m.init_record_tracking(true);
+	m.set("version", 7);
+	m.set("name", "Bob");
+	EXPECT_TRUE(m.save());
+	EXPECT_FALSE(m.get("created_at").is_null());
+	EXPECT_FALSE(m.get("updated_at").is_null());
 }

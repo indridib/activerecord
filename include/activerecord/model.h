@@ -64,7 +64,7 @@ class model {
 		return *this;
 	}
 
-	model(model&&) noexcept = default;
+	model(model&&) = default;
 	model& operator=(model&&) noexcept = default;
 
 	/**
@@ -102,7 +102,7 @@ class model {
 	 * @param name - attribute name.
 	 * @return - true if the attribute exists.
 	 */
-	bool isset(std::string_view name) const noexcept {
+	bool isset(std::string_view name) const {
 		std::string key{ name };
 		const auto& aliases = alias_attributes();
 		return attributes_.find(key) != attributes_.end() || aliases.find(key) != aliases.end();
@@ -114,7 +114,7 @@ class model {
 	 * @param name - attribute name.
 	 * @return - real name of the attribute or empty if attribute cannot be found.
 	 */
-	std::string get_real_attribute_name(std::string_view name) const noexcept {
+	std::string get_real_attribute_name(std::string_view name) const {
 		std::string key{ name };
 		if (attributes_.find(key) != attributes_.end())
 			return key;
@@ -217,15 +217,17 @@ class model {
 		if (alias_iter != aliases.end())
 			real_name = alias_iter->second;
 
-		// Primary key is immutable for persisted records.
-		if (!new_record_ && real_name == primary_key_) {
-			throw ex::readonly("Primary key \"{}\" cannot be modified on persisted {}", primary_key_, table_name_);
-		}
-
 		auto attrib_iter{ attributes_.find(real_name) };
 		if ((attrib_iter == attributes_.end()) && (real_name == "id")) {
 			// try primary key name
 			attrib_iter = attributes_.find(std::string(get_primary_key()));
+		}
+
+		// Primary key is immutable for persisted records.
+		const std::string_view target{ attrib_iter != attributes_.end() ? std::string_view{ attrib_iter->first }
+																		: std::string_view{ real_name } };
+		if (!new_record_ && target == primary_key_) {
+			throw ex::readonly("Primary key \"{}\" cannot be modified on persisted {}", primary_key_, table_name_);
 		}
 
 		if (attrib_iter != attributes_.end()) {
@@ -257,15 +259,17 @@ class model {
 		if (alias_iter != aliases.end())
 			real_name = alias_iter->second;
 
-		// Primary key is immutable for persisted records.
-		if (!new_record_ && real_name == primary_key_) {
-			throw ex::readonly("Primary key \"{}\" cannot be modified on persisted {}", primary_key_, table_name_);
-		}
-
 		auto attrib_iter{ attributes_.find(real_name) };
 		if ((attrib_iter == attributes_.end()) && (real_name == "id")) {
 			// try primary key name
 			attrib_iter = attributes_.find(std::string(get_primary_key()));
+		}
+
+		// Primary key is immutable for persisted records.
+		const std::string_view target{ attrib_iter != attributes_.end() ? std::string_view{ attrib_iter->first }
+																		: std::string_view{ real_name } };
+		if (!new_record_ && target == primary_key_) {
+			throw ex::readonly("Primary key \"{}\" cannot be modified on persisted {}", primary_key_, table_name_);
 		}
 
 		if (attrib_iter != attributes_.end()) {
@@ -335,8 +339,7 @@ class model {
 		}
 
 		const attribute& pk_value{ get(primary_key_) };
-		const bool has_version{ track_record_metadata_ && attributes_.find("version") != attributes_.end() &&
-								!attributes_["version"].is_null() };
+		const bool has_version{ manages("version") && !attributes_.at("version").is_null() };
 
 		std::string where{ std::string(primary_key_) + " = ?" };
 		attribute_vector values{ pk_value };
@@ -375,7 +378,7 @@ class model {
 	 *
 	 * @param name - attribute name.
 	 */
-	void flag_dirty(std::string_view name) noexcept { dirty_.insert(std::string(name)); }
+	void flag_dirty(std::string_view name) { dirty_.insert(std::string(name)); }
 
 	/**
 	 * Check if a particular attribute has been modified since loading the model.
@@ -383,9 +386,7 @@ class model {
 	 * @param name - attribute name.
 	 * @return - true if the attribute has been modified.
 	 */
-	bool attribute_is_dirty(std::string_view name) const noexcept {
-		return dirty_.find(std::string(name)) != dirty_.end();
-	}
+	bool attribute_is_dirty(std::string_view name) const { return dirty_.find(std::string(name)) != dirty_.end(); }
 
 	/**
 	 * Returns true if the model has been modified.
@@ -451,12 +452,10 @@ class model {
 		if (!track_record_metadata) {
 			return;
 		}
-		if (attributes_.find("created_at") == attributes_.end())
-			attributes_["created_at"] = attribute();
-		if (attributes_.find("updated_at") == attributes_.end())
-			attributes_["updated_at"] = attribute();
-		if (attributes_.find("version") == attributes_.end())
-			attributes_["version"] = attribute();
+		for (const char* column : { "created_at", "updated_at", "version" }) {
+			if (column != primary_key_ && !attributes_.contains(column))
+				attributes_[column] = attribute();
+		}
 	}
 
 	// - connection()
@@ -491,7 +490,7 @@ class model {
 	 *
 	 * @return - validation errors container.
 	 */
-	const ar::errors& errors() const noexcept { return errors_ ? *errors_ : empty_errors(); }
+	const ar::errors& errors() const { return errors_ ? *errors_ : empty_errors(); }
 
 	/**
 	 * Returns true if model has validation errors.
@@ -580,8 +579,7 @@ class model {
 		set_timestamps_for_update();
 
 		// Optimistic locking: capture old version before incrementing
-		const bool has_version = track_record_metadata_ && (attributes_.find("version") != attributes_.end() &&
-															!attributes_["version"].is_null());
+		const bool has_version{ manages("version") && !attributes_.at("version").is_null() };
 		int64_t old_version{ 0 };
 		if (has_version) {
 			old_version = get("version").as_integer();
@@ -683,16 +681,24 @@ class model {
 	}
 
 	/**
+	 * True if column is an automatically managed metadata column (created_at, updated_at, version) that this
+	 * record tracks. The primary key is never managed, even if it has one of those names.
+	 */
+	bool manages(const std::string& column) const {
+		return track_record_metadata_ && column != primary_key_ && attributes_.contains(column);
+	}
+
+	/**
 	 * Sets created_at and updated_at timestamps if those attributes exist.
 	 * Called automatically during insert().
 	 */
 	void set_timestamps_for_create() {
 		datetime now{ datetime::now() };
-		if (track_record_metadata_ && attributes_.find("created_at") != attributes_.end()) {
+		if (manages("created_at")) {
 			attributes_["created_at"] = attribute(now);
 			flag_dirty("created_at");
 		}
-		if (track_record_metadata_ && attributes_.find("updated_at") != attributes_.end()) {
+		if (manages("updated_at")) {
 			attributes_["updated_at"] = attribute(now);
 			flag_dirty("updated_at");
 		}
@@ -703,7 +709,7 @@ class model {
 	 * Called automatically during update(). Does NOT touch created_at.
 	 */
 	void set_timestamps_for_update() {
-		if (track_record_metadata_ && attributes_.find("updated_at") != attributes_.end()) {
+		if (manages("updated_at")) {
 			attributes_["updated_at"] = attribute(datetime::now());
 			flag_dirty("updated_at");
 		}
@@ -714,13 +720,13 @@ class model {
 	 * Called automatically during insert().
 	 */
 	void set_version_for_create() {
-		if (track_record_metadata_ && attributes_.find("version") != attributes_.end()) {
+		if (manages("version")) {
 			attributes_["version"] = attribute(static_cast<int64_t>(1));
 			flag_dirty("version");
 		}
 	}
 
-	static const std::map<std::string, std::string>& alias_attributes() noexcept {
+	static const std::map<std::string, std::string>& alias_attributes() {
 		static const std::map<std::string, std::string> aliases{};
 		return aliases;
 	}
@@ -732,7 +738,7 @@ class model {
 		return *errors_;
 	}
 
-	static const ar::errors& empty_errors() noexcept {
+	static const ar::errors& empty_errors() {
 		static const ar::errors empty{};
 		return empty;
 	}

@@ -353,5 +353,5 @@ TEST_F(SQLiteAdapterTest, NullFieldConversion) {
 // ==============================================================================
 
 TEST_F(SQLiteAdapterTest, AcceptsLimitForUpdateAndDelete) {
-	EXPECT_TRUE(adapter->accepts_limit_and_order_for_update_and_delete());
+	EXPECT_FALSE(adapter->accepts_limit_and_order_for_update_and_delete());
 }

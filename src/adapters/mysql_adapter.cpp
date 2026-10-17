@@ -383,9 +383,11 @@ void mysql_adapter::limit(std::string& sql, long offset, long limit) const {
 	// MySQL uses LIMIT with optional OFFSET
 	if (limit >= 0) {
 		sql += " LIMIT " + std::to_string(limit);
-		if (offset >= 0) {
-			sql += " OFFSET " + std::to_string(offset);
-		}
+	} else if (offset >= 0) {
+		sql += " LIMIT 18446744073709551615"; // MySQL has no OFFSET without LIMIT; this is its documented "no limit"
+	}
+	if (offset >= 0) {
+		sql += " OFFSET " + std::to_string(offset);
 	}
 }
 

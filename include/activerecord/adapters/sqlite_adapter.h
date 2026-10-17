@@ -58,7 +58,6 @@ class sqlite_adapter : public connection {
 	void commit() override;
 	void rollback() override;
 
-	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
   private:
 	sqlite3* db_{ nullptr }; // Owned database handle (closed in destructor)

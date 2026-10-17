@@ -384,9 +384,9 @@ void postgres_adapter::limit(std::string& sql, long offset, long limit) const {
 	// PostgreSQL uses LIMIT with optional OFFSET
 	if (limit >= 0) {
 		sql += " LIMIT " + std::to_string(limit);
-		if (offset >= 0) {
-			sql += " OFFSET " + std::to_string(offset);
-		}
+	}
+	if (offset >= 0) {
+		sql += " OFFSET " + std::to_string(offset);
 	}
 }
 

@@ -316,19 +316,88 @@ TEST(SqlBuilderTest, DeleteWithWhereUsesBindValues) {
 	EXPECT_EQ(7, bind_values[0].as_integer());
 }
 
-TEST(SqlBuilderTest, DeleteWithOrderLimitAndOffset) {
+TEST(SqlBuilderTest, DeleteWithOrderAndLimitOnAcceptingAdapter) {
 	auto conn = std::make_shared<mock_delete_limit_connection>();
 	delete_sql_builder_for_test builder(conn, "users");
 
 	builder.add_where("active = ?", { true });
 	builder.add_order("id DESC");
 	builder.set_limit(2);
-	builder.set_offset(1);
 
 	std::string sql = builder.build_delete_public();
-	EXPECT_EQ("DELETE FROM users WHERE active = ? ORDER BY id DESC LIMIT 2 OFFSET 1", sql);
+	EXPECT_EQ("DELETE FROM users WHERE active = ? ORDER BY id DESC LIMIT 2", sql);
 
 	const attribute_vector& bind_values = builder.get_bind_values();
 	ASSERT_EQ(1, bind_values.size());
 	EXPECT_TRUE(bind_values[0].as_bool());
+}
+
+TEST(SqlBuilderTest, UpdateWithOrderAndLimitOnAcceptingAdapter) {
+	auto conn = std::make_shared<mock_delete_limit_connection>();
+	sql_builder builder(conn, "users");
+
+	builder.update({ "name" }, { "Jane" });
+	builder.add_where("active = ?", { true });
+	builder.add_order("id DESC");
+	builder.set_limit(1);
+
+	std::string sql = builder.to_string();
+	EXPECT_TRUE(sql.ends_with(" WHERE active = ? ORDER BY id DESC LIMIT 1")) << sql;
+
+	const attribute_vector& bind_values = builder.get_bind_values();
+	ASSERT_EQ(2, bind_values.size());
+	EXPECT_EQ("Jane", bind_values[0].as_string());
+	EXPECT_TRUE(bind_values[1].as_bool());
+}
+
+TEST(SqlBuilderTest, DmlOmitsOrderOnNonAcceptingAdapter) {
+	auto conn = std::make_shared<mock_connection>();
+
+	sql_builder remove(conn, "users");
+	remove.remove();
+	remove.add_where("active = ?", { false });
+	remove.add_order("id");
+	EXPECT_EQ("DELETE FROM users WHERE active = ?", remove.to_string());
+
+	sql_builder update(conn, "users");
+	update.update({ "name" }, { "Jane" });
+	update.add_where("active = ?", { false });
+	update.add_order("id");
+	EXPECT_TRUE(update.to_string().ends_with(" WHERE active = ?"));
+}
+
+namespace {
+
+// Builds the same DELETE and UPDATE with the given bounds; -1 means unset.
+void expect_dml_bounds_throw(const config::connection_ptr& conn, long limit, long offset) {
+	sql_builder remove(conn, "users");
+	remove.remove();
+	remove.set_limit(limit);
+	remove.set_offset(offset);
+	EXPECT_THROW((void)remove.to_string(), ex::activerecord) << "DELETE limit=" << limit << " offset=" << offset;
+
+	sql_builder update(conn, "users");
+	update.update({ "name" }, { "Jane" });
+	update.set_limit(limit);
+	update.set_offset(offset);
+	EXPECT_THROW((void)update.to_string(), ex::activerecord) << "UPDATE limit=" << limit << " offset=" << offset;
+}
+
+} // namespace
+
+TEST(SqlBuilderTest, DmlBoundsThrowOnNonAcceptingAdapter) {
+	auto conn = std::make_shared<mock_connection>();
+	expect_dml_bounds_throw(conn, 0, -1);
+	expect_dml_bounds_throw(conn, 3, -1);
+	expect_dml_bounds_throw(conn, -1, 0);
+	expect_dml_bounds_throw(conn, -1, 2);
+	expect_dml_bounds_throw(conn, 3, 2);
+}
+
+TEST(SqlBuilderTest, DmlOffsetThrowsOnAcceptingAdapter) {
+	auto conn = std::make_shared<mock_delete_limit_connection>();
+	expect_dml_bounds_throw(conn, -1, 0);
+	expect_dml_bounds_throw(conn, -1, 2);
+	expect_dml_bounds_throw(conn, 0, 0);
+	expect_dml_bounds_throw(conn, 3, 2);
 }
