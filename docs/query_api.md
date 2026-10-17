@@ -71,7 +71,7 @@ All `where*` methods accumulate with AND:
 ```cpp
 ar::query<User>()
     .where("active = ?", true)
-    .where_not("banned = ?", true)
+    .where_not("banned = ?", { true })
     .where_in("role_id", { 1, 2, 3 })
 // WHERE (active = ?) AND (NOT (banned = ?)) AND (role_id IN (?, ?, ?))
 ```
@@ -112,8 +112,10 @@ Calling `order()` again replaces the previous ordering (it does not append).
 ar::query<User>()
     .select("role, COUNT(*) as count")
     .group("role")
-    .having("COUNT(*) > ?", { 5 })
+    .having("COUNT(*) > 5")
 ```
+
+`having()` takes a SQL fragment and has no bind values; put only trusted text in it.
 
 ### joins
 
@@ -215,7 +217,7 @@ long deleted = ar::query<User>().where("active = ?", false).delete_all();
 
 ## Lazy Iteration
 
-`query<T>` supports range-for loops. Rows are fetched one at a time from the database — not loaded into memory all at once:
+`query<T>` supports range-for loops. Models are built one row at a time as you iterate. How the rows themselves are buffered depends on the adapter: SQLite and MS-SQL step through the result, while MySQL and PostgreSQL receive the whole result set from the server before the first row:
 
 ```cpp
 for (const User& user : ar::query<User>().where("active = ?", true)) {
@@ -223,13 +225,13 @@ for (const User& user : ar::query<User>().where("active = ?", true)) {
 }
 ```
 
-Breaking out of the loop stops fetching:
+Breaking out of the loop stops building models (and, on SQLite and MS-SQL, stops fetching rows):
 
 ```cpp
 int count = 0;
 for (const User& user : ar::query<User>().order("created_at DESC")) {
     process(user);
-    if (++count >= 100) break;  // only 100 rows fetched
+    if (++count >= 100) break;  // only 100 models built
 }
 ```
 

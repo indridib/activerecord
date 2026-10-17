@@ -18,7 +18,7 @@ Other platforms and compilers are not tested.
 
 **Why MSVC on Windows?**
 - ✅ **Static Linking** - No DLL dependencies, single executable deployment
-- ✅ **Full C++23 Support** - Complete implementation including std::expected, std::print, std::format
+- ✅ **C++23 support** - Everything the library uses, plus std::expected and std::print
 - ✅ **Native vcpkg Integration** - Seamless package management
 - ✅ **Optimal Windows Performance** - Native toolchain, best optimization
 - ✅ **Zero DLL Headaches** - Eliminates PATH issues, deployment complexity
@@ -40,7 +40,7 @@ build.bat Debug     # Debug build
 
 **Why GCC on Linux?**
 - ✅ **Standard Toolchain** - Default on most Linux distributions
-- ✅ **Excellent C++23 Support** - Mature, well-tested implementation
+- ✅ **C++23 support** - Everything the library uses
 - ✅ **Broad Ecosystem** - Compatible with system package managers
 - ✅ **Performance** - Highly optimized code generation
 - ✅ **Debuggability** - Excellent GDB integration
@@ -90,9 +90,11 @@ Use MSVC on Windows instead. It works better and is simpler.
 
 ## Compiler Feature Matrix
 
+Standard library features depend on the library as well as the compiler; the Clang column assumes the system libstdc++ 14.
+
 | Feature | MSVC (VS 2022) | GCC 14+ | Clang 18+ |
 |---------|----------------|---------|-----------|
-| `std::expected` | ✅ | ✅ | ✅ |
+| `std::expected` | ✅ | ✅ | ❌ with libstdc++ 14 ([known gap](hardening.md#known-gaps)) |
 | `std::print` | ✅ | ✅ | ✅ |
 | `std::format` | ✅ | ✅ | ✅ |
 | Concepts | ✅ | ✅ | ✅ |

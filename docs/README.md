@@ -26,6 +26,6 @@ For installation, building, and a quick overview, see the [main README](../READM
 ## Building & Contributing
 
 - **[Compilers](compilers.md)** — supported platforms and compilers, installation
-- **[Building on Windows](building_windows.md)** — Windows build details and manual alternatives to `setup.bat` / `build.bat`
+- **[Building on Windows](building_windows.md)** — what `setup.bat` / `build.bat` do, building with CMake directly, other adapters
 - **[Database Setup](database_setup.md)** — installing the database servers and client libraries each adapter needs
 - **[Hardening](hardening.md)** — pre-release checks: warnings-as-errors builds, clang-tidy, sanitizers, adapter test runs

@@ -107,14 +107,14 @@ The `windows(...)` syntax handles Windows drive letters. Replace `:` with `*` in
 Append query parameters with `?`:
 
 ```
-mysql://root:pass@localhost/mydb?charset=utf8mb4
-postgres://user:pass@localhost/mydb?charset=utf8&decode=true
+postgres://user:pass@localhost/mydb?decode=true
 ```
 
 | Parameter | Effect |
 |-----------|--------|
-| `charset` | Sets character encoding for the connection |
 | `decode=true` | URL-decode the username and password |
+
+The connection encoding is fixed: MySQL connections use `utf8mb4` and PostgreSQL connections `UTF8`. A `charset` parameter is accepted but has no effect.
 
 URL-decoding is useful when credentials contain special characters:
 

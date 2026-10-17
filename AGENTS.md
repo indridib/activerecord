@@ -217,7 +217,7 @@ User user();  // Only when {} would be ambiguous
 // ✅ Correct - const and noexcept where appropriate:
 class model {
 public:
-    std::string table_name() const noexcept { return table_name_; }
+    std::string_view table_name() const noexcept { return table_name_; }
     bool is_dirty() const noexcept { return dirty_; }
     bool is_new_record() const noexcept { return new_record_; }
 

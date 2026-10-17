@@ -70,7 +70,8 @@ ctest --test-dir build -C %BUILD_TYPE% --output-on-failure
 
 if errorlevel 1 (
     echo.
-    echo WARNING: Some tests failed!
+    echo ERROR: Some tests failed!
+    exit /b 1
 ) else (
     echo.
     echo All tests passed!

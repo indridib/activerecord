@@ -1,8 +1,6 @@
 # Build outputs
 /build/
-/build-clang/
-/build-clangcl/
-/build-clang*/
+/build-*/
 /out/
 /CMakeFiles/
 /CMakeCache.txt
@@ -45,3 +43,4 @@ vcpkg_installed/
 
 # Private notes (not published)
 /.private/
+/todo/

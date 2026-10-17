@@ -78,7 +78,7 @@ name.as_integer();  // throws — it's a string, not an integer
 | `as_bool()` | `bool` | Yes |
 | `as_date()` | `ar::datetime` | No — see below |
 
-`as_date()` is lenient. It handles datetime values stored as integers (Unix timestamps) or strings (for example from a text column) without throwing:
+`as_date()` is lenient about the stored type. It accepts a `datetime`, an integer (Unix timestamp) or a string, which it parses; a string it cannot parse throws `std::invalid_argument`. Parsing does not check the calendar: `"2024-02-31"` becomes 2024-03-02. An empty string, and any other type (null, bool, double), return a default `datetime` without throwing: its `timestamp()` is 0 and its `to_string()` is empty:
 
 ```cpp
 ar::attribute ts = int64_t(1718451000);

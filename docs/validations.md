@@ -234,7 +234,7 @@ user.errors().count();    // 0
 
 ## Models Without Validations
 
-If a `typed_model<T>` does not define a `validations()` method, `is_valid()` always returns `true` and `save()` proceeds directly to the database. No overhead is added — the check is resolved at compile time with `if constexpr`.
+If a `typed_model<T>` does not define a `validations()` method, `is_valid()` always returns `true` and `save()` proceeds directly to the database. No rules are run: the check is resolved at compile time with `if constexpr`. `save()` still copies the struct members into the attribute map and clears old errors first, as it does for every typed model.
 
 ```cpp
 struct SimpleUser : ar::typed_model<SimpleUser> {
@@ -266,6 +266,6 @@ Internally, `typed_model<T>::save()` hides `model::save()`. When `should_validat
 4. If any rule added errors, `save()` returns `false` without executing SQL.
 5. If no errors, `model::save(false)` is called (skipping the base class's own validation stub).
 
-The `validations()` return type is a `std::tuple` of rule structs, dispatched with `std::apply` and a fold expression. This means all rules are resolved at compile time — no virtual calls, no heap allocation for the rules themselves.
+The `validations()` return type is a `std::tuple` of rule structs, dispatched with `std::apply` and a fold expression. Dispatch is static (no virtual calls), and the rules are plain value types. Building them is not free: `validations()` is called on every validation, and a `format` rule copies its regular expression into the rule each time.
 
 Errors are stored in a lazily-allocated `std::unique_ptr<ar::errors>` on the base `model`. Models that never use validation pay no memory cost for the error storage.

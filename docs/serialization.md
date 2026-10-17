@@ -94,10 +94,12 @@ Values are serialized according to their attribute type:
 |------|------|-----|
 | String | `"value"` | `<key>value</key>` |
 | Integer | `42` | `<key>42</key>` |
-| Decimal | `3.14` | `<key>3.140000</key>` |
-| Boolean | `1` | `<key>1</key>` |
+| Decimal | `3.140000` | `<key>3.140000</key>` |
+| Boolean | `true` / `false` | `<key>1</key>` / `<key>0</key>` |
 | Datetime | `"2024-06-15 14:30:00"` | `<key>2024-06-15 14:30:00</key>` |
-| Null | `null` | `<key/>` |
+| Null | `null` | `<key />` |
+
+Decimals use six digits after the point. In XML, an empty string is written as `<key />` too.
 
 ---
 

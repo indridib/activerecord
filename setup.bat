@@ -23,14 +23,11 @@ if not exist "%VCPKG_PATH%\.git" (
 REM Check if vcpkg is bootstrapped
 if not exist "%VCPKG_PATH%\vcpkg.exe" (
     echo Bootstrapping vcpkg...
-    cd "%VCPKG_PATH%"
-    call bootstrap-vcpkg.bat
+    call "%VCPKG_PATH%\bootstrap-vcpkg.bat"
     if errorlevel 1 (
         echo ERROR: vcpkg bootstrap failed
-        cd "%PROJECT_ROOT%"
         exit /b 1
     )
-    cd "%PROJECT_ROOT%"
     echo vcpkg bootstrapped successfully!
 ) else (
     echo vcpkg already bootstrapped

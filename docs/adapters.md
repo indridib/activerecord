@@ -76,7 +76,7 @@ ar::config::instance().set_connections({{"default", conn}}, "default");
 
 ```
 mysql://root:password@localhost:3306/mydb
-mysql://root:password@localhost/mydb?charset=utf8mb4
+mysql://root:password@localhost/mydb
 mysql://root:password@unix(/var/run/mysqld/mysqld.sock)/mydb
 ```
 
@@ -84,7 +84,7 @@ mysql://root:password@unix(/var/run/mysqld/mysqld.sock)/mydb
 
 - Requires `libmysqlclient`.
 - Empty inserts use `() VALUES()` (MySQL syntax).
-- Use the `charset` query parameter to set character encoding.
+- The connection uses `utf8mb4`; the `charset` URL parameter has no effect.
 
 ---
 
@@ -110,7 +110,7 @@ ar::config::instance().set_connections({{"default", conn}}, "default");
 
 ```
 postgres://postgres:password@localhost:5432/mydb
-postgres://user:password@localhost/mydb?charset=utf8
+postgres://user:password@localhost/mydb
 ```
 
 ### Notes
