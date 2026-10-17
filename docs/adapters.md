@@ -175,7 +175,8 @@ Most differences are handled internally by the library. For reference:
 | Behavior | SQLite | MySQL | PostgreSQL | MS-SQL |
 |----------|--------|-------|-----------|--------|
 | Empty INSERT clause | `DEFAULT VALUES` | `() VALUES()` | `DEFAULT VALUES` | `DEFAULT VALUES` |
-| Datetime storage | INTEGER (timestamp) | DATETIME | TIMESTAMP | DATETIME |
+| Datetime storage | INTEGER (Unix timestamp) | BIGINT (Unix timestamp) | BIGINT (Unix timestamp) | BIGINT (Unix timestamp) |
+| Native date/time columns | None (a DATETIME column stores the integer) | Read only | Read only | Read only |
 | Auto-increment | AUTOINCREMENT | AUTO_INCREMENT | SERIAL | IDENTITY |
 | LIMIT/OFFSET in UPDATE/DELETE | Adapter-dependent (only when adapter explicitly enables it) | Adapter-dependent (only when adapter explicitly enables it) | Adapter-dependent (only when adapter explicitly enables it) | Adapter-dependent (only when adapter explicitly enables it) |
 

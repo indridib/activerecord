@@ -267,7 +267,7 @@ user.save();
 | `bool` | INTEGER/BOOLEAN | |
 | `int`, `long`, `int64_t` | INTEGER | All stored as int64_t internally |
 | `float`, `double` | REAL/DOUBLE | |
-| `ar::datetime` | DATETIME/INTEGER | See [Attributes](attributes.md) |
+| `ar::datetime` | INTEGER/BIGINT | Unix timestamp; see [Attributes](attributes.md#database-storage) |
 | `enum` / `enum class` | INTEGER | Via underlying type |
 | `std::optional<T>` | Any of the above, nullable | `std::nullopt` maps to NULL |
 

@@ -126,9 +126,8 @@ class model {
 	}
 
 	/**
-	 * Retrieves an attribute's value or a relationship object based on the name passed. If the attribute
-	 * accessed is 'id' then it will return the model's primary key no matter what the actual attribute name is
-	 * for the primary key.
+	 * Retrieves an attribute's value based on the name passed. If the attribute accessed is 'id' then it will
+	 * return the model's primary key no matter what the actual attribute name is for the primary key.
 	 *
 	 * @param name - attribute name.
 	 * @return - the value of the attribute.

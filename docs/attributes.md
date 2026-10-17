@@ -78,7 +78,7 @@ name.as_integer();  // throws — it's a string, not an integer
 | `as_bool()` | `bool` | Yes |
 | `as_date()` | `ar::datetime` | No — see below |
 
-`as_date()` is lenient. It handles datetime values stored as integers (Unix timestamps from SQLite) or strings (from MySQL/PostgreSQL) without throwing:
+`as_date()` is lenient. It handles datetime values stored as integers (Unix timestamps) or strings (for example from a text column) without throwing:
 
 ```cpp
 ar::attribute ts = int64_t(1718451000);
@@ -212,9 +212,6 @@ a == b;  // false
 
 ### Database Storage
 
-How `datetime` is stored depends on the adapter:
+Every adapter writes `datetime` as a Unix timestamp, so store it in an integer column: INTEGER on SQLite, BIGINT on MySQL, PostgreSQL and MS-SQL. `as_date()` and `datetime` members of `typed_model<T>` convert the integer back.
 
-- **SQLite** stores as INTEGER (Unix timestamp). `as_date()` converts from integer.
-- **MySQL/PostgreSQL/MS-SQL** store as DATETIME or TIMESTAMP strings. `as_date()` parses from string.
-
-This conversion is handled automatically — you don't need to think about it when using `datetime` fields.
+On MySQL, PostgreSQL and MS-SQL, native date/time columns (DATETIME, TIMESTAMP and similar) can be read; their values arrive as `datetime`. Writing a `datetime` to them is not supported yet. SQLite has no native date/time type: a column declared DATETIME stores the integer timestamp and reads back as `datetime`, and date text in it is parsed.

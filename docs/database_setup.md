@@ -286,23 +286,19 @@ user.set("email", ar::attribute("alice@example.com"));
 user.save();
 ```
 
-## ⚙️ Connection Pooling
+## ⚙️ Multiple Connections
 
-For production applications, consider implementing connection pooling:
+There is no connection pooling: each named connection is one adapter instance. An application can register several and choose one per model:
 
 ```cpp
-// Multiple named connections
 ar::config::connection_map connections;
 connections["primary"] = std::make_shared<ar::postgres_adapter>(...);
-connections["replica"] = std::make_shared<ar::postgres_adapter>(...);
-connections["cache"] = std::make_shared<ar::sqlite_adapter>(":memory:");
+connections["analytics"] = std::make_shared<ar::sqlite_adapter>("analytics.db");
 
-ar::config::instance().set_connections(connections, "primary");
-
-// Use specific connections
-ar::query<User> q;
-q.where("active = ?", ar::attribute(true)).all();  // Uses primary
+ar::config::instance().set_connections(connections, "primary");  // "primary" is the default
 ```
+
+A model uses the default connection unless its constructor names another one; see [Using Named Connections](configuration.md#using-named-connections).
 
 ## 🔐 Security Best Practices
 
