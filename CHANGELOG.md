@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.1 (alpha), unreleased
+## 0.9.1 (alpha), 2026-10-17
 
 The first public release. The API may change before 1.0.
 
