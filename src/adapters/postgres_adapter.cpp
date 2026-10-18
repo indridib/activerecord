@@ -234,7 +234,8 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 				break;
 
 			case type_decimal:
-				param_strings.push_back(std::to_string(param.as_real()));
+				// std::to_string keeps 6 decimals; {} is the shortest text that parses back to the same double
+				param_strings.push_back(std::format("{}", param.as_real()));
 				param_values.push_back(param_strings.back().c_str());
 				break;
 

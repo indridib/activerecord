@@ -138,6 +138,21 @@ inline std::string bool_true_literal(AdapterType type) {
 	return type == AdapterType::PostgreSQL ? "true" : "1";
 }
 
+// 64-bit floating-point column
+inline std::string double_type(AdapterType type) {
+	switch (type) {
+	case AdapterType::SQLite:
+		return "REAL";
+	case AdapterType::MySQL:
+		return "DOUBLE";
+	case AdapterType::PostgreSQL:
+		return "DOUBLE PRECISION";
+	case AdapterType::MSSQL:
+		return "FLOAT";
+	}
+	return {};
+}
+
 // ar::datetime is stored as a Unix timestamp (project convention)
 inline std::string timestamp_type(AdapterType type) {
 	return type == AdapterType::SQLite ? "INTEGER" : "BIGINT";

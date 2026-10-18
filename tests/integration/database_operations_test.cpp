@@ -46,8 +46,23 @@ class User : public model {
 
 class DatabaseOperationsTest : public AdapterTest {
   protected:
-	table_list table_definitions(AdapterType type) const override { return { { "users", users_columns(type) } }; }
+	table_list table_definitions(AdapterType type) const override {
+		return { { "users", users_columns(type) },
+				 { "measurements", std::format("{}, value {}", pk_column(type), double_type(type)) } };
+	}
 };
+
+namespace {
+
+class Measurement : public model {
+  public:
+	static const char* st_table_name() { return "measurements"; }
+	static const char* st_primary_key() { return "id"; }
+
+	Measurement() : model(st_table_name(), st_primary_key()) {}
+};
+
+} // namespace
 
 // ==============================================================================
 // Model CRUD Tests
@@ -101,6 +116,21 @@ TEST_P(DatabaseOperationsTest, DestroyDeletesPersistedRecord) {
 
 	auto deleted = query<User>().where("name = ?", "DeleteMe").first();
 	EXPECT_FALSE(deleted.has_value());
+}
+
+TEST_P(DatabaseOperationsTest, DoubleValuesRoundTripExactly) {
+	const std::vector<double> values{ 1.234567891, 0.1, -98765.4321012345, 1e-10, 123456789.123456789, 1e20 };
+	for (const double value : values) {
+		Measurement m;
+		m.set("value", value);
+		ASSERT_TRUE(m.save());
+	}
+
+	const auto rows = query<Measurement>().order("id").all();
+	ASSERT_EQ(values.size(), rows.size());
+	for (std::size_t i = 0; i < values.size(); ++i) {
+		EXPECT_EQ(values[i], rows[i].get("value").as_real()) << "value " << i;
+	}
 }
 
 TEST_P(DatabaseOperationsTest, SetMultipleAttributes) {

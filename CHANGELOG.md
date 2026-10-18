@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.2, unreleased
+
+### Fixed
+
+- PostgreSQL: `double` values were written with only six decimal places (`1.234567891` became `1.234568`, `1e-10` became `0`). They are now written with full precision.
+
 ## 0.9.1 (alpha), 2026-10-17
 
 The first public release. The API may change before 1.0.
