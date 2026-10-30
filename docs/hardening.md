@@ -271,8 +271,10 @@ Every clang-tidy suppression in the codebase, with its reason. Add new entries h
 |----------|-------|--------|
 | `include/activerecord/model.h` (`model` ctor) | `bugprone-easily-swappable-parameters` | Public API (`table_name, primary_key, con_name`); changing it breaks callers |
 | `src/datetime.cpp` (`datetime(y, m, d, h, min, s)`) | `bugprone-easily-swappable-parameters` | Public API; conventional field order |
+| `include/activerecord/typed_model.h` (`column_def::decimal(precision, scale)`) | `bugprone-easily-swappable-parameters` | Public API; same order as SQL `DECIMAL(p, s)` |
 | `include/activerecord/attribute.h` (`attribute_type`) | `performance-enum-size` | Public unscoped enum; a `uint8_t` base would print as a character through ostream/gtest |
 | `tests/unit/typed_model_test.cpp` (`task_state`) | `performance-enum-size` | `int32_t` base is deliberate: the test covers enum <-> INTEGER mapping |
+| `tests/unit/schema_test.cpp` (`priority`, `flags`) | `performance-enum-size` | `int` and `unsigned` bases are deliberate: the test covers signed and unsigned enum members |
 | `include/activerecord/transaction.h` (destructor) | `bugprone-empty-catch` | A destructor must not throw; rollback errors are swallowed on purpose |
 | `tests/integration/adapter_tests.cpp` (2x) | `bugprone-empty-catch` | Best-effort `DROP TABLE` in setup/teardown |
 | `tests/unit/transaction_test.cpp` | `bugprone-empty-catch` | The exception is the point of the test |

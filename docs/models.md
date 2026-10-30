@@ -271,6 +271,50 @@ user.save();
 | `enum` / `enum class` | INTEGER | Via underlying type |
 | `std::optional<T>` | Any of the above, nullable | `std::nullopt` maps to NULL |
 
+### Table Schema
+
+A typed model can also describe its table in more detail. The modifiers on `col<>()` are optional and only describe the table; they never change how values are read or written. `ar::table_schema_for<T>()` (`<activerecord/schema.h>`) turns `columns()` into a plain `ar::table_schema` and checks it. Creating the table from it comes in a later release.
+
+```cpp
+struct Book : ar::typed_model<Book> {
+    static constexpr auto table_name{ "books" };
+    static constexpr auto primary_key{ "id" };
+
+    std::int64_t id{};
+    std::string title{};
+    std::optional<std::string> summary{};
+    double price{};
+    std::int64_t author_id{};
+
+    static constexpr auto columns() {
+        return ar::columns(
+            ar::col<&Book::id>("id"),
+            ar::col<&Book::title>("title").limit(200).index(),
+            ar::col<&Book::summary>("summary").text(),
+            ar::col<&Book::price>("price").decimal(10, 2).default_value(0),
+            ar::col<&Book::author_id>("author_id").references<Author>().on_delete(ar::fk_action::cascade));
+    }
+};
+
+ar::table_schema schema = ar::table_schema_for<Book>();
+```
+
+Without modifiers, the member type decides the column: integers and signed enums → `bigint`, `float`/`double` → `real`, `bool` → `boolean`, `std::string` → `string` (255), `ar::datetime` → `datetime` (a Unix timestamp). `std::optional<T>` makes the column nullable; all other columns are NOT NULL. The primary key must be a `std::int64_t` and becomes the auto-increment key. Unsigned members cannot be used in a schema.
+
+| Modifier | For | Effect |
+|---|---|---|
+| `.limit(n)` | strings | `VARCHAR(n)` instead of 255 |
+| `.text()` | strings | unbounded text |
+| `.decimal(p, s)` | `float`, `double` | exact `DECIMAL(p, s)`; the C++ value stays floating-point |
+| `.integer()` | integers (not the primary key) | 32-bit `INT` |
+| `.not_null()` | optional members | NOT NULL anyway; saving `nullopt` then fails |
+| `.default_value(v)` | numbers, `bool`, enums | `DEFAULT v` in the table; a typed save still writes every member |
+| `.unique()`, `.index()` | any column | unique constraint, index |
+| `.references<U>()` | `std::int64_t`, optional or not | foreign key to `U`'s primary key |
+| `.on_delete(a)`, `.on_update(a)` | referencing columns | `ar::fk_action::no_action`, `cascade` or `set_null` (nullable columns only) |
+
+A modifier that does not fit the member type does not compile. Invalid values (`limit(0)`, a repeated modifier, a default that does not fit) make `table_schema_for<T>()` throw `ar::ex::activerecord`. Names may be at most 63 bytes.
+
 ### Disabling Record Tracking
 
 By default, `typed_model<T>` manages `created_at`, `updated_at`, and `version` columns if they exist. To disable:

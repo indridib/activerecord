@@ -44,6 +44,7 @@ add_executable(unit_tests
   unit/typed_model_test.cpp
   unit/transaction_test.cpp
   unit/validation_test.cpp
+  unit/schema_test.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE
