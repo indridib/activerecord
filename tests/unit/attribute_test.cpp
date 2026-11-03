@@ -93,9 +93,16 @@ TEST(AttributeTest, IntegerToString) {
 }
 
 TEST(AttributeTest, DoubleToString) {
-	attribute attr(3.14);
-	std::string result = attr.to_string();
-	EXPECT_TRUE(result.find("3.14") == 0);
+	EXPECT_EQ("3.14", attribute(3.14).to_string());
+	EXPECT_EQ("1.234567891", attribute(1.234567891).to_string());
+	EXPECT_EQ("1e-10", attribute(1e-10).to_string());
+	EXPECT_EQ("-0.5", attribute(-0.5).to_string());
+}
+
+TEST(AttributeTest, DoubleSerializesWithFullPrecision) {
+	const attribute_map attrs{ { "value", 1.234567891 } };
+	EXPECT_EQ(R"({"value": 1.234567891})", to_json_string(attrs));
+	EXPECT_NE(std::string::npos, to_xml_string(attrs, "item").find("<value>1.234567891</value>"));
 }
 
 TEST(AttributeTest, BoolToString) {

@@ -8,6 +8,8 @@
 // Implementation of PostgreSQL adapter
 //
 
+#include "parse_number.h"
+
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/postgres_adapter.h>
 #include <cctype>
@@ -329,7 +331,7 @@ attribute postgres_statement::field_as_attribute(PGresult* result, int row, int 
 	case 700:  // FLOAT4OID
 	case 701:  // FLOAT8OID
 	case 1700: // NUMERICOID
-		return { std::stod(value_str) };
+		return { detail::parse_double(value_str) };
 
 	case 1114: // TIMESTAMPOID
 	case 1184: // TIMESTAMPTZOID

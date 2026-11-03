@@ -8,6 +8,8 @@
 // Implementation of MS-SQL Server adapter using ODBC
 //
 
+#include "parse_number.h"
+
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/mssql_adapter.h>
 
@@ -334,7 +336,7 @@ attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, unsigned short colu
 	case SQL_DOUBLE:
 	case SQL_DECIMAL:
 	case SQL_NUMERIC:
-		return { std::stod(value_str) };
+		return { detail::parse_double(value_str) };
 
 	case SQL_TYPE_DATE:
 	case SQL_TYPE_TIMESTAMP:

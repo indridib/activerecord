@@ -8,6 +8,8 @@
 // Implementation of MySQL adapter
 //
 
+#include "parse_number.h"
+
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/mysql_adapter.h>
 #include <algorithm>
@@ -317,7 +319,7 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 	case MYSQL_TYPE_DOUBLE:
 	case MYSQL_TYPE_DECIMAL:
 	case MYSQL_TYPE_NEWDECIMAL:
-		return value.empty() ? attribute() : attribute(std::stod(value));
+		return value.empty() ? attribute() : attribute(detail::parse_double(value));
 
 	case MYSQL_TYPE_TIMESTAMP:
 	case MYSQL_TYPE_DATETIME:

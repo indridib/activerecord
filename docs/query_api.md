@@ -156,6 +156,18 @@ Find a single record by primary key. Throws `ex::item_not_found` if not found:
 User user = ar::query<User>().find(42);
 ```
 
+### find_optional(id)
+
+Like `find(id)`, but returns `std::optional<T>`, empty if there is no such record:
+
+```cpp
+if (auto user = ar::query<User>().find_optional(42)) {
+    std::cout << user->get("name").as_string() << '\n';
+}
+```
+
+Both respect the query's other conditions: `query<User>().where("active = ?", true).find_optional(42)` finds record 42 only if it is active.
+
 ### find(ids)
 
 Find multiple records by primary keys:

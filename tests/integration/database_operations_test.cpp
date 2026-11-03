@@ -16,7 +16,9 @@
 #include <activerecord/model.h>
 #include <activerecord/sql_builder.h>
 #include <activerecord/typed_model.h>
+#include <cmath>
 #include <gtest/gtest.h>
+#include <limits>
 
 using namespace ar;
 using namespace ar::test;
@@ -130,6 +132,31 @@ TEST_P(DatabaseOperationsTest, DoubleValuesRoundTripExactly) {
 	ASSERT_EQ(values.size(), rows.size());
 	for (std::size_t i = 0; i < values.size(); ++i) {
 		EXPECT_EQ(values[i], rows[i].get("value").as_real()) << "value " << i;
+	}
+}
+
+TEST_P(DatabaseOperationsTest, DoubleEdgeValuesRoundTrip) {
+	std::vector<double> values{ std::numeric_limits<double>::max(), std::numeric_limits<double>::lowest(),
+								std::numeric_limits<double>::min() };
+	// SQL Server FLOAT has no subnormals, and only PostgreSQL keeps the sign of zero
+	if (adapter_type() != AdapterType::MSSQL) {
+		values.push_back(std::numeric_limits<double>::denorm_min());
+	}
+	if (adapter_type() == AdapterType::PostgreSQL) {
+		values.push_back(-0.0);
+	}
+	for (const double value : values) {
+		Measurement m;
+		m.set("value", value);
+		ASSERT_TRUE(m.save());
+	}
+
+	const auto rows = query<Measurement>().order("id").all();
+	ASSERT_EQ(values.size(), rows.size());
+	for (std::size_t i = 0; i < values.size(); ++i) {
+		const double read{ rows[i].get("value").as_real() };
+		EXPECT_EQ(values[i], read) << "value " << i;
+		EXPECT_EQ(std::signbit(values[i]), std::signbit(read)) << "value " << i;
 	}
 }
 
@@ -395,6 +422,23 @@ TEST_P(DatabaseOperationsTest, QueryFind) {
 	EXPECT_EQ("FindMe", user.get("name").as_string());
 	EXPECT_EQ(25, user.get("age").as_integer());
 	EXPECT_FALSE(user.is_new_record());
+}
+
+TEST_P(DatabaseOperationsTest, QueryFindOptional) {
+	User user;
+	user.set("name", "FindMe");
+	user.set("age", 25);
+	ASSERT_TRUE(user.save());
+	const std::int64_t id{ user.get("id").as_integer() };
+
+	const auto found = query<User>().find_optional(id);
+	ASSERT_TRUE(found.has_value());
+	EXPECT_EQ("FindMe", found->get("name").as_string());
+	EXPECT_FALSE(found->is_new_record());
+
+	EXPECT_FALSE(query<User>().find_optional(id + 1000).has_value());
+	EXPECT_FALSE(query<User>().where("age > ?", 30).find_optional(id).has_value()); // respects the scope
+	EXPECT_THROW(query<User>().find(id + 1000), ex::item_not_found);
 }
 
 TEST_P(DatabaseOperationsTest, QueryFindMultipleIds) {

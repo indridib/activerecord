@@ -15,6 +15,7 @@
 #include <activerecord/config.h>
 #include <cassert>
 #include <cctype>
+#include <cstdint>
 #include <format>
 #include <iterator>
 #include <memory>
@@ -315,15 +316,22 @@ template <class T> class query : public sql_builder {
 	}
 
 	/*
-	 * Returns the record with the primary key id 'id'
+	 * Returns the record with the primary key id 'id', or nullopt if there is none.
 	 */
-	T find(long id) {
+	std::optional<T> find_optional(std::int64_t id) {
 		add_where(std::format("{} = ?", T::st_primary_key()), { id });
-		auto result{ first() };
+		return first();
+	}
+
+	/*
+	 * Returns the record with the primary key id 'id'. Throws ex::item_not_found if there is none.
+	 */
+	T find(std::int64_t id) {
+		auto result{ find_optional(id) };
 		if (!result.has_value()) {
 			throw ex::item_not_found("record not found");
 		}
-		return *result;
+		return std::move(*result);
 	}
 
 	/*

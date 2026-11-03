@@ -45,6 +45,7 @@ add_executable(unit_tests
   unit/transaction_test.cpp
   unit/validation_test.cpp
   unit/schema_test.cpp
+  unit/parse_number_test.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE

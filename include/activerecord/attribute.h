@@ -126,7 +126,7 @@ class attribute {
 		case type_integer:
 			return std::to_string(std::get<int64_t>(data_));
 		case type_decimal:
-			return std::to_string(std::get<double>(data_));
+			return std::format("{}", std::get<double>(data_)); // shortest text that reads back exactly
 		case type_bool:
 			return std::to_string(static_cast<int>(std::get<bool>(data_)));
 		case type_date:
