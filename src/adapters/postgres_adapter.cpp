@@ -12,9 +12,11 @@
 
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/postgres_adapter.h>
+#include <activerecord/schema.h>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <format>
 #include <libpq-fe.h>
 #include <sstream>
 #include <string>
@@ -439,6 +441,56 @@ std::string postgres_adapter::escape(std::string_view str) const {
 	}
 	escaped += '"';
 	return escaped;
+}
+
+// ============================================================================
+// DDL
+// ============================================================================
+
+std::string postgres_adapter::column_type_sql(const column_schema& column) const {
+	switch (column.type) {
+	case column_type::bigint:
+	case column_type::datetime:
+		return "BIGINT";
+	case column_type::integer:
+		return "INTEGER";
+	case column_type::real:
+		return "DOUBLE PRECISION";
+	case column_type::decimal:
+		return std::format("NUMERIC({},{})", column.precision, column.scale);
+	case column_type::boolean:
+		return "BOOLEAN";
+	case column_type::string:
+		return std::format("VARCHAR({})", column.length);
+	case column_type::text:
+		return "TEXT";
+	}
+	throw ex::activerecord("Column {}: invalid column type", column.name);
+}
+
+std::string postgres_adapter::primary_key_sql() const {
+	return "BIGSERIAL PRIMARY KEY";
+}
+
+std::string postgres_adapter::literal_sql(const column_schema& column) const {
+	return detail::numeric_literal_sql(column, "TRUE", "FALSE");
+}
+
+bool postgres_adapter::table_exists(std::string_view name) {
+	return query("SELECT 1 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+				 "WHERE n.nspname = current_schema() AND c.relname = ? AND c.relkind IN ('r', 'p')",
+				 { attribute{ name } })
+		->fetch();
+}
+
+void postgres_adapter::check_table(const table_schema& schema) const {
+	constexpr std::size_t max_varchar{ 10485760 };
+	for (const column_schema& column : schema.columns) {
+		if (column.type == column_type::string && column.length > max_varchar) {
+			throw ex::activerecord("Table {}, column {}: PostgreSQL VARCHAR holds at most {} characters", schema.name,
+								   column.name, max_varchar);
+		}
+	}
 }
 
 } // namespace ar

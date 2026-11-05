@@ -46,6 +46,7 @@ add_executable(unit_tests
   unit/validation_test.cpp
   unit/schema_test.cpp
   unit/parse_number_test.cpp
+  unit/ddl_test.cpp
 )
 
 target_link_libraries(unit_tests PRIVATE
@@ -74,6 +75,7 @@ if(AR_SQLITE OR AR_MYSQL OR AR_POSTGRES OR AR_MSSQL)
     integration/adapter_tests.cpp
     integration/database_operations_test.cpp
     integration/datetime_integration_test.cpp
+    integration/ddl_integration_test.cpp
   )
 
   # SQLite-specific adapter tests

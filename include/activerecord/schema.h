@@ -66,11 +66,18 @@ std::string index_name(std::string_view table, std::string_view column);
 
 /**
  * Checks the invariants of a finished schema (names, primary key, types, defaults, foreign keys).
- * Throws ex::activerecord naming the table and column.
+ * Names must be non-empty, at most 63 bytes, and contain no '.', NUL or identifier delimiter
+ * (` " [ ]). Throws ex::activerecord naming the table and column.
  */
 void validate(const table_schema& schema);
 
 namespace detail {
+
+/** DEFAULT literal of a numeric or boolean default, with the adapter's spelling of true and false. */
+std::string numeric_literal_sql(const column_schema& column, std::string_view true_sql, std::string_view false_sql);
+
+/** Bytes MySQL stores for DECIMAL(precision, scale): 4 per 9 digits on each side of the point. */
+std::uint64_t mysql_decimal_bytes(int precision, int scale);
 
 template <class T>
 concept typed_model_type = std::derived_from<T, typed_model<T, true>> || std::derived_from<T, typed_model<T, false>>;

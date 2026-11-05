@@ -51,6 +51,7 @@ sqlite://windows(c*/path/to/file.db)
 - Stores datetime values as INTEGER (Unix timestamps).
 - Empty inserts use `DEFAULT VALUES`.
 - No username/password — authentication parameters are ignored.
+- Foreign keys are not enforced unless you turn them on: `adapter->foreign_keys(true)`, or `?foreign_keys=on` in the URL. It runs `PRAGMA foreign_keys = ON` and checks that it took effect. Inside a transaction SQLite ignores the PRAGMA, so trying to change the setting there throws. `enforces_foreign_keys()` reports the current setting.
 
 ---
 
@@ -85,6 +86,7 @@ mysql://root:password@unix(/var/run/mysqld/mysqld.sock)/mydb
 - Requires `libmysqlclient`.
 - Empty inserts use `() VALUES()` (MySQL syntax).
 - The connection uses `utf8mb4`; the `charset` URL parameter has no effect.
+- Tables created by the library use `ENGINE=InnoDB`. Before generating SQL, the library checks MySQL's limits for the server defaults (`utf8mb4`, `ROW_FORMAT=DYNAMIC`, 16 KB pages): `VARCHAR` up to 16383 characters, at most 768 when indexed or unique, no index on `TEXT`, `DECIMAL` scale up to 30, and an estimated row size of at most 65535 bytes. InnoDB can still reject a table for its in-page limit, and on other server settings the limits differ; the server's error then comes through.
 
 ---
 

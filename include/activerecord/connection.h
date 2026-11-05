@@ -15,12 +15,21 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace ar {
+
+// Defined in schema.h / typed_model.h; declared here for the DDL functions below
+struct table_schema;
+struct column_schema;
+enum class column_type : std::uint8_t;
+enum class fk_action : std::uint8_t;
 
 /**
  * a general db statement class
@@ -52,6 +61,7 @@ class connection {
 		std::optional<std::string> socket;
 		std::optional<std::string> file;
 		std::optional<std::string> charset;
+		bool foreign_keys{ false }; // ?foreign_keys=on: enforce foreign keys (SQLite)
 		std::map<std::string, std::string> query;
 	};
 
@@ -117,6 +127,7 @@ class connection {
 		if (auto iter = info.query.find("charset"); iter != info.query.end()) {
 			info.charset = iter->second;
 		}
+		info.foreign_keys = query_true(info.query, "foreign_keys");
 
 		if (info.protocol == "sqlite") {
 			parse_sqlite_connection(authority_and_path, info);
@@ -236,6 +247,38 @@ class connection {
 	 * @returns boolean (false by default)
 	 */
 	virtual bool accepts_limit_and_order_for_update_and_delete() const { return false; }
+
+	// -------------------------------------------
+	// DDL (table creation). Built-in adapters implement these; a custom adapter that does not
+	// gets ex::activerecord("DDL is not supported by this adapter").
+
+	/** SQL type of a non-primary-key column, e.g. VARCHAR(200) or DECIMAL(10,2). */
+	virtual std::string column_type_sql(const column_schema& column) const;
+
+	/** Type and constraints of the generated BIGINT primary key, e.g. "BIGSERIAL PRIMARY KEY". */
+	virtual std::string primary_key_sql() const;
+
+	/** SQL literal of the column's default value (numbers and booleans only). */
+	virtual std::string literal_sql(const column_schema& column) const;
+
+	/**
+	 * Validates the schema (common and adapter rules), then returns the statements that create the table:
+	 * CREATE TABLE, then one CREATE INDEX per index() column. Throws ex::activerecord before building any SQL.
+	 */
+	virtual std::vector<std::string> create_table_plan(const table_schema& schema) const;
+
+	/** True if a base table with exactly this name exists in the current schema/database. */
+	virtual bool table_exists(std::string_view name);
+
+	/** True if this connection enforces foreign keys right now. */
+	virtual bool enforces_foreign_keys() { return true; }
+
+  protected:
+	/** Adapter-specific limits, checked by create_table_plan() after the common validation. */
+	virtual void check_table(const table_schema& /*schema*/) const {}
+
+	/** Appended to CREATE TABLE (...), e.g. " ENGINE=InnoDB". */
+	virtual std::string table_suffix_sql() const { return {}; }
 
   private:
 	static bool query_true(const std::map<std::string, std::string>& query, std::string_view key) {

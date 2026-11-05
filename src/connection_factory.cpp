@@ -43,7 +43,11 @@ std::shared_ptr<connection> make_connection(std::string_view url) {
 	if (protocol == "sqlite") {
 #ifdef AR_SQLITE
 		const std::string file{ required_field(info.file, "file", protocol) };
-		return std::make_shared<sqlite_adapter>(file);
+		auto adapter{ std::make_shared<sqlite_adapter>(file) };
+		if (info.foreign_keys) {
+			adapter->foreign_keys(true);
+		}
+		return adapter;
 #else
 		throw ex::config("Protocol '{}' is not enabled in this build", protocol);
 #endif

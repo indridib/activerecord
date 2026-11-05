@@ -313,7 +313,7 @@ Without modifiers, the member type decides the column: integers and signed enums
 | `.references<U>()` | `std::int64_t`, optional or not | foreign key to `U`'s primary key |
 | `.on_delete(a)`, `.on_update(a)` | referencing columns | `ar::fk_action::no_action`, `cascade` or `set_null` (nullable columns only) |
 
-A modifier that does not fit the member type does not compile. Invalid values (`limit(0)`, a repeated modifier, a default that does not fit) make `table_schema_for<T>()` throw `ar::ex::activerecord`. Names may be at most 63 bytes.
+A modifier that does not fit the member type does not compile. Invalid values (`limit(0)`, a repeated modifier, a default that does not fit) make `table_schema_for<T>()` throw `ar::ex::activerecord`. Table and column names may be at most 63 bytes and may not contain `.` or an identifier quote character (`` ` ``, `"`, `[`, `]`).
 
 ### Disabling Record Tracking
 

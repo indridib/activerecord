@@ -62,6 +62,13 @@ class postgres_adapter : public connection {
 	void rollback() override;
 	std::string escape(std::string_view str) const override;
 
+	std::string column_type_sql(const column_schema& column) const override;
+	std::string primary_key_sql() const override;
+	std::string literal_sql(const column_schema& column) const override;
+	bool table_exists(std::string_view name) override;
+
+  protected:
+	void check_table(const table_schema& schema) const override;
 
   private:
 	PGconn* db_{ nullptr }; // Owned database connection (closed in destructor)

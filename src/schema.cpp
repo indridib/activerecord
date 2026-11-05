@@ -25,8 +25,10 @@ void check_name(std::string_view table, std::string_view what, std::string_view 
 	if (name.size() > max_name_length) {
 		throw ex::activerecord("Table {}: {} name \"{}\" is longer than {} bytes", table, what, name, max_name_length);
 	}
-	if (name.find('.') != std::string_view::npos || name.find('\0') != std::string_view::npos) {
-		throw ex::activerecord("Table {}: {} name \"{}\" contains '.' or NUL", table, what, name);
+	constexpr std::string_view forbidden{ ".`\"[]\0", 6 };
+	if (name.find_first_of(forbidden) != std::string_view::npos) {
+		throw ex::activerecord("Table {}: {} name \"{}\" contains '.', NUL or an identifier delimiter", table, what,
+							   name);
 	}
 }
 

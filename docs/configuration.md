@@ -113,6 +113,7 @@ postgres://user:pass@localhost/mydb?decode=true
 | Parameter | Effect |
 |-----------|--------|
 | `decode=true` | URL-decode the username and password |
+| `foreign_keys=on` | SQLite only: enforce foreign keys (`PRAGMA foreign_keys = ON`); also `true` or `1` |
 
 The connection encoding is fixed: MySQL connections use `utf8mb4` and PostgreSQL connections `UTF8`. A `charset` parameter is accepted but has no effect.
 

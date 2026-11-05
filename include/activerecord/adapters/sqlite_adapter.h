@@ -58,6 +58,17 @@ class sqlite_adapter : public connection {
 	void commit() override;
 	void rollback() override;
 
+	std::string column_type_sql(const column_schema& column) const override;
+	std::string primary_key_sql() const override;
+	std::string literal_sql(const column_schema& column) const override;
+	bool table_exists(std::string_view name) override;
+	bool enforces_foreign_keys() override;
+
+	/**
+	 * Turns foreign-key enforcement on or off (PRAGMA foreign_keys), then reads it back. Throws ex::config
+	 * if the setting did not change, e.g. inside a transaction, where SQLite ignores it.
+	 */
+	void foreign_keys(bool on);
 
   private:
 	sqlite3* db_{ nullptr }; // Owned database handle (closed in destructor)

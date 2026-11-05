@@ -10,7 +10,9 @@
 
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/sqlite_adapter.h>
+#include <activerecord/schema.h>
 #include <cctype>
+#include <format>
 #include <sqlite3.h>
 #include <string>
 
@@ -279,6 +281,58 @@ void sqlite_adapter::commit() {
 
 void sqlite_adapter::rollback() {
 	query("ROLLBACK");
+}
+
+// ============================================================================
+// DDL
+// ============================================================================
+
+std::string sqlite_adapter::column_type_sql(const column_schema& column) const {
+	switch (column.type) {
+	case column_type::bigint:
+	case column_type::integer:
+	case column_type::datetime:
+		return "INTEGER";
+	case column_type::real:
+		return "REAL";
+	case column_type::decimal:
+		return std::format("NUMERIC({},{})", column.precision, column.scale);
+	case column_type::boolean:
+		return "BOOLEAN";
+	case column_type::string:
+	case column_type::text:
+		return "TEXT";
+	}
+	throw ex::activerecord("Column {}: invalid column type", column.name);
+}
+
+std::string sqlite_adapter::primary_key_sql() const {
+	return "INTEGER PRIMARY KEY AUTOINCREMENT";
+}
+
+std::string sqlite_adapter::literal_sql(const column_schema& column) const {
+	return detail::numeric_literal_sql(column, "1", "0");
+}
+
+bool sqlite_adapter::table_exists(std::string_view name) {
+	return query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", { attribute{ name } })->fetch();
+}
+
+bool sqlite_adapter::enforces_foreign_keys() {
+	auto stmt{ query("PRAGMA foreign_keys") };
+	attribute_map row;
+	if (!stmt->fetch()) {
+		return false;
+	}
+	stmt->get_attributes(row);
+	return !row.empty() && row.begin()->second.as_numeric() != 0;
+}
+
+void sqlite_adapter::foreign_keys(bool on) {
+	query(on ? "PRAGMA foreign_keys = ON" : "PRAGMA foreign_keys = OFF");
+	if (enforces_foreign_keys() != on) {
+		throw ex::config("SQLite: PRAGMA foreign_keys could not be changed (inside a transaction?)");
+	}
 }
 
 } // namespace ar

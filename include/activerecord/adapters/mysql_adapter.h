@@ -78,6 +78,16 @@ class mysql_adapter : public connection {
 
 	bool accepts_limit_and_order_for_update_and_delete() const override { return true; }
 
+	std::string column_type_sql(const column_schema& column) const override;
+	std::string primary_key_sql() const override;
+	std::string literal_sql(const column_schema& column) const override;
+	bool table_exists(std::string_view name) override;
+	bool enforces_foreign_keys() override;
+
+  protected:
+	void check_table(const table_schema& schema) const override;
+	std::string table_suffix_sql() const override { return " ENGINE=InnoDB"; }
+
   private:
 	MYSQL* db_{ nullptr }; // Owned database handle (closed in destructor)
 };

@@ -12,6 +12,8 @@
 
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/mssql_adapter.h>
+#include <activerecord/schema.h>
+#include <format>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -491,6 +493,63 @@ std::string mssql_adapter::escape(std::string_view str) const {
 	}
 	escaped += ']';
 	return escaped;
+}
+
+// ============================================================================
+// DDL
+// ============================================================================
+
+std::string mssql_adapter::column_type_sql(const column_schema& column) const {
+	switch (column.type) {
+	case column_type::bigint:
+	case column_type::datetime:
+		return "BIGINT";
+	case column_type::integer:
+		return "INT";
+	case column_type::real:
+		return "FLOAT";
+	case column_type::decimal:
+		return std::format("DECIMAL({},{})", column.precision, column.scale);
+	case column_type::boolean:
+		return "BIT";
+	case column_type::string:
+		return std::format("VARCHAR({})", column.length);
+	case column_type::text:
+		return "VARCHAR(MAX)";
+	}
+	throw ex::activerecord("Column {}: invalid column type", column.name);
+}
+
+std::string mssql_adapter::primary_key_sql() const {
+	return "BIGINT IDENTITY(1,1) PRIMARY KEY";
+}
+
+std::string mssql_adapter::literal_sql(const column_schema& column) const {
+	return detail::numeric_literal_sql(column, "1", "0");
+}
+
+bool mssql_adapter::table_exists(std::string_view name) {
+	return query("SELECT 1 FROM sys.tables WHERE name = ? AND schema_id = SCHEMA_ID()", { attribute{ name } })->fetch();
+}
+
+void mssql_adapter::check_table(const table_schema& schema) const {
+	constexpr std::size_t max_varchar{ 8000 };
+	constexpr std::size_t max_indexed_varchar{ 1700 }; // nonclustered index key bytes
+	for (const column_schema& column : schema.columns) {
+		const bool keyed{ column.name != schema.primary_key && (column.index || column.unique) };
+		if (column.type == column_type::string && column.length > max_varchar) {
+			throw ex::activerecord("Table {}, column {}: SQL Server VARCHAR holds at most {} characters", schema.name,
+								   column.name, max_varchar);
+		}
+		if (keyed && column.type == column_type::text) {
+			throw ex::activerecord("Table {}, column {}: SQL Server cannot index or make unique a VARCHAR(MAX) column",
+								   schema.name, column.name);
+		}
+		if (keyed && column.type == column_type::string && column.length > max_indexed_varchar) {
+			throw ex::activerecord("Table {}, column {}: SQL Server indexes VARCHAR of at most {} characters",
+								   schema.name, column.name, max_indexed_varchar);
+		}
+	}
 }
 
 } // namespace ar

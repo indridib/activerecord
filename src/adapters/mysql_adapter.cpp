@@ -12,9 +12,11 @@
 
 #include <activerecord/activerecord.h>
 #include <activerecord/adapters/mysql_adapter.h>
+#include <activerecord/schema.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <limits>
 #include <memory>
 #include <mysql/mysql.h>
@@ -418,6 +420,122 @@ std::string mysql_adapter::escape(std::string_view str) const {
 
 std::string mysql_adapter::default_values_insert_clause() const {
 	return "() VALUES ()";
+}
+
+// ============================================================================
+// DDL
+// ============================================================================
+
+std::string mysql_adapter::column_type_sql(const column_schema& column) const {
+	switch (column.type) {
+	case column_type::bigint:
+	case column_type::datetime:
+		return "BIGINT";
+	case column_type::integer:
+		return "INT";
+	case column_type::real:
+		return "DOUBLE";
+	case column_type::decimal:
+		return std::format("DECIMAL({},{})", column.precision, column.scale);
+	case column_type::boolean:
+		return "BOOLEAN";
+	case column_type::string:
+		return std::format("VARCHAR({})", column.length);
+	case column_type::text:
+		return "TEXT";
+	}
+	throw ex::activerecord("Column {}: invalid column type", column.name);
+}
+
+std::string mysql_adapter::primary_key_sql() const {
+	return "BIGINT AUTO_INCREMENT PRIMARY KEY";
+}
+
+std::string mysql_adapter::literal_sql(const column_schema& column) const {
+	return detail::numeric_literal_sql(column, "1", "0");
+}
+
+bool mysql_adapter::table_exists(std::string_view name) {
+	return query("SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? AND "
+				 "table_type = 'BASE TABLE'",
+				 { attribute{ name } })
+		->fetch();
+}
+
+bool mysql_adapter::enforces_foreign_keys() {
+	auto stmt{ query("SELECT @@foreign_key_checks") };
+	attribute_map row;
+	if (!stmt->fetch()) {
+		return false;
+	}
+	stmt->get_attributes(row);
+	return !row.empty() && row.begin()->second.as_numeric() != 0;
+}
+
+// Limits for MySQL 8 defaults (utf8mb4, ROW_FORMAT=DYNAMIC, 16 KB pages); see docs/adapters.md
+void mysql_adapter::check_table(const table_schema& schema) const {
+	constexpr std::size_t max_varchar{ 16383 };		  // 65535 bytes / 4 bytes per utf8mb4 character
+	constexpr std::size_t max_indexed_varchar{ 768 }; // 3072-byte index key / 4
+	constexpr int max_scale{ 30 };
+	constexpr std::uint64_t max_row_bytes{ 65535 };
+
+	std::uint64_t row_bytes{ 0 };
+	std::uint64_t nullable{ 0 };
+	for (const column_schema& column : schema.columns) {
+		const bool keyed{ column.name != schema.primary_key && (column.index || column.unique) };
+		if (column.type == column_type::string && column.length > max_varchar) {
+			throw ex::activerecord("Table {}, column {}: MySQL VARCHAR holds at most {} characters", schema.name,
+								   column.name, max_varchar);
+		}
+		if (column.type == column_type::decimal && column.scale > max_scale) {
+			throw ex::activerecord("Table {}, column {}: MySQL DECIMAL scale is at most {}", schema.name, column.name,
+								   max_scale);
+		}
+		if (keyed && column.type == column_type::text) {
+			throw ex::activerecord("Table {}, column {}: MySQL cannot index or make unique a TEXT column", schema.name,
+								   column.name);
+		}
+		if (keyed && column.type == column_type::string && column.length > max_indexed_varchar) {
+			throw ex::activerecord("Table {}, column {}: MySQL indexes VARCHAR of at most {} characters", schema.name,
+								   column.name, max_indexed_varchar);
+		}
+
+		switch (column.type) {
+		case column_type::bigint:
+		case column_type::datetime:
+		case column_type::real:
+			row_bytes += 8;
+			break;
+		case column_type::integer:
+			row_bytes += 4;
+			break;
+		case column_type::boolean:
+			row_bytes += 1;
+			break;
+		case column_type::decimal:
+			row_bytes += detail::mysql_decimal_bytes(column.precision, column.scale);
+			break;
+		case column_type::string: {
+			const std::uint64_t bytes{ std::uint64_t{ column.length } * 4 };
+			row_bytes += bytes + (bytes <= 255 ? 1 : 2);
+			break;
+		}
+		case column_type::text:
+			row_bytes += 12; // conservative: TEXT counts 9 to 12 bytes toward the row size
+			break;
+		}
+		if (column.nullable) {
+			++nullable;
+		}
+		if (row_bytes > max_row_bytes) {
+			break; // already too large; stop before the sum can grow further
+		}
+	}
+	row_bytes += (nullable + 7) / 8;
+	if (row_bytes > max_row_bytes) {
+		throw ex::activerecord("Table {}: MySQL rows hold at most {} bytes; this table needs at least {}", schema.name,
+							   max_row_bytes, row_bytes);
+	}
 }
 
 } // namespace ar
