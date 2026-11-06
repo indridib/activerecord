@@ -18,19 +18,6 @@ namespace ar {
 
 namespace {
 
-void check_name(std::string_view table, std::string_view what, std::string_view name) {
-	if (name.empty()) {
-		throw ex::activerecord("Table {}: {} name is empty", table, what);
-	}
-	if (name.size() > max_name_length) {
-		throw ex::activerecord("Table {}: {} name \"{}\" is longer than {} bytes", table, what, name, max_name_length);
-	}
-	constexpr std::string_view forbidden{ ".`\"[]\0", 6 };
-	if (name.find_first_of(forbidden) != std::string_view::npos) {
-		throw ex::activerecord("Table {}: {} name \"{}\" contains '.', NUL or an identifier delimiter", table, what,
-							   name);
-	}
-}
 
 bool valid_type(column_type type) {
 	switch (type) {
@@ -110,15 +97,23 @@ std::string index_name(std::string_view table, std::string_view column) {
 	return std::format("ix_{}_{}_{}", table.size(), table, column);
 }
 
+bool create_table(const table_schema& schema, create_options options, std::string_view connection) {
+	return detail::create_table(*config::instance().get_connection(connection), schema, options);
+}
+
+void drop_table(std::string_view table, drop_options options, std::string_view connection) {
+	detail::drop_table(*config::instance().get_connection(connection), table, options);
+}
+
 void validate(const table_schema& schema) {
 	const std::string_view table{ schema.name };
-	check_name(table, "table", table);
-	check_name(table, "primary key", schema.primary_key);
+	detail::check_name(table, "table", table);
+	detail::check_name(table, "primary key", schema.primary_key);
 
 	std::set<std::string_view> names;
 	const column_schema* primary_key{ nullptr };
 	for (const column_schema& column : schema.columns) {
-		check_name(table, "column", column.name);
+		detail::check_name(table, "column", column.name);
 		if (!names.insert(column.name).second) {
 			throw ex::activerecord("Table {}: column {} appears twice", table, column.name);
 		}
@@ -135,7 +130,7 @@ void validate(const table_schema& schema) {
 		}
 		check_default(table, column);
 		if (column.index) {
-			check_name(table, "index", index_name(table, column.name));
+			detail::check_name(table, "index", index_name(table, column.name));
 		}
 		if (column.name == schema.primary_key) {
 			primary_key = &column;
@@ -152,9 +147,9 @@ void validate(const table_schema& schema) {
 	}
 
 	for (const foreign_key& key : schema.foreign_keys) {
-		check_name(table, "foreign key column", key.column);
-		check_name(table, "referenced table", key.ref_table);
-		check_name(table, "referenced column", key.ref_column);
+		detail::check_name(table, "foreign key column", key.column);
+		detail::check_name(table, "referenced table", key.ref_table);
+		detail::check_name(table, "referenced column", key.ref_column);
 		if (!valid_action(key.on_delete) || !valid_action(key.on_update)) {
 			throw ex::activerecord("Table {}, column {}: invalid foreign-key action", table, key.column);
 		}
@@ -175,6 +170,41 @@ void validate(const table_schema& schema) {
 }
 
 namespace detail {
+
+void check_name(std::string_view table, std::string_view what, std::string_view name) {
+	if (name.empty()) {
+		throw ex::activerecord("Table {}: {} name is empty", table, what);
+	}
+	if (name.size() > max_name_length) {
+		throw ex::activerecord("Table {}: {} name \"{}\" is longer than {} bytes", table, what, name, max_name_length);
+	}
+	constexpr std::string_view forbidden{ ".`\"[]\0", 6 };
+	if (name.find_first_of(forbidden) != std::string_view::npos) {
+		throw ex::activerecord("Table {}: {} name \"{}\" contains '.', NUL or an identifier delimiter", table, what,
+							   name);
+	}
+}
+
+bool create_table(connection& conn, const table_schema& schema, create_options options) {
+	const std::vector<std::string> plan{ conn.create_table_plan(schema) };
+	if (options.if_not_exists && conn.table_exists(schema.name)) {
+		return false;
+	}
+	if (!schema.foreign_keys.empty() && !conn.enforces_foreign_keys()) {
+		throw ex::config("Table {} has foreign keys, but this connection does not enforce them (SQLite: call "
+						 "foreign_keys(true) or use ?foreign_keys=on)",
+						 schema.name);
+	}
+	for (const std::string& sql : plan) {
+		conn.query(sql);
+	}
+	return true;
+}
+
+void drop_table(connection& conn, std::string_view table, drop_options options) {
+	check_name(table, "table", table);
+	conn.query(std::format("DROP TABLE {}{}", options.if_exists ? "IF EXISTS " : "", conn.escape(table)));
+}
 
 std::string_view modifier_name(std::uint16_t bit) {
 	switch (bit) {

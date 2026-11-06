@@ -271,9 +271,9 @@ user.save();
 | `enum` / `enum class` | INTEGER | Via underlying type |
 | `std::optional<T>` | Any of the above, nullable | `std::nullopt` maps to NULL |
 
-### Table Schema
+### Creating Tables
 
-A typed model can also describe its table in more detail. The modifiers on `col<>()` are optional and only describe the table; they never change how values are read or written. `ar::table_schema_for<T>()` (`<activerecord/schema.h>`) turns `columns()` into a plain `ar::table_schema` and checks it. Creating the table from it comes in a later release.
+A typed model can create its own table. The modifiers on `col<>()` are optional and only describe the table; they never change how values are read or written. Everything below is in `<activerecord/schema.h>`.
 
 ```cpp
 struct Book : ar::typed_model<Book> {
@@ -296,8 +296,24 @@ struct Book : ar::typed_model<Book> {
     }
 };
 
-ar::table_schema schema = ar::table_schema_for<Book>();
+ar::create_tables<Author, Book>();                    // in this order
+ar::create_table<Book>({ .if_not_exists = true });    // false if it already existed
+ar::drop_tables<Author, Book>();                      // in reverse: Book, then Author
+ar::drop_table<Book>({ .if_exists = true });
+std::vector<std::string> sql = ar::create_table_sql<Book>();  // the statements, nothing is run
+ar::table_schema schema = ar::table_schema_for<Book>();       // the table as plain data
 ```
+
+Every function takes an optional connection name as its last argument; empty means the default connection. `create_table(schema)` and `drop_table("name")` take a hand-built `ar::table_schema` or a table name instead of a model.
+
+`create_table` works in this order:
+
+1. It validates the schema and builds every statement. If anything is invalid, it throws `ar::ex::activerecord` and nothing is sent to the database.
+2. With `if_not_exists`, it returns `false` if the table exists. The existing table is not compared or repaired. If another program creates the table after this check, the `CREATE TABLE` fails and the server's error propagates.
+3. For a table with foreign keys, it throws `ar::ex::config` if the connection does not enforce them. On SQLite, turn enforcement on first with `foreign_keys(true)` or `?foreign_keys=on` (see [Adapters](adapters.md)).
+4. It runs the statements one by one: `CREATE TABLE`, then one `CREATE INDEX` per `index()` column.
+
+If a statement fails, its error propagates. There is no automatic rollback or cleanup, so a table created by an earlier statement may remain; remove it with `drop_table`. Inside your own transaction, the database's rules for DDL apply (MySQL, for example, commits DDL immediately). `create_tables` checks each table separately and stops at the first failure without undoing the tables already created. There is no dependency sorting and no support for tables that reference each other in a cycle; a table may reference itself.
 
 Without modifiers, the member type decides the column: integers and signed enums → `bigint`, `float`/`double` → `real`, `bool` → `boolean`, `std::string` → `string` (255), `ar::datetime` → `datetime` (a Unix timestamp). `std::optional<T>` makes the column nullable; all other columns are NOT NULL. The primary key must be a `std::int64_t` and becomes the auto-increment key. Unsigned members cannot be used in a schema.
 

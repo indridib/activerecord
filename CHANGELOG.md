@@ -4,16 +4,31 @@
 
 ### Added
 
+- **Table creation from typed models** (`<activerecord/schema.h>`):
+  - column modifiers on `col<>()`: `limit`, `text`, `decimal`, `integer`, `not_null`, `default_value`, `unique`, `index`, `references<U>`, `on_delete`, `on_update`. A modifier that does not fit the member type does not compile;
+  - `table_schema_for<T>()` turns a typed model into a plain, validated `ar::table_schema`;
+  - `create_table`, `create_tables`, `drop_table`, `drop_tables` (with `if_not_exists` / `if_exists`) and `create_table_sql`;
+  - each adapter writes its own SQL (types, auto-increment key, quoting; `ENGINE=InnoDB` on MySQL) and checks its limits before any SQL is sent;
+  - `connection::table_exists()` and `connection::enforces_foreign_keys()`;
+  - SQLite foreign keys can be turned on with `sqlite_adapter::foreign_keys(true)` or `?foreign_keys=on`.
 - `query<T>::find_optional(id)`: returns `std::optional<T>`, empty when no record has that primary key. `find(id)` now also takes a 64-bit id (`std::int64_t`); `long` arguments still work.
 
 ### Changed
 
+- Table and column names in a table schema may not contain identifier quote characters (`` ` ``, `"`, `[`, `]`).
 - JSON and XML output, and `attribute::to_string()`, write `double` values in their shortest exact form (`3.14`, `1e-10`) instead of with six decimal places (`3.140000`), so serialized values no longer lose precision.
 
 ### Fixed
 
 - PostgreSQL: `double` values were written with only six decimal places (`1.234567891` became `1.234568`, `1e-10` became `0`). They are now written with full precision.
+- README: lazy iteration builds models one row at a time; MySQL and PostgreSQL still receive the whole result first (see `docs/query_api.md`).
 - MySQL and PostgreSQL: reading a very small (subnormal) `double` such as `5e-324` threw `std::out_of_range`. It is now read correctly. MS-SQL uses the same locale-independent number parser (SQL Server `FLOAT` cannot store subnormals).
+
+### Known gaps
+
+- Table creation has no migrations or `ALTER TABLE`, and cannot create tables that reference each other in a cycle.
+- MS-SQL tables use `VARCHAR` for strings; Unicode text (`NVARCHAR`) is not supported yet.
+- The 0.9.1 gaps below remain, except `find_optional()`.
 
 ## 0.9.1 (alpha), 2026-10-17
 

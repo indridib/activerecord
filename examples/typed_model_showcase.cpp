@@ -12,8 +12,10 @@
 #include <activerecord/adapters/sqlite_adapter.h>
 #include <activerecord/config.h>
 #include <activerecord/datetime.h>
+#include <activerecord/schema.h>
 #include <activerecord/sql_builder.h>
 #include <activerecord/typed_model.h>
+#include <cstdint>
 #include <iostream>
 #include <optional>
 
@@ -21,7 +23,7 @@ struct Account : ar::typed_model<Account> {
 	static constexpr auto table_name{ "accounts" };
 	static constexpr auto primary_key{ "id" };
 
-	long id{};
+	std::int64_t id{};
 	std::string username{};
 	int age{};
 	bool active{};
@@ -46,7 +48,7 @@ struct ImportAccount : ar::typed_model<ImportAccount, false> {
 	static constexpr auto table_name{ "accounts" };
 	static constexpr auto primary_key{ "id" };
 
-	long id{};
+	std::int64_t id{};
 	std::string username{};
 
 	static constexpr auto columns() {
@@ -59,21 +61,8 @@ int main() {
 		// Easy to swap: replace sqlite_adapter with another adapter and connection setup.
 		ar::config::instance().set_connections({ { "default", std::make_shared<ar::sqlite_adapter>(":memory:") } },
 											   "default");
-		auto conn = ar::config::instance().get_connection();
-
-		conn->query("CREATE TABLE accounts ("
-					"id INTEGER PRIMARY KEY AUTOINCREMENT, "
-					"username TEXT NOT NULL, "
-					"age INTEGER NOT NULL, "
-					"active INTEGER NOT NULL, "
-					"credit REAL NOT NULL, "
-					"joined_at INTEGER NOT NULL, "
-					"nickname TEXT NULL, "
-					"created_at INTEGER, "
-					"updated_at INTEGER, "
-					"version INTEGER"
-					")",
-					{});
+		// The table comes from Account::columns(); optional members become nullable columns
+		ar::create_table<Account>();
 
 		Account acc;
 		acc.username = "sigrun";

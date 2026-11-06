@@ -11,8 +11,10 @@
 #pragma once
 
 #include <activerecord/activerecord.h>
+#include <activerecord/config.h>
 #include <activerecord/datetime.h>
 #include <activerecord/typed_model.h>
+#include <array>
 #include <concepts>
 #include <cstdint>
 #include <optional>
@@ -72,6 +74,9 @@ std::string index_name(std::string_view table, std::string_view column);
 void validate(const table_schema& schema);
 
 namespace detail {
+
+/** Throws ex::activerecord unless name is a valid table/column name (see validate()); what names it in the message. */
+void check_name(std::string_view table, std::string_view what, std::string_view name);
 
 /** DEFAULT literal of a numeric or boolean default, with the adapter's spelling of true and false. */
 std::string numeric_literal_sql(const column_schema& column, std::string_view true_sql, std::string_view false_sql);
@@ -244,6 +249,70 @@ template <class T> table_schema table_schema_for() {
 		T::columns());
 	validate(schema);
 	return schema;
+}
+
+struct create_options {
+	bool if_not_exists{ false }; // do nothing if the table already exists
+};
+
+struct drop_options {
+	bool if_exists{ false }; // do nothing if the table does not exist
+};
+
+namespace detail {
+
+bool create_table(connection& conn, const table_schema& schema, create_options options);
+void drop_table(connection& conn, std::string_view table, drop_options options);
+
+} // namespace detail
+
+/**
+ * Creates the table. In order: validates the schema and builds every statement (nothing runs if that fails);
+ * with if_not_exists, returns false if the table exists (it is not compared or repaired; a table created by
+ * someone else after this check still makes CREATE TABLE fail); for a table with foreign keys, throws ex::config
+ * if the connection does not enforce them (SQLite: foreign_keys(true)); then runs the statements one by one.
+ * A failing statement's error propagates: there is no automatic rollback or cleanup, so a table created by an
+ * earlier statement may remain (drop it with drop_table()). Returns true if the table was created. connection
+ * names a configured connection; empty means the default.
+ */
+bool create_table(const table_schema& schema, create_options options = {}, std::string_view connection = {});
+
+/** create_table() for the schema of the typed model T (see table_schema_for<T>()). */
+template <class T> bool create_table(create_options options = {}, std::string_view connection = {}) {
+	return create_table(table_schema_for<T>(), options, connection);
+}
+
+/**
+ * Creates the tables of T... in the given order on one connection, each as create_table<T>() does: the checks
+ * are per table, not for the batch, and the first failure stops it without undoing tables already created.
+ */
+template <class... T> void create_tables(create_options options = {}, std::string_view connection = {}) {
+	const config::connection_ptr conn{ config::instance().get_connection(connection) };
+	(detail::create_table(*conn, table_schema_for<T>(), options), ...);
+}
+
+/** Drops the table (DROP TABLE [IF EXISTS]). Without if_exists, a missing table is the server's error. */
+void drop_table(std::string_view table, drop_options options = {}, std::string_view connection = {});
+
+/** drop_table() for the typed model T; only T::table_name is used. */
+template <class T> void drop_table(drop_options options = {}, std::string_view connection = {}) {
+	static_assert(detail::typed_model_type<T>, "drop_table<T>: T must be a typed_model");
+	drop_table(T::table_name, options, connection);
+}
+
+/** Drops the tables of T... in reverse order, so the list given to create_tables() works unchanged. */
+template <class... T> void drop_tables(drop_options options = {}, std::string_view connection = {}) {
+	static_assert((detail::typed_model_type<T> && ...), "drop_tables<T...>: every T must be a typed_model");
+	const config::connection_ptr conn{ config::instance().get_connection(connection) };
+	const std::array<std::string_view, sizeof...(T)> tables{ std::string_view{ T::table_name }... };
+	for (auto table{ tables.rbegin() }; table != tables.rend(); ++table) {
+		detail::drop_table(*conn, *table, options);
+	}
+}
+
+/** The statements create_table<T>() would run, without running anything or checking the database. */
+template <class T> std::vector<std::string> create_table_sql(std::string_view connection = {}) {
+	return config::instance().get_connection(connection)->create_table_plan(table_schema_for<T>());
 }
 
 } // namespace ar

@@ -51,6 +51,7 @@ sqlite://windows(c*/path/to/file.db)
 - Stores datetime values as INTEGER (Unix timestamps).
 - Empty inserts use `DEFAULT VALUES`.
 - No username/password — authentication parameters are ignored.
+- SQLite does not always parse floating-point numbers in SQL text exactly: a column `DEFAULT` with an extreme exponent (e.g. `1e-300`) can be stored one unit in the last place off. Values written through the library are bound, not written as text, and keep full precision.
 - Foreign keys are not enforced unless you turn them on: `adapter->foreign_keys(true)`, or `?foreign_keys=on` in the URL. It runs `PRAGMA foreign_keys = ON` and checks that it took effect. Inside a transaction SQLite ignores the PRAGMA, so trying to change the setting there throws. `enforces_foreign_keys()` reports the current setting.
 
 ---

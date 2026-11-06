@@ -15,8 +15,10 @@
 #include <cstdint>
 #include <format>
 #include <gtest/gtest.h>
+#include <limits>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -130,6 +132,81 @@ table_schema limits_schema(std::vector<column_schema> extra) {
 		schema.columns.push_back(std::move(column));
 	}
 	return schema;
+}
+
+// Wraps a real adapter and counts its queries
+template <class Base> class counting : public Base {
+  public:
+	using Base::Base;
+	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector& values = {}) override {
+		++calls;
+		return Base::query(sql, values);
+	}
+	int calls{ 0 };
+};
+
+// A second connection of the same kind as create_connection() makes, counting its queries
+std::shared_ptr<connection> make_counting(AdapterType type, const int*& calls) {
+	switch (type) {
+#ifdef AR_SQLITE
+	case AdapterType::SQLite: {
+		auto conn{ std::make_shared<counting<sqlite_adapter>>(":memory:") };
+		calls = &conn->calls;
+		return conn;
+	}
+#endif
+#ifdef AR_MYSQL
+	case AdapterType::MySQL: {
+		auto conn{ std::make_shared<counting<mysql_adapter>>("127.0.0.1", "test", "test", "test_db", 3306) };
+		calls = &conn->calls;
+		return conn;
+	}
+#endif
+#ifdef AR_POSTGRES
+	case AdapterType::PostgreSQL: {
+		auto conn{ std::make_shared<counting<postgres_adapter>>("localhost", "test", "test", "test_db", 5432) };
+		calls = &conn->calls;
+		return conn;
+	}
+#endif
+#ifdef AR_MSSQL
+	case AdapterType::MSSQL: {
+		auto conn{ std::make_shared<counting<mssql_adapter>>("localhost", "test_db", "test", "test", 1433) };
+		calls = &conn->calls;
+		return conn;
+	}
+#endif
+	default:
+		throw std::runtime_error("Adapter not enabled in this build");
+	}
+}
+
+bool index_exists(AdapterType type, connection& conn, std::string_view table, std::string_view index) {
+	switch (type) {
+	case AdapterType::SQLite:
+		return conn
+			.query("SELECT 1 FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?",
+				   { attribute{ table }, attribute{ index } })
+			->fetch();
+	case AdapterType::MySQL:
+		return conn
+			.query("SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND "
+				   "table_name = ? AND index_name = ?",
+				   { attribute{ table }, attribute{ index } })
+			->fetch();
+	case AdapterType::PostgreSQL:
+		return conn
+			.query("SELECT 1 FROM pg_indexes WHERE schemaname = current_schema() AND tablename = ? AND "
+				   "indexname = ?",
+				   { attribute{ table }, attribute{ index } })
+			->fetch();
+	case AdapterType::MSSQL:
+		return conn
+			.query("SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(?) AND name = ?",
+				   { attribute{ table }, attribute{ index } })
+			->fetch();
+	}
+	return false;
 }
 
 } // namespace
@@ -372,6 +449,155 @@ TEST_P(DdlTest, IndexedColumnLimits) {
 		break;
 	}
 	EXPECT_TRUE(adapter_->table_exists("ddl_limits"));
+}
+
+// ==============================================================================
+// create_table / drop_table API
+// ==============================================================================
+
+TEST_P(DdlTest, CreateTablesAndDropTables) {
+#ifdef AR_SQLITE
+	if (adapter_type() == AdapterType::SQLite) {
+		dynamic_cast<sqlite_adapter&>(*adapter_).foreign_keys(true);
+	}
+#endif
+	for (const char* name : { "ddl_books", "ddl_publishers", "ddl_authors" }) {
+		drop(name);
+		created_.emplace_back(name); // cleanup if the test fails half-way
+	}
+	create_tables<DdlAuthor, DdlPublisher, DdlBook>();
+	EXPECT_TRUE(adapter_->table_exists("ddl_books"));
+	EXPECT_FALSE(create_table<DdlAuthor>({ .if_not_exists = true }));
+
+	DdlAuthor author;
+	author.name = "Ann";
+	ASSERT_TRUE(author.save());
+	DdlBook book;
+	book.title = "API";
+	book.author_id = author.id;
+	ASSERT_TRUE(book.save());
+	EXPECT_EQ("API", query<DdlBook>().find(book.id).title);
+
+	drop_tables<DdlAuthor, DdlPublisher, DdlBook>(); // books first
+	for (const char* name : { "ddl_books", "ddl_publishers", "ddl_authors" }) {
+		EXPECT_FALSE(adapter_->table_exists(name)) << name;
+	}
+	EXPECT_NO_THROW((drop_tables<DdlAuthor, DdlPublisher, DdlBook>({ .if_exists = true })));
+}
+
+TEST_P(DdlTest, ForeignKeyTablesNeedEnforcement) {
+	if (adapter_type() != AdapterType::SQLite && adapter_type() != AdapterType::MySQL) {
+		return; // PostgreSQL and SQL Server always enforce new constraints
+	}
+	const auto disable = [&] {
+		adapter_->query(
+			adapter_type() == AdapterType::SQLite ? "PRAGMA foreign_keys = OFF" : "SET foreign_key_checks = 0", {});
+	};
+	const auto enable = [&] {
+		adapter_->query(
+			adapter_type() == AdapterType::SQLite ? "PRAGMA foreign_keys = ON" : "SET foreign_key_checks = 1", {});
+	};
+	create(table_schema_for<DdlAuthor>());
+	create(table_schema_for<DdlPublisher>());
+	drop("ddl_books");
+	created_.emplace_back("ddl_books");
+
+	disable();
+	EXPECT_THROW(create_table<DdlBook>(), ex::config);
+	EXPECT_FALSE(adapter_->table_exists("ddl_books"));
+
+	// An existing FK table is skipped without looking at enforcement
+	enable();
+	create_table<DdlBook>();
+	disable();
+	EXPECT_FALSE(create_table<DdlBook>({ .if_not_exists = true }));
+	enable();
+}
+
+TEST_P(DdlTest, InvalidSchemasSendNoQuery) {
+	const int* calls{ nullptr };
+	const std::shared_ptr<connection> conn{ make_counting(adapter_type(), calls) };
+	config::instance().set_connections({ { "default", conn } }, "default");
+
+	table_schema common{ limits_schema({ string_column("a.b", 10) }) };
+	table_schema dialect{ limits_schema({ string_column("v", 10) }) };
+	switch (adapter_type()) {
+	case AdapterType::MySQL:
+		dialect.columns.back().length = 16383;
+		break;
+	case AdapterType::MSSQL:
+		dialect.columns.back().length = 8001;
+		break;
+	case AdapterType::PostgreSQL:
+		dialect.columns.back().length = 10485761;
+		break;
+	case AdapterType::SQLite:
+		dialect.columns.push_back(string_column("V", 10)); // differs from "v" only in case
+		break;
+	}
+	const int before{ *calls };
+	EXPECT_THROW(create_table(common), ex::activerecord);
+	EXPECT_THROW(create_table(dialect, { .if_not_exists = true }), ex::activerecord);
+	EXPECT_THROW(ar::drop_table("a.b"), ex::activerecord); // ar:: — AdapterTest has its own drop_table
+	EXPECT_EQ(before, *calls);
+}
+
+TEST_P(DdlTest, MixedCaseTableName) {
+	created_.emplace_back("DdlMixed_Case");
+	drop("DdlMixed_Case");
+	EXPECT_TRUE(
+		create_table(table_schema{ "DdlMixed_Case", "id", { column_schema{ "id" }, string_column("Value", 10) }, {} }));
+	EXPECT_TRUE(adapter_->table_exists("DdlMixed_Case"));
+}
+
+TEST_P(DdlTest, DefaultExtremes) {
+	const auto real_default = [](std::string name, double value) {
+		return column_schema{ std::move(name), column_type::real, 0, 0, 0, false, false, false, value };
+	};
+	const auto bigint_default = [](std::string name, std::int64_t value) {
+		return column_schema{ std::move(name), column_type::bigint, 0, 0, 0, false, false, false, value };
+	};
+	created_.emplace_back("ddl_defaults");
+	drop("ddl_defaults");
+	create_table(
+		table_schema{ "ddl_defaults",
+					  "id",
+					  { column_schema{ "id" }, real_default("r_max", std::numeric_limits<double>::max()),
+						real_default("r_low", std::numeric_limits<double>::lowest()), real_default("r_tiny", 1e-300),
+						bigint_default("i_min", std::numeric_limits<std::int64_t>::min()),
+						bigint_default("i_max", std::numeric_limits<std::int64_t>::max()) },
+					  {} });
+	adapter_->query(
+		std::format("INSERT INTO {} {}", adapter_->escape("ddl_defaults"), adapter_->default_values_insert_clause()),
+		{});
+
+	auto stmt{ adapter_->query(std::format("SELECT {}, {}, {}, {}, {} FROM {}", adapter_->escape("r_max"),
+										   adapter_->escape("r_low"), adapter_->escape("r_tiny"),
+										   adapter_->escape("i_min"), adapter_->escape("i_max"),
+										   adapter_->escape("ddl_defaults")),
+							   {}) };
+	ASSERT_TRUE(stmt->fetch());
+	attribute_map row;
+	stmt->get_attributes(row);
+	EXPECT_EQ(std::numeric_limits<double>::max(), row.at("r_max").as_real());
+	EXPECT_EQ(std::numeric_limits<double>::lowest(), row.at("r_low").as_real());
+	if (adapter_type() == AdapterType::SQLite) {
+		// SQLite's parser for numbers in SQL text is not correctly rounded at extreme exponents
+		EXPECT_DOUBLE_EQ(1e-300, row.at("r_tiny").as_real());
+	} else {
+		EXPECT_EQ(1e-300, row.at("r_tiny").as_real());
+	}
+	EXPECT_EQ(std::numeric_limits<std::int64_t>::min(), row.at("i_min").as_integer());
+	EXPECT_EQ(std::numeric_limits<std::int64_t>::max(), row.at("i_max").as_integer());
+}
+
+TEST_P(DdlTest, SeparateIndexOnThePrimaryKey) {
+	table_schema schema{ "ddl_pk_index", "id", { column_schema{ "id" } }, {} };
+	schema.columns[0].index = true;
+	created_.emplace_back(schema.name);
+	drop(schema.name);
+	create_table(schema);
+	EXPECT_TRUE(index_exists(adapter_type(), *adapter_, schema.name, index_name(schema.name, "id")));
 }
 
 INSTANTIATE_TEST_SUITE_P(AllAdapters, DdlTest, ::testing::ValuesIn(enabled_adapters()), adapter_param_name);

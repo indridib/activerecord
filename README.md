@@ -16,7 +16,7 @@ The library offers two model styles: a classic dynamic model with string-based a
 
 - **Multi-database support** — SQLite, MySQL, PostgreSQL, and MS-SQL Server
 - **Two model styles** — dynamic `model` (string-based) and `typed_model<T>` (direct member access via CRTP)
-- **Lazy query iteration** — rows fetched one at a time, early termination supported
+- **Lazy query iteration** — models built one row at a time, early termination supported
 - **`std::optional` results** — `first()` returns optional, `first_or_throw()` for strict access
 - **`std::ranges` compatible** — compose queries with views and pipelines
 - **Auto-timestamps & optimistic locking** — convention-based `created_at`, `updated_at`, `version`
@@ -24,6 +24,7 @@ The library offers two model styles: a classic dynamic model with string-based a
 - **Type-safe attribute system** — string, integer, float, bool, datetime, null
 - **Dirty tracking** — only changed attributes are included in UPDATE statements
 - **Typed model validations** — declarative rules with per-attribute error collection
+- **Table creation** — `create_table<T>()` builds the table from a typed model, with column types, defaults, indexes and foreign keys
 - **Cross-platform** — Windows (MSVC, static linking), Linux (GCC, Clang)
 - **Comprehensive test suite** — unit and integration tests via GoogleTest
 
