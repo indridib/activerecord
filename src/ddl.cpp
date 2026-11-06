@@ -12,7 +12,6 @@
 #include <activerecord/schema.h>
 #include <array>
 #include <format>
-#include <set>
 #include <string>
 #include <variant>
 
@@ -22,16 +21,6 @@ namespace {
 
 [[noreturn]] void unsupported() {
 	throw ex::activerecord("DDL is not supported by this adapter");
-}
-
-std::string ascii_folded(std::string_view name) {
-	std::string folded{ name };
-	for (char& c : folded) {
-		if (c >= 'A' && c <= 'Z') {
-			c = static_cast<char>(c - 'A' + 'a');
-		}
-	}
-	return folded;
 }
 
 std::string_view action_sql(fk_action action) {
@@ -58,13 +47,6 @@ bool connection::table_exists(std::string_view /*name*/) {
 
 std::vector<std::string> connection::create_table_plan(const table_schema& schema) const {
 	validate(schema);
-	std::set<std::string> folded;
-	for (const column_schema& column : schema.columns) {
-		if (!folded.insert(ascii_folded(column.name)).second) {
-			throw ex::activerecord("Table {}: column {} differs from another column only in case", schema.name,
-								   column.name);
-		}
-	}
 	check_table(schema);
 
 	std::string body;

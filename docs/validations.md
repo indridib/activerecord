@@ -18,7 +18,7 @@ struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};
     static constexpr auto primary_key{"id"};
 
-    long id{};
+    std::int64_t id{};
     std::string name{};
     std::string email{};
     int age{};
@@ -241,7 +241,7 @@ struct SimpleUser : ar::typed_model<SimpleUser> {
     static constexpr auto table_name{"users"};
     static constexpr auto primary_key{"id"};
 
-    long id{};
+    std::int64_t id{};
     std::string name{};
 
     static constexpr auto columns() {

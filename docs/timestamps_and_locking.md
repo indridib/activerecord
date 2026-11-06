@@ -51,7 +51,7 @@ struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};
     static constexpr auto primary_key{"id"};
 
-    long id{};
+    std::int64_t id{};
     std::string name;
     ar::datetime created_at;
     ar::datetime updated_at;

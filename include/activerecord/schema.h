@@ -68,8 +68,8 @@ std::string index_name(std::string_view table, std::string_view column);
 
 /**
  * Checks the invariants of a finished schema (names, primary key, types, defaults, foreign keys).
- * Names must be non-empty, at most 63 bytes, and contain no '.', NUL or identifier delimiter
- * (` " [ ]). Throws ex::activerecord naming the table and column.
+ * Names must be 1 to 63 characters of a-z, 0-9 and _, not starting with a digit: such names mean the same table
+ * whether a query quotes them or not. Throws ex::activerecord naming the table and column.
  */
 void validate(const table_schema& schema);
 

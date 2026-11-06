@@ -9,6 +9,7 @@
 //
 
 #include <activerecord/schema.h>
+#include <algorithm>
 #include <cmath>
 #include <format>
 #include <limits>
@@ -178,10 +179,11 @@ void check_name(std::string_view table, std::string_view what, std::string_view 
 	if (name.size() > max_name_length) {
 		throw ex::activerecord("Table {}: {} name \"{}\" is longer than {} bytes", table, what, name, max_name_length);
 	}
-	constexpr std::string_view forbidden{ ".`\"[]\0", 6 };
-	if (name.find_first_of(forbidden) != std::string_view::npos) {
-		throw ex::activerecord("Table {}: {} name \"{}\" contains '.', NUL or an identifier delimiter", table, what,
-							   name);
+	// Quoted (DDL) and unquoted (queries) spellings of such a name mean the same table on every database
+	const auto simple = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_'; };
+	if ((name.front() >= '0' && name.front() <= '9') || !std::ranges::all_of(name, simple)) {
+		throw ex::activerecord("Table {}: {} name \"{}\" must use only a-z, 0-9 and _, and not start with a digit",
+							   table, what, name);
 	}
 }
 

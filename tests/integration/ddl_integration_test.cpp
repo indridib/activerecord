@@ -309,11 +309,7 @@ TEST_P(DdlTest, TableExists) {
 	}
 }
 
-TEST_P(DdlTest, UnusualNamesAreQuotedExactly) {
-	table_schema odd{ "ddl_odd'n?m%e", "id", { column_schema{ "id" }, string_column("Mixed Case", 10) }, {} };
-	create(odd);
-	EXPECT_TRUE(adapter_->table_exists("ddl_odd'n?m%e"));
-
+TEST_P(DdlTest, NameBoundaries) {
 	const std::string longest(max_name_length, 't'); // 63 bytes
 	create(table_schema{ longest, "id", { column_schema{ "id" } }, {} });
 	EXPECT_TRUE(adapter_->table_exists(longest));
@@ -532,7 +528,7 @@ TEST_P(DdlTest, InvalidSchemasSendNoQuery) {
 		dialect.columns.back().length = 10485761;
 		break;
 	case AdapterType::SQLite:
-		dialect.columns.push_back(string_column("V", 10)); // differs from "v" only in case
+		dialect.columns.push_back(string_column("V", 10)); // SQLite has no dialect limits: an uppercase name
 		break;
 	}
 	const int before{ *calls };
@@ -542,12 +538,16 @@ TEST_P(DdlTest, InvalidSchemasSendNoQuery) {
 	EXPECT_EQ(before, *calls);
 }
 
-TEST_P(DdlTest, MixedCaseTableName) {
-	created_.emplace_back("DdlMixed_Case");
-	drop("DdlMixed_Case");
-	EXPECT_TRUE(
-		create_table(table_schema{ "DdlMixed_Case", "id", { column_schema{ "id" }, string_column("Value", 10) }, {} }));
-	EXPECT_TRUE(adapter_->table_exists("DdlMixed_Case"));
+TEST_P(DdlTest, MixedCaseNamesAreRejected) {
+	// The ORM writes table names unquoted; a quoted mixed-case table would be a different table on PostgreSQL
+	for (const char* table : { "DdlMixed_Case", "ddl odd", "ddl'odd" }) {
+		EXPECT_THROW(create_table(table_schema{ table, "id", { column_schema{ "id" } }, {} }), ex::activerecord)
+			<< table;
+	}
+	EXPECT_THROW(
+		create_table(table_schema{ "ddl_mixed", "id", { column_schema{ "id" }, string_column("Value", 10) }, {} }),
+		ex::activerecord);
+	EXPECT_FALSE(adapter_->table_exists("ddl_mixed"));
 }
 
 TEST_P(DdlTest, DefaultExtremes) {

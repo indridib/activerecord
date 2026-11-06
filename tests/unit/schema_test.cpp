@@ -411,36 +411,35 @@ TEST(SchemaValidateTest, MinimalSchemaIsValid) {
 	EXPECT_NO_THROW(validate(minimal_schema()));
 }
 
-TEST(SchemaValidateTest, NameLimitsAreInBytes) {
+TEST(SchemaValidateTest, NameLengthLimit) {
 	table_schema schema{ minimal_schema() };
 	schema.columns.push_back(column_schema{ std::string(63, 'c') });
 	EXPECT_NO_THROW(validate(schema));
 	schema.columns.back().name = std::string(64, 'c');
 	EXPECT_THROW(validate(schema), ex::activerecord);
-
-	std::string multibyte;
-	for (int i = 0; i < 31; ++i) {
-		multibyte += "\xC3\xA9"; // é: 2 bytes
-	}
-	schema.columns.back().name = multibyte + "x"; // 63 bytes, 32 characters
-	EXPECT_NO_THROW(validate(schema));
-	schema.columns.back().name = multibyte + "xy"; // 64 bytes
-	EXPECT_THROW(validate(schema), ex::activerecord);
 }
 
-TEST(SchemaValidateTest, BadNamesThrow) {
+TEST(SchemaValidateTest, NamesMustBeSimpleLowercaseIdentifiers) {
 	table_schema schema{ minimal_schema() };
-	schema.columns.push_back(column_schema{ std::string{ "a\0b", 3 } });
-	EXPECT_THROW(validate(schema), ex::activerecord);
-	schema.columns.back().name = "a.b";
-	EXPECT_THROW(validate(schema), ex::activerecord);
-	schema.columns.back().name = "";
-	EXPECT_THROW(validate(schema), ex::activerecord);
+	schema.columns.push_back(column_schema{ "snake_case_2" });
+	EXPECT_NO_THROW(validate(schema));
+	schema.columns.push_back(column_schema{ "_leading_underscore" });
+	EXPECT_NO_THROW(validate(schema));
+
+	for (const std::string& bad :
+		 { std::string{ "a\0b", 3 }, std::string{ "a.b" }, std::string{}, std::string{ "Upper" },
+		   std::string{ "has space" }, std::string{ "2nd" }, std::string{ "a-b" }, std::string{ "odd'name" },
+		   std::string{ "\xC3\xA9t\xC3\xA9" }, std::string{ "`x`" } }) {
+		table_schema with_bad{ minimal_schema() };
+		with_bad.columns.push_back(column_schema{ bad });
+		EXPECT_THROW(validate(with_bad), ex::activerecord) << bad;
+		table_schema bad_table{ minimal_schema() };
+		bad_table.name = bad;
+		EXPECT_THROW(validate(bad_table), ex::activerecord) << bad;
+	}
+
 	schema.columns.back().name = "id";
 	EXPECT_THROW(validate(schema), ex::activerecord); // duplicate
-	table_schema qualified{ minimal_schema() };
-	qualified.name = "main.things";
-	EXPECT_THROW(validate(qualified), ex::activerecord);
 }
 
 TEST(SchemaValidateTest, IndexNames) {

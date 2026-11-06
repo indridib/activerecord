@@ -115,12 +115,12 @@ TEST(DdlTest, CustomAdapterWithoutOverridesRefusesDdl) {
 	EXPECT_TRUE(conn.enforces_foreign_keys());
 }
 
-TEST(DdlTest, ColumnsDifferingOnlyInCaseAreRejected) {
+TEST(DdlTest, UppercaseNamesAreRejected) {
 	sqlite_adapter adapter{ ":memory:" };
 	table_schema schema{ simple_schema() };
 	schema.columns.push_back(column_schema{ "Name", column_type::string, 20 });
 	EXPECT_THROW((void)adapter.create_table_plan(schema), ex::activerecord);
-	schema.columns.back().name = "nAmE2";
+	schema.columns.back().name = "name2";
 	EXPECT_NO_THROW((void)adapter.create_table_plan(schema));
 }
 

@@ -752,8 +752,9 @@ TEST_P(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
 	user.init_record_tracking(true);
 	user.set("name", "Alice");
 
-	datetime before = datetime::now();
+	const std::time_t before{ datetime::now().timestamp() };
 	user.save();
+	const std::time_t after{ datetime::now().timestamp() };
 
 	// Reload from DB
 	auto loaded = query<TimestampedUser>().where("name = ?", "Alice").first_or_throw();
@@ -761,15 +762,13 @@ TEST_P(TimestampVersionTest, InsertSetsCreatedAtAndUpdatedAt) {
 	EXPECT_FALSE(loaded.get("created_at").is_null());
 	EXPECT_FALSE(loaded.get("updated_at").is_null());
 
-	// Both should be approximately "now"
-	auto created = loaded.get("created_at").as_date().timestamp();
-	auto updated = loaded.get("updated_at").as_date().timestamp();
-	auto before_ts = before.timestamp();
-
-	EXPECT_GE(created, before_ts - 2);
-	EXPECT_LE(created, before_ts + 2);
-	EXPECT_GE(updated, before_ts - 2);
-	EXPECT_LE(updated, before_ts + 2);
+	// Both are set during save(), however long a loaded machine takes for it
+	const auto created = loaded.get("created_at").as_date().timestamp();
+	const auto updated = loaded.get("updated_at").as_date().timestamp();
+	EXPECT_GE(created, before);
+	EXPECT_LE(created, after);
+	EXPECT_GE(updated, before);
+	EXPECT_LE(updated, after);
 }
 
 TEST_P(TimestampVersionTest, InsertSetsVersionToOne) {

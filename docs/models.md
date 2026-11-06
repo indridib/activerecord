@@ -79,9 +79,9 @@ user.save();
 User user = ar::query<User>().find(42);
 
 // Find with optional — returns nullopt if not found
-auto user = ar::query<User>().where("email = ?", "alice@example.com").first();
-if (user) {
-    std::cout << user->get("name").as_string() << '\n';
+auto alice = ar::query<User>().where("email = ?", "alice@example.com").first();
+if (alice) {
+    std::cout << alice->get("name").as_string() << '\n';
 }
 ```
 
@@ -152,7 +152,7 @@ struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};
     static constexpr auto primary_key{"id"};
 
-    long id{};
+    std::int64_t id{};
     std::string name;
     std::string email;
 
@@ -182,8 +182,8 @@ user.save();
 // user.id is now set to the auto-generated primary key
 
 // Query
-auto user = ar::query<User>().find(1);
-std::cout << user.name << '\n';  // direct member access
+auto loaded = ar::query<User>().find(1);
+std::cout << loaded.name << '\n';  // direct member access
 
 // Update
 user.email = "new@example.com";
@@ -217,7 +217,7 @@ struct User : ar::typed_model<User> {
 
     enum class Status : int { pending = 0, active = 1, disabled = 2 };
 
-    long id{};
+    std::int64_t id{};
     Status account_status{Status::pending};
 
     static constexpr auto columns() {
@@ -241,7 +241,7 @@ struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};
     static constexpr auto primary_key{"id"};
 
-    long id{};
+    std::int64_t id{};
     std::string name;
     std::optional<std::string> nickname;  // nullable
 
@@ -276,6 +276,18 @@ user.save();
 A typed model can create its own table. The modifiers on `col<>()` are optional and only describe the table; they never change how values are read or written. Everything below is in `<activerecord/schema.h>`.
 
 ```cpp
+struct Author : ar::typed_model<Author> {
+    static constexpr auto table_name{ "authors" };
+    static constexpr auto primary_key{ "id" };
+
+    std::int64_t id{};
+    std::string name{};
+
+    static constexpr auto columns() {
+        return ar::columns(ar::col<&Author::id>("id"), ar::col<&Author::name>("name").limit(100));
+    }
+};
+
 struct Book : ar::typed_model<Book> {
     static constexpr auto table_name{ "books" };
     static constexpr auto primary_key{ "id" };
@@ -319,9 +331,9 @@ Without modifiers, the member type decides the column: integers and signed enums
 
 | Modifier | For | Effect |
 |---|---|---|
-| `.limit(n)` | strings | `VARCHAR(n)` instead of 255 |
+| `.limit(n)` | strings | `VARCHAR(n)` instead of 255 (not enforced on SQLite) |
 | `.text()` | strings | unbounded text |
-| `.decimal(p, s)` | `float`, `double` | exact `DECIMAL(p, s)`; the C++ value stays floating-point |
+| `.decimal(p, s)` | `float`, `double` | `DECIMAL(p, s)`: exact on MySQL, PostgreSQL and SQL Server, not on SQLite; the C++ value stays floating-point |
 | `.integer()` | integers (not the primary key) | 32-bit `INT` |
 | `.not_null()` | optional members | NOT NULL anyway; saving `nullopt` then fails |
 | `.default_value(v)` | numbers, `bool`, enums | `DEFAULT v` in the table; a typed save still writes every member |
@@ -329,7 +341,7 @@ Without modifiers, the member type decides the column: integers and signed enums
 | `.references<U>()` | `std::int64_t`, optional or not | foreign key to `U`'s primary key |
 | `.on_delete(a)`, `.on_update(a)` | referencing columns | `ar::fk_action::no_action`, `cascade` or `set_null` (nullable columns only) |
 
-A modifier that does not fit the member type does not compile. Invalid values (`limit(0)`, a repeated modifier, a default that does not fit) make `table_schema_for<T>()` throw `ar::ex::activerecord`. Table and column names may be at most 63 bytes and may not contain `.` or an identifier quote character (`` ` ``, `"`, `[`, `]`).
+A modifier that does not fit the member type does not compile. Invalid values (`limit(0)`, a repeated modifier, a default that does not fit) make `table_schema_for<T>()` throw `ar::ex::activerecord`. Table and column names must be plain lowercase identifiers: 1 to 63 characters of `a-z`, `0-9` and `_`, not starting with a digit (the ORM uses names unquoted, so a quoted mixed-case table would be a different table on PostgreSQL). Avoid SQL keywords such as `order` or `user` as names. The modifiers only shape the table; they do not add validation rules to the model (see [Validations](validations.md)).
 
 ### Disabling Record Tracking
 

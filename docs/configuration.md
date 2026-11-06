@@ -64,7 +64,7 @@ ar::config::instance().set_connection_urls({
 Retrieve a connection by name:
 
 ```cpp
-auto conn = ar::config::instance().get_connection("primary");
+auto primary = ar::config::instance().get_connection("primary");
 
 // Or get the default
 auto conn = ar::config::instance().get_connection();
@@ -91,7 +91,6 @@ sqlite://unix(/absolute/path/to/file.db)
 sqlite://windows(c*/absolute/path/to/file.db)
 
 mysql://root:password@localhost:3306/mydb
-mysql://root:password@unix(/var/run/mysqld/mysqld.sock)/mydb
 
 postgres://postgres:password@localhost:5432/mydb
 

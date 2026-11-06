@@ -2,7 +2,7 @@
 
 A C++ implementation of the [Active Record pattern](https://en.wikipedia.org/wiki/Active_record_pattern), influenced by [Ruby on Rails](https://guides.rubyonrails.org/active_record_basics.html) and [PHP ActiveRecord](https://github.com/jpfuentes2/php-activerecord).
 
-> **Status:** alpha (0.9.1), the first public release. The API may change before 1.0. Tested on Windows (MSVC) and Linux (GCC, Clang).
+> **Status:** alpha (0.10.0). The API may change before 1.0. Tested on Windows (MSVC) and Linux (GCC, Clang).
 
 ## Overview
 
@@ -41,7 +41,7 @@ cd activerecord
 **2. Setup (bootstraps vcpkg):**
 ```bash
 # Windows
-setup.bat
+.\setup.bat
 
 # Linux
 chmod +x setup.sh && ./setup.sh
@@ -50,7 +50,7 @@ chmod +x setup.sh && ./setup.sh
 **3. Build and test:**
 ```bash
 # Windows
-build.bat
+.\build.bat
 
 # Linux
 chmod +x build.sh && ./build.sh
@@ -121,7 +121,7 @@ struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};
     static constexpr auto primary_key{"id"};
 
-    long id{};
+    std::int64_t id{};
     std::string name{};
     std::string email{};
 
@@ -203,7 +203,7 @@ Following Active Record conventions:
 
 - **Reflection:** offer a `reflected_model<T>` alongside `typed_model<T>` that auto-discovers struct members, eliminating the manual `columns()` mapping. Pre-C++26: [reflect-cpp](https://github.com/getml/reflect-cpp) behind a build flag. Post-C++26: native reflection. `typed_model<T>` remains the dependency-free default.
 
-- **Table creation / DDL:** generate `CREATE TABLE` from model definitions, with adapter-specific SQL.
+- **Schema changes:** migrations and `ALTER TABLE` on top of the table creation in 0.10.0.
 
 - **Validation:** uniqueness checks, validation contexts (`on_create`/`on_update`), and richer custom validators.
 

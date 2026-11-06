@@ -42,7 +42,7 @@ echo Configuring CMake with MSVC and static linking...
 cmake -B build ^
   -G "Visual Studio 17 2022" ^
   -A x64 ^
-  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_TOOLCHAIN% ^
+  "-DCMAKE_TOOLCHAIN_FILE=%VCPKG_TOOLCHAIN%" ^
   -DAR_BUILD_TESTS=ON ^
   -DAR_SQLITE=ON
 
