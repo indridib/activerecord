@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.10.0, unreleased
+## 0.10.0 (alpha), 2026-11-07
 
 ### Added
 
@@ -15,7 +15,7 @@
 
 ### Changed
 
-- Table and column names in a table schema (task 019) must be plain lowercase identifiers: `a-z`, `0-9` and `_`, not starting with a digit, at most 63 characters.
+- Table and column names in a table schema must be plain lowercase identifiers: `a-z`, `0-9` and `_`, not starting with a digit, at most 63 characters.
 - JSON and XML output, and `attribute::to_string()`, write `double` values in their shortest exact form (`3.14`, `1e-10`) instead of with six decimal places (`3.140000`), so serialized values no longer lose precision.
 
 ### Fixed
