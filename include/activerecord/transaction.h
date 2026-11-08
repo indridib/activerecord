@@ -97,7 +97,7 @@ class transaction {
 	}
 
   private:
-	config::connection_ptr connection_;
+	config::connection_ptr connection_{};
 	bool committed_{ false };
 };
 

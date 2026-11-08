@@ -42,7 +42,7 @@ class mssql_statement : public statement {
   private:
 	static attribute field_as_attribute(SQLHSTMT stmt, unsigned short column_index); // SQLUSMALLINT
 
-	SQLHDBC dbc_;					  // Non-owning pointer to database connection
+	SQLHDBC dbc_{ nullptr };		  // Non-owning pointer to database connection
 	SQLHSTMT stmt_{ nullptr };		  // Owned statement handle (freed in destructor)
 	unsigned short num_columns_{ 0 }; // Number of columns in result
 	bool has_data_{ false };		  // Whether we have result data

@@ -234,11 +234,9 @@ class model {
 			attrib_iter->second = value;
 			flag_dirty(attrib_iter->first);
 		} else {
-			// This attribute does not exist.
 			if (!allow_new_attributes) {
 				throw ex::attribute_not_found("Attribute \"{}\" not found", name);
 			}
-			// If allowing new attributes we just insert the item
 			attributes_[real_name] = value;
 			flag_dirty(real_name);
 		}
@@ -276,11 +274,9 @@ class model {
 			attrib_iter->second = std::move(value);
 			flag_dirty(attrib_iter->first);
 		} else {
-			// This attribute does not exist.
 			if (!allow_new_attributes) {
 				throw ex::attribute_not_found("Attribute \"{}\" not found", name);
 			}
-			// If allowing new attributes we just insert the item
 			attributes_[real_name] = std::move(value);
 			flag_dirty(real_name);
 		}
@@ -575,7 +571,6 @@ class model {
 			throw ex::activerecord("Unable to update, no primary key defined for {}", table_name_);
 		}
 
-		// Auto-set updated_at timestamp
 		set_timestamps_for_update();
 
 		// Optimistic locking: capture old version before incrementing
@@ -598,7 +593,6 @@ class model {
 			values.emplace_back(get(attrib));
 		}
 
-		// Nothing to update after excluding primary key.
 		if (names.empty()) {
 			return true;
 		}
@@ -640,14 +634,12 @@ class model {
 			return false;
 		}
 
-		// Auto-set timestamps and version before building SQL
 		set_timestamps_for_create();
 		set_version_for_create();
 
 		string_vector names;
 		attribute_vector values;
 		for (const auto& attrib : dirty_attributes()) {
-			// Make sure that primary key isn't set
 			if (attrib != primary_key_) {
 				names.emplace_back(attrib);
 				values.emplace_back(get(attrib));
@@ -658,13 +650,11 @@ class model {
 		builder.insert(names, values);
 		auto stmt{ connection_->query(builder.to_string(), builder.get_bind_values()) };
 
-		// Get the auto-generated primary key and set it on the model (don't mark as dirty)
 		std::size_t id{ connection_->insert_id() };
 		if (id > 0) {
-			attributes_[std::string(primary_key_)] = static_cast<int64_t>(id); // Set directly without marking dirty
+			attributes_[std::string(primary_key_)] = static_cast<int64_t>(id); // not marked dirty
 		}
 
-		// Mark as persisted (no longer a new record)
 		new_record_ = false;
 
 		return true;
@@ -744,14 +734,14 @@ class model {
 	}
 
 	// Per-instance metadata kept lightweight to reduce model footprint.
-	config::connection_ptr connection_; // a reference to the database connection to use
-	std::string_view table_name_;		// name of the database table (expected static lifetime)
-	std::string_view primary_key_;		// name of primary key, default id
-	attribute_map attributes_;			// values as column_name => value
-	bool new_record_{ true };			// whether this is a fresh copy not from database.
-										// Note: we could also test if the primary key is valid
-	string_set dirty_;					// attributes that are dirty
-	bool readonly_{ false };			// no writing
+	config::connection_ptr connection_{}; // a reference to the database connection to use
+	std::string_view table_name_{};		  // name of the database table (expected static lifetime)
+	std::string_view primary_key_{};	  // name of primary key, default id
+	attribute_map attributes_{};		  // values as column_name => value
+	bool new_record_{ true };			  // whether this is a fresh copy not from database.
+										  // Note: we could also test if the primary key is valid
+	string_set dirty_{};				  // attributes that are dirty
+	bool readonly_{ false };			  // no writing
 	bool track_record_metadata_{ true };
 	mutable std::unique_ptr<ar::errors> errors_{};
 };

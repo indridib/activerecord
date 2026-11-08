@@ -110,8 +110,8 @@ class config {
   private:
 	config() = default;
 
-	std::string default_connection_;
-	connection_map connections_;
+	std::string default_connection_{};
+	connection_map connections_{};
 };
 
 } // namespace ar

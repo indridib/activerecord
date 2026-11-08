@@ -35,7 +35,6 @@ class pg_result_guard {
 		}
 	}
 
-	// Delete copy/move to enforce unique ownership
 	pg_result_guard(const pg_result_guard&) = delete;
 	pg_result_guard& operator=(const pg_result_guard&) = delete;
 	pg_result_guard(pg_result_guard&&) = delete;
@@ -49,7 +48,7 @@ class pg_result_guard {
 	}
 
   private:
-	PGresult* result_;
+	PGresult* result_{ nullptr };
 };
 
 std::string normalize_postgres_datetime(std::string value) {
@@ -202,15 +201,11 @@ postgres_statement::~postgres_statement() {
 
 void postgres_statement::execute(const std::string& command, const attribute_vector& values) {
 	if (values.empty()) {
-		// Simple query without parameters
 		result_ = PQexec(db_, command.c_str());
 	} else {
-		// Prepared statement with parameters
-		// PostgreSQL uses $1, $2, etc. for placeholders.
-		// Convert '?' while preserving literals/comments.
+		// PostgreSQL placeholders are $1, $2, ...: convert '?' outside literals and comments
 		std::string pg_command{ convert_placeholders_to_postgres(command) };
 
-		// Convert attribute values to string arrays for PostgreSQL
 		std::vector<std::string> param_strings;
 		std::vector<const char*> param_values;
 		param_strings.reserve(values.size());
@@ -254,7 +249,6 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 			}
 		}
 
-		// Execute the parameterized query
 		result_ = PQexecParams(db_, pg_command.c_str(), static_cast<int>(param_values.size()),
 							   nullptr, // let server infer param types
 							   param_values.data(),
@@ -263,7 +257,6 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 							   0);		// result format (0 = text)
 	}
 
-	// Check for errors
 	if (result_ == nullptr) {
 		throw ex::activerecord("PostgreSQL error: query returned no result");
 	}
@@ -276,7 +269,6 @@ void postgres_statement::execute(const std::string& command, const attribute_vec
 		throw ex::activerecord(error);
 	}
 
-	// Initialize fetch state
 	current_row_ = -1;
 	num_rows_ = PQntuples(result_);
 	num_fields_ = PQnfields(result_);
@@ -307,20 +299,15 @@ void postgres_statement::get_attributes(attribute_map& attributes) {
 }
 
 attribute postgres_statement::field_as_attribute(PGresult* result, int row, int column) {
-	// Check for NULL
 	if (PQgetisnull(result, row, column) != 0) {
 		return {};
 	}
 
-	// Get the value as a string
 	const char* value_str = PQgetvalue(result, row, column);
 
-	// Get the PostgreSQL type OID
 	Oid type_oid{ PQftype(result, column) };
 
-	// Convert based on PostgreSQL type
-	// Common PostgreSQL type OIDs (from pg_type.h)
-	// These are standard and should be consistent across PostgreSQL versions
+	// Type OIDs from pg_type.h, stable across PostgreSQL versions
 	switch (type_oid) {
 	case 16: // BOOLOID
 		return { value_str[0] == 't' || value_str[0] == 'T' };
@@ -344,7 +331,6 @@ attribute postgres_statement::field_as_attribute(PGresult* result, int row, int 
 	case 1043: // VARCHAROID
 	case 1042: // BPCHAROID
 	default:
-		// Text and unknown types - return as string
 		return { std::string(value_str) };
 	}
 }
@@ -356,12 +342,10 @@ attribute postgres_statement::field_as_attribute(PGresult* result, int row, int 
 postgres_adapter::postgres_adapter(const std::string& host, const std::string& user, const std::string& password,
 								   const std::string& database, unsigned int port)
 	: connection() {
-	// Build connection string
 	std::ostringstream conninfo;
 	conninfo << "host=" << host << " port=" << port << " dbname=" << database << " user=" << user
 			 << " password=" << password << " client_encoding=UTF8";
 
-	// Connect to database
 	db_ = PQconnectdb(conninfo.str().c_str());
 
 	if (PQstatus(db_) != CONNECTION_OK) {
@@ -386,7 +370,6 @@ std::unique_ptr<statement> postgres_adapter::query(const std::string& sql, const
 }
 
 void postgres_adapter::limit(std::string& sql, long offset, long limit) const {
-	// PostgreSQL uses LIMIT with optional OFFSET
 	if (limit >= 0) {
 		sql += " LIMIT " + std::to_string(limit);
 	}
@@ -400,7 +383,6 @@ std::size_t postgres_adapter::insert_id() const {
 		return 0;
 	}
 
-	// Use RAII wrapper for automatic cleanup
 	pg_result_guard result_guard(PQexec(db_, "SELECT LASTVAL()"));
 	PGresult* result{ result_guard.get() };
 

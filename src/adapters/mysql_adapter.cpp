@@ -57,7 +57,6 @@ std::string normalize_mysql_datetime(std::string value) {
 mysql_statement::mysql_statement(MYSQL* db) : statement(), db_(db) {}
 
 mysql_statement::~mysql_statement() {
-	// Vectors (result_binds_, lengths_, buffers_) clean themselves up via RAII
 	if (metadata_ != nullptr) {
 		mysql_free_result(metadata_);
 		metadata_ = nullptr;
@@ -69,20 +68,17 @@ mysql_statement::~mysql_statement() {
 }
 
 void mysql_statement::execute(const std::string& command, const attribute_vector& values) {
-	// Initialize statement
 	stmt_ = mysql_stmt_init(db_);
 	if (stmt_ == nullptr) {
 		throw ex::activerecord("MySQL: Failed to initialize statement");
 	}
 
-	// Prepare the SQL statement
 	if (mysql_stmt_prepare(stmt_, command.c_str(), static_cast<unsigned long>(command.length())) != 0) {
 		std::string error{ "MySQL prepare error: " };
 		error += mysql_stmt_error(stmt_);
 		throw ex::activerecord(error);
 	}
 
-	// Bind parameters if any.
 	if (!values.empty()) {
 		std::vector<MYSQL_BIND> param_binds(values.size());
 		std::memset(param_binds.data(), 0, sizeof(MYSQL_BIND) * values.size());
@@ -169,7 +165,6 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 			throw ex::activerecord(error);
 		}
 	} else {
-		// Execute the statement
 		if (mysql_stmt_execute(stmt_) != 0) {
 			std::string error{ "MySQL execute error: " };
 			error += mysql_stmt_error(stmt_);
@@ -190,7 +185,6 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 		bool update_max_length{ true }; // MySQL 8 replaced my_bool with bool
 		mysql_stmt_attr_set(stmt_, STMT_ATTR_UPDATE_MAX_LENGTH, &update_max_length);
 
-		// Use RAII vectors instead of raw arrays to prevent memory leaks
 		result_binds_.resize(num_fields_);
 		lengths_.resize(num_fields_, 0UL);
 		buffers_.resize(num_fields_);
@@ -212,7 +206,6 @@ void mysql_statement::execute(const std::string& command, const attribute_vector
 			const unsigned long preferred = fields[i].max_length;
 			const unsigned long buffer_size = std::max(preferred + 1UL, 256UL);
 
-			// Allocate buffer in RAII vector
 			buffers_[i].data.resize(buffer_size, '\0');
 
 			result_binds_[i].buffer_length = buffer_size;
@@ -248,7 +241,6 @@ bool mysql_statement::fetch() {
 			}
 
 			unsigned long full_length = lengths_[i];
-			// Resize buffer using RAII vector instead of raw allocation
 			buffers_[i].data.resize(full_length + 1, '\0');
 
 			MYSQL_BIND fetch_bind{};
@@ -270,7 +262,6 @@ bool mysql_statement::fetch() {
 		}
 		return true;
 	} else {
-		// Error occurred
 		std::string error{ "MySQL fetch error: " };
 		error += mysql_stmt_error(stmt_);
 		throw ex::activerecord(error);
@@ -298,7 +289,6 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 	MYSQL_FIELD* fields = mysql_fetch_fields(metadata);
 	MYSQL_FIELD& field = fields[column_index];
 
-	// Check for NULL value
 	if (binds[column_index].is_null != nullptr && *binds[column_index].is_null) {
 		return {};
 	}
@@ -308,7 +298,6 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 								  ? std::string(raw_value, lengths[column_index])
 								  : std::string{};
 
-	// Convert based on MySQL field type
 	switch (field.type) {
 	case MYSQL_TYPE_TINY:
 	case MYSQL_TYPE_SHORT:
@@ -351,13 +340,11 @@ attribute mysql_statement::field_as_attribute(MYSQL_RES* metadata, MYSQL_BIND* b
 mysql_adapter::mysql_adapter(const std::string& host, const std::string& user, const std::string& password,
 							 const std::string& database, unsigned int port)
 	: connection() {
-	// Initialize MySQL library
 	db_ = mysql_init(nullptr);
 	if (db_ == nullptr) {
 		throw ex::activerecord("MySQL: Failed to initialize");
 	}
 
-	// Connect to database
 	if (mysql_real_connect(db_, host.c_str(), user.c_str(), password.c_str(), database.c_str(), port, nullptr, 0) ==
 		nullptr) {
 		std::string error{ "MySQL connection error: " };
@@ -366,7 +353,6 @@ mysql_adapter::mysql_adapter(const std::string& host, const std::string& user, c
 		throw ex::activerecord(error);
 	}
 
-	// Set charset to UTF-8
 	mysql_set_character_set(db_, "utf8mb4");
 }
 
@@ -384,7 +370,6 @@ std::unique_ptr<statement> mysql_adapter::query(const std::string& sql, const at
 }
 
 void mysql_adapter::limit(std::string& sql, long offset, long limit) const {
-	// MySQL uses LIMIT with optional OFFSET
 	if (limit >= 0) {
 		sql += " LIMIT " + std::to_string(limit);
 	} else if (offset >= 0) {

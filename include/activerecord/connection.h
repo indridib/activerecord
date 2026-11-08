@@ -52,17 +52,17 @@ class connection {
 
   public:
 	struct connection_url_info {
-		std::string protocol;
-		std::optional<std::string> host;
-		std::optional<int> port;
-		std::optional<std::string> database;
-		std::optional<std::string> user;
-		std::optional<std::string> password;
-		std::optional<std::string> socket;
-		std::optional<std::string> file;
-		std::optional<std::string> charset;
+		std::string protocol{};
+		std::optional<std::string> host{};
+		std::optional<int> port{};
+		std::optional<std::string> database{};
+		std::optional<std::string> user{};
+		std::optional<std::string> password{};
+		std::optional<std::string> socket{};
+		std::optional<std::string> file{};
+		std::optional<std::string> charset{};
 		bool foreign_keys{ false }; // ?foreign_keys=on: enforce foreign keys (SQLite)
-		std::map<std::string, std::string> query;
+		std::map<std::string, std::string> query{};
 	};
 
 	/**
@@ -185,13 +185,11 @@ class connection {
 	 * @return string
 	 */
 	static std::string quote_name(std::string_view str) {
-		// Handle already-quoted identifiers
 		if (!str.empty() && str.front() == QUOTE_CHARACTER && str.back() == QUOTE_CHARACTER) {
 			return std::string(str);
 		}
 
-		// Escape any quote characters within the identifier
-		// SQL standard: double the quote character to escape it
+		// SQL standard: double the quote character
 		std::string escaped;
 		escaped.reserve(str.size() + 2);
 		escaped += QUOTE_CHARACTER;

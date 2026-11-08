@@ -12,6 +12,7 @@
 
 #include <activerecord/schema.h>
 #include <activerecord/typed_model.h>
+#include <algorithm>
 #include <cstdint>
 #include <format>
 #include <gtest/gtest.h>
@@ -134,45 +135,45 @@ table_schema limits_schema(std::vector<column_schema> extra) {
 	return schema;
 }
 
-// Wraps a real adapter and counts its queries
+// Wraps a real adapter and records its queries
 template <class Base> class counting : public Base {
   public:
 	using Base::Base;
 	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector& values = {}) override {
-		++calls;
+		statements.push_back(sql);
 		return Base::query(sql, values);
 	}
-	int calls{ 0 };
+	std::vector<std::string> statements{};
 };
 
-// A second connection of the same kind as create_connection() makes, counting its queries
-std::shared_ptr<connection> make_counting(AdapterType type, const int*& calls) {
+// A second connection of the same kind as create_connection() makes, recording its queries
+std::shared_ptr<connection> make_counting(AdapterType type, const std::vector<std::string>*& statements) {
 	switch (type) {
 #ifdef AR_SQLITE
 	case AdapterType::SQLite: {
 		auto conn{ std::make_shared<counting<sqlite_adapter>>(":memory:") };
-		calls = &conn->calls;
+		statements = &conn->statements;
 		return conn;
 	}
 #endif
 #ifdef AR_MYSQL
 	case AdapterType::MySQL: {
 		auto conn{ std::make_shared<counting<mysql_adapter>>("127.0.0.1", "test", "test", "test_db", 3306) };
-		calls = &conn->calls;
+		statements = &conn->statements;
 		return conn;
 	}
 #endif
 #ifdef AR_POSTGRES
 	case AdapterType::PostgreSQL: {
 		auto conn{ std::make_shared<counting<postgres_adapter>>("localhost", "test", "test", "test_db", 5432) };
-		calls = &conn->calls;
+		statements = &conn->statements;
 		return conn;
 	}
 #endif
 #ifdef AR_MSSQL
 	case AdapterType::MSSQL: {
 		auto conn{ std::make_shared<counting<mssql_adapter>>("localhost", "test_db", "test", "test", 1433) };
-		calls = &conn->calls;
+		statements = &conn->statements;
 		return conn;
 	}
 #endif
@@ -481,38 +482,78 @@ TEST_P(DdlTest, CreateTablesAndDropTables) {
 	EXPECT_NO_THROW((drop_tables<DdlAuthor, DdlPublisher, DdlBook>({ .if_exists = true })));
 }
 
+TEST_P(DdlTest, IdsAboveInt32Max) {
+	create(table_schema_for<DdlAuthor>());
+	constexpr std::int64_t big{ std::int64_t{ std::numeric_limits<std::int32_t>::max() } + 10 };
+	const attribute_vector row{ attribute{ big }, attribute{ std::string{ "Big" } } };
+	const std::string insert{ "INSERT INTO ddl_authors (id, name) VALUES (?, ?)" };
+	switch (adapter_type()) {
+	case AdapterType::MSSQL:
+		// One batch: a prepared statement's SET does not outlive it
+		adapter_->query("SET IDENTITY_INSERT ddl_authors ON; " + insert + "; SET IDENTITY_INSERT ddl_authors OFF", row);
+		break;
+	case AdapterType::PostgreSQL:
+		adapter_->query(insert, row);
+		adapter_->query("SELECT setval('ddl_authors_id_seq', ?)", { attribute{ big } });
+		break;
+	default:
+		adapter_->query(insert, row);
+		break;
+	}
+
+	const auto found{ query<DdlAuthor>().find_optional(big) };
+	ASSERT_TRUE(found.has_value());
+	EXPECT_EQ("Big", found->name);
+	EXPECT_EQ(big, query<DdlAuthor>().find(big).id);
+
+	DdlAuthor next;
+	next.name = "Next";
+	ASSERT_TRUE(next.save());
+	EXPECT_GT(next.id, big);
+	EXPECT_EQ("Next", query<DdlAuthor>().find(next.id).name);
+}
+
 TEST_P(DdlTest, ForeignKeyTablesNeedEnforcement) {
 	if (adapter_type() != AdapterType::SQLite && adapter_type() != AdapterType::MySQL) {
 		return; // PostgreSQL and SQL Server always enforce new constraints
 	}
-	const auto disable = [&] {
-		adapter_->query(
-			adapter_type() == AdapterType::SQLite ? "PRAGMA foreign_keys = OFF" : "SET foreign_key_checks = 0", {});
+	const std::vector<std::string>* statements{ nullptr };
+	const std::shared_ptr<connection> conn{ make_counting(adapter_type(), statements) };
+	config::instance().set_connections({ { "default", conn } }, "default");
+	const auto enforce = [&](bool on) {
+		if (adapter_type() == AdapterType::SQLite) {
+			conn->query(on ? "PRAGMA foreign_keys = ON" : "PRAGMA foreign_keys = OFF", {});
+		} else {
+			conn->query(on ? "SET foreign_key_checks = 1" : "SET foreign_key_checks = 0", {});
+		}
 	};
-	const auto enable = [&] {
-		adapter_->query(
-			adapter_type() == AdapterType::SQLite ? "PRAGMA foreign_keys = ON" : "SET foreign_key_checks = 1", {});
+	const auto creates = [&] {
+		return std::ranges::count_if(*statements, [](const std::string& sql) { return sql.starts_with("CREATE"); });
 	};
-	create(table_schema_for<DdlAuthor>());
-	create(table_schema_for<DdlPublisher>());
-	drop("ddl_books");
-	created_.emplace_back("ddl_books");
+	for (const char* name : { "ddl_books", "ddl_publishers", "ddl_authors" }) {
+		drop(name);
+	}
+	created_ = { "ddl_authors", "ddl_publishers", "ddl_books" };
+	create_tables<DdlAuthor, DdlPublisher>(); // on the recording connection: SQLite's is its own database
 
-	disable();
+	enforce(false);
+	const auto before{ creates() };
 	EXPECT_THROW(create_table<DdlBook>(), ex::config);
-	EXPECT_FALSE(adapter_->table_exists("ddl_books"));
+	EXPECT_EQ(before, creates());
+	EXPECT_FALSE(conn->table_exists("ddl_books"));
 
 	// An existing FK table is skipped without looking at enforcement
-	enable();
+	enforce(true);
 	create_table<DdlBook>();
-	disable();
+	enforce(false);
+	const std::size_t queries{ statements->size() };
 	EXPECT_FALSE(create_table<DdlBook>({ .if_not_exists = true }));
-	enable();
+	EXPECT_EQ(queries + 1, statements->size()); // the existence check only
 }
 
 TEST_P(DdlTest, InvalidSchemasSendNoQuery) {
-	const int* calls{ nullptr };
-	const std::shared_ptr<connection> conn{ make_counting(adapter_type(), calls) };
+	const std::vector<std::string>* statements{ nullptr };
+	const std::shared_ptr<connection> conn{ make_counting(adapter_type(), statements) };
 	config::instance().set_connections({ { "default", conn } }, "default");
 
 	table_schema common{ limits_schema({ string_column("a.b", 10) }) };
@@ -531,11 +572,11 @@ TEST_P(DdlTest, InvalidSchemasSendNoQuery) {
 		dialect.columns.push_back(string_column("V", 10)); // SQLite has no dialect limits: an uppercase name
 		break;
 	}
-	const int before{ *calls };
+	const std::size_t before{ statements->size() };
 	EXPECT_THROW(create_table(common), ex::activerecord);
 	EXPECT_THROW(create_table(dialect, { .if_not_exists = true }), ex::activerecord);
 	EXPECT_THROW(ar::drop_table("a.b"), ex::activerecord); // ar:: — AdapterTest has its own drop_table
-	EXPECT_EQ(before, *calls);
+	EXPECT_EQ(before, statements->size());
 }
 
 TEST_P(DdlTest, MixedCaseNamesAreRejected) {

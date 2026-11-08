@@ -37,7 +37,7 @@ class postgres_statement : public statement {
   private:
 	static attribute field_as_attribute(PGresult* result, int row, int column);
 
-	PGconn* db_;					 // Non-owning pointer to database connection
+	PGconn* db_{ nullptr };			 // Non-owning pointer to database connection
 	PGresult* result_{ nullptr };	 // Owned result set (cleared in destructor)
 	int current_row_{ -1 };			 // Current row index
 	int num_rows_{ 0 };				 // Total number of rows

@@ -44,7 +44,7 @@ using attribute_storage = std::variant<std::monostate, // 0 = type_null
  */
 class attribute {
   public:
-	attribute() : data_(std::monostate{}) {}
+	attribute() = default;
 	attribute(bool value) : data_(value) {}
 	attribute(int64_t value) : data_(value) {}
 	attribute(int value) : data_(static_cast<int64_t>(value)) {}
@@ -73,14 +73,12 @@ class attribute {
 	int64_t as_integer() const { return std::get<int64_t>(data_); }
 	double as_real() const { return std::get<double>(data_); }
 	datetime as_date() const {
-		// Handle datetime, integer (timestamp from DB), and string
 		if (std::holds_alternative<datetime>(data_)) {
 			return std::get<datetime>(data_);
 		} else if (std::holds_alternative<int64_t>(data_)) {
 			// Database stored as Unix timestamp
 			return datetime{ static_cast<std::time_t>(std::get<int64_t>(data_)) };
 		} else if (std::holds_alternative<std::string>(data_)) {
-			// Parse from string (e.g., "2024-06-15 14:30:00")
 			return datetime::parse(std::get<std::string>(data_));
 		}
 		return datetime{}; // Return empty datetime for other types
@@ -136,7 +134,7 @@ class attribute {
 	}
 
   private:
-	attribute_storage data_;
+	attribute_storage data_{};
 };
 
 using attribute_map = std::map<std::string, attribute>;

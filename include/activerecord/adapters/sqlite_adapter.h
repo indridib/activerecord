@@ -35,7 +35,7 @@ class sqlite_statement : public statement {
   private:
 	static attribute field_as_attribute(sqlite3_stmt* stmt, int column_index);
 
-	sqlite3* db_;					  // Non-owning pointer to database connection
+	sqlite3* db_{ nullptr };		  // Non-owning pointer to database connection
 	sqlite3_stmt* stmt_{ nullptr };	  // Owned prepared statement (finalized in destructor)
 	int first_step_result_{ 0 };	  // Result from first sqlite3_step() call (0 == SQLITE_OK)
 	bool used_first_result_{ false }; // Whether first result has been consumed by fetch()

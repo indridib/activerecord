@@ -27,10 +27,9 @@ namespace ar {
 // Thread-safe helper to convert time_t to tm structure
 static bool safe_localtime(const std::time_t* timer, std::tm* buf) {
 #ifdef _WIN32
-	// Windows: use localtime_s (arguments reversed compared to POSIX)
+	// Arguments reversed compared to POSIX
 	return localtime_s(buf, timer) == 0;
 #else
-	// POSIX: use localtime_r
 	return localtime_r(timer, buf) != nullptr;
 #endif
 }
@@ -137,9 +136,7 @@ datetime datetime::parse(const std::string& str) {
 
 	int year{ 0 }, month{ 0 }, day{ 0 }, hour{ 0 }, min{ 0 }, sec{ 0 };
 
-	// Try parsing "YYYY-MM-DD HH:MM:SS"
 	if (AR_SSCANF(str.c_str(), "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &min, &sec) == 6) {
-		// Validate parsed values
 		if (year < 1970 || year > 9999) {
 			throw std::invalid_argument(std::format("Invalid year in date/time string: '{}' (year={})", str, year));
 		}
@@ -161,9 +158,7 @@ datetime datetime::parse(const std::string& str) {
 		return datetime{ year, month, day, hour, min, sec };
 	}
 
-	// Try parsing "YYYY-MM-DD"
 	if (AR_SSCANF(str.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
-		// Validate parsed values
 		if (year < 1970 || year > 9999) {
 			throw std::invalid_argument(std::format("Invalid year in date string: '{}' (year={})", str, year));
 		}

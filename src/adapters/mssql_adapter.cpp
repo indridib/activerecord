@@ -124,13 +124,10 @@ mssql_statement::~mssql_statement() {
 void mssql_statement::execute(const std::string& command, const attribute_vector& values) {
 	SQLRETURN ret;
 
-	// Prepare the statement
 	ret = SQLPrepare(stmt_, (SQLCHAR*)command.c_str(), SQL_NTS);
 	check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLPrepare failed");
 
-	// Bind parameters if any
 	if (!values.empty()) {
-		// Storage for parameter data
 		std::vector<SQLLEN> indicators(values.size());
 		std::vector<SQLBIGINT> int_values(values.size());
 		std::vector<double> double_values(values.size());
@@ -197,7 +194,6 @@ void mssql_statement::execute(const std::string& command, const attribute_vector
 		// Execute while bound parameter storage is still alive.
 		ret = SQLExecute(stmt_);
 	} else {
-		// Execute the statement
 		ret = SQLExecute(stmt_);
 	}
 
@@ -211,7 +207,6 @@ void mssql_statement::execute(const std::string& command, const attribute_vector
 	}
 	check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLExecute failed");
 
-	// Get number of columns
 	SQLSMALLINT cols;
 	ret = SQLNumResultCols(stmt_, &cols);
 	check_odbc_error(ret, SQL_HANDLE_STMT, stmt_, "SQLNumResultCols failed");
@@ -275,7 +270,6 @@ void mssql_statement::get_attributes(attribute_map& attributes) {
 	}
 
 	for (SQLUSMALLINT i = 1; i <= num_columns_; ++i) {
-		// Get column name
 		std::array<SQLCHAR, 256> column_name{};
 		SQLSMALLINT name_length{ 0 };
 		SQLRETURN ret = SQLDescribeCol(stmt_, i, column_name.data(), static_cast<SQLSMALLINT>(column_name.size()),
@@ -289,7 +283,6 @@ void mssql_statement::get_attributes(attribute_map& attributes) {
 
 attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, unsigned short column_index) {
 	static_assert(std::is_same_v<SQLUSMALLINT, unsigned short>, "header declares column_index as unsigned short");
-	// Get column type
 	SQLSMALLINT data_type;
 	SQLRETURN ret = SQLDescribeCol(stmt, column_index, nullptr, 0, nullptr, &data_type, nullptr, nullptr, nullptr);
 
@@ -322,7 +315,6 @@ attribute mssql_statement::field_as_attribute(SQLHSTMT stmt, unsigned short colu
 		}
 	}
 
-	// Convert based on SQL type
 	switch (data_type) {
 	case SQL_BIT:
 		return { !value_str.empty() && (value_str[0] == '1' || value_str[0] == 't' || value_str[0] == 'T') };
@@ -388,19 +380,15 @@ mssql_adapter::mssql_adapter(const std::string& server, const std::string& datab
 void mssql_adapter::connect(const std::string& connection_string) {
 	SQLRETURN ret;
 
-	// Allocate environment handle
 	ret = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &env_);
 	check_odbc_error(ret, SQL_HANDLE_ENV, env_, "Failed to allocate environment handle");
 
-	// Set ODBC version
 	ret = SQLSetEnvAttr(env_, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)SQL_OV_ODBC3, 0);
 	check_odbc_error(ret, SQL_HANDLE_ENV, env_, "Failed to set ODBC version");
 
-	// Allocate connection handle
 	ret = SQLAllocHandle(SQL_HANDLE_DBC, env_, &dbc_);
 	check_odbc_error(ret, SQL_HANDLE_ENV, env_, "Failed to allocate connection handle");
 
-	// Connect to database
 	std::array<SQLCHAR, 1024> out_conn_str{};
 	SQLSMALLINT out_conn_str_len{ 0 };
 

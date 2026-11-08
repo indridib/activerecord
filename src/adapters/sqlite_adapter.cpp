@@ -97,7 +97,6 @@ sqlite_statement::~sqlite_statement() {
 }
 
 void sqlite_statement::execute(const std::string& command, const attribute_vector& values) {
-	// Prepare the SQL statement
 	int rc{ sqlite3_prepare_v2(db_, command.c_str(), static_cast<int>(command.length()), &stmt_, nullptr) };
 	if (rc != SQLITE_OK) {
 		std::string error{ "SQLite prepare error: " };
@@ -105,7 +104,6 @@ void sqlite_statement::execute(const std::string& command, const attribute_vecto
 		throw ex::activerecord(error);
 	}
 
-	// Bind parameters (SQLite uses ? placeholders directly, 1-based indexing)
 	for (size_t i = 0; i < values.size(); ++i) {
 		int param_index{ static_cast<int>(i + 1) };
 		const attribute& param = values[i];
@@ -211,8 +209,7 @@ attribute sqlite_statement::field_as_attribute(sqlite3_stmt* stmt, int column_in
 	}
 
 	case SQLITE_BLOB:
-		// For now, return null for BLOB data
-		// Could be enhanced later to handle binary data
+		// BLOB is not supported yet: read as null
 	default:
 		return {};
 	}
@@ -223,8 +220,6 @@ attribute sqlite_statement::field_as_attribute(sqlite3_stmt* stmt, int column_in
 // ============================================================================
 
 sqlite_adapter::sqlite_adapter(const std::string& db_path, const std::string&, const std::string&) : connection() {
-	// Note: SQLite doesn't use username/password at the library level
-
 	int rc{ sqlite3_open(db_path.c_str(), &db_) };
 	if (rc != SQLITE_OK) {
 		std::string error{ "SQLite connection error: " };
@@ -247,13 +242,12 @@ sqlite_adapter::~sqlite_adapter() {
 }
 
 std::unique_ptr<statement> sqlite_adapter::query(const std::string& sql, const attribute_vector& values) {
-	std::unique_ptr<statement> stmt(new sqlite_statement(db_));
+	auto stmt{ std::make_unique<sqlite_statement>(db_) };
 	stmt->execute(sql, values);
 	return stmt;
 }
 
 void sqlite_adapter::limit(std::string& sql, long offset, long limit) const {
-	// SQLite LIMIT syntax: LIMIT number_rows OFFSET offset_value
 	if (limit >= 0) {
 		sql += " LIMIT " + std::to_string(limit);
 	} else if (offset >= 0) {

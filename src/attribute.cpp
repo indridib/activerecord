@@ -88,7 +88,6 @@ std::string escape_xml(std::string_view value) {
 string_vector get_attrib_keys(const attribute_map& attributes, const string_vector& only, const string_set& exclude) {
 	string_vector attrib_names{ only };
 	if (attrib_names.empty()) {
-		// use all keys
 		attrib_names.reserve(attributes.size());
 		for (const auto& [key, value] : attributes) {
 			if (exclude.find(key) == exclude.end()) {

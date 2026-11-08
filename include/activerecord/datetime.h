@@ -27,7 +27,7 @@ namespace ar {
 class datetime {
   public:
 	// Constructors
-	datetime() : timestamp_(0) {}
+	datetime() = default;
 	datetime(std::time_t t) : timestamp_(t) {}
 	datetime(const std::string& date_str);
 	datetime(int year, int month, int day, int hour = 0, int min = 0, int sec = 0);
@@ -61,7 +61,7 @@ class datetime {
 	bool operator>=(const datetime& other) const { return timestamp_ >= other.timestamp_; }
 
   private:
-	std::time_t timestamp_;
+	std::time_t timestamp_{ 0 };
 };
 
 } // namespace ar

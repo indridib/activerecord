@@ -212,28 +212,28 @@ class sql_builder {
 		}
 	}
 
-	config::connection_ptr connection_; ///< a reference to the database connection to use
-	std::string table_;
+	config::connection_ptr connection_{}; ///< a reference to the database connection to use
+	std::string table_{};
 
 	enum sql_type : std::uint8_t { sql_select, sql_insert, sql_update, sql_delete };
 	sql_type operation_{ sql_select };
 	std::string select_{ "*" };
-	std::string joins_;
-	std::string order_;
-	std::string group_;
-	std::string having_;
+	std::string joins_{};
+	std::string order_{};
+	std::string group_{};
+	std::string having_{};
 	long limit_{ -1L };
 	long offset_{ -1L };
 
 	// for where
-	std::string where_;
-	attribute_vector where_bind_values_;
-	mutable attribute_vector bind_values_; // mutable for lazy initialization in const methods
+	std::string where_{};
+	attribute_vector where_bind_values_{};
+	mutable attribute_vector bind_values_{}; // mutable for lazy initialization in const methods
 
 	// for insert/update
-	string_vector keys_;
-	mutable attribute_vector data_; // mutable for lazy initialization in const methods
-	std::string sequence_;
+	string_vector keys_{};
+	mutable attribute_vector data_{}; // mutable for lazy initialization in const methods
+	std::string sequence_{};
 };
 
 
