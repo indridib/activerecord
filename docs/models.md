@@ -343,6 +343,63 @@ Without modifiers, the member type decides the column: integers and signed enums
 
 A modifier that does not fit the member type does not compile. Invalid values (`limit(0)`, a repeated modifier, a default that does not fit) make `table_schema_for<T>()` throw `ar::ex::activerecord`. Table and column names must be plain lowercase identifiers: 1 to 63 characters of `a-z`, `0-9` and `_`, not starting with a digit (the ORM uses names unquoted, so a quoted mixed-case table would be a different table on PostgreSQL). Avoid SQL keywords such as `order` or `user` as names. The modifiers only shape the table; they do not add validation rules to the model (see [Validations](validations.md)).
 
+### Relationships
+
+`<activerecord/relations.h>` follows a foreign key between typed models. A relationship is named by its foreign-key member, which must be mapped by exactly one column in `columns()` and hold a `std::int64_t` (optional or not). You write one short accessor per relationship:
+
+```cpp
+struct Book;
+struct Profile;
+
+struct Author : ar::typed_model<Author> {
+    // table_name, primary_key, id, name, columns() as above
+    ar::query<Book> books() const;          // defined after Book: the body needs Book complete
+    std::optional<Profile> profile() const; // likewise, after Profile
+};
+
+struct Book : ar::typed_model<Book> {
+    // ... author_id with .references<Author>(), and an editor_id without references<>
+    std::optional<Author> author() const { return ar::belongs_to<&Book::author_id>(*this); }
+    std::optional<Author> editor() const { return ar::belongs_to<&Book::editor_id, Author>(*this); }
+};
+
+struct Profile : ar::typed_model<Profile> {
+    // ... author_id with .references<Author>().unique()
+};
+
+inline ar::query<Book> Author::books() const { return ar::has_many<&Book::author_id>(*this); }
+inline std::optional<Profile> Author::profile() const { return ar::has_one<&Profile::author_id>(*this); }
+
+auto titles = author.books().order("title").limit(5).all(); // has_many is a query: chain on it
+Book draft = ar::build<&Book::author_id>(author);           // a new book with author_id set
+draft.title = "Draft";
+draft.save();
+```
+
+| Function | Returns | Rails / PHP ActiveRecord |
+|---|---|---|
+| `belongs_to<&Child::fk[, Parent]>(child)` | `std::optional<Parent>` | `belongs_to` |
+| `has_many<&Child::fk>(parent)` | `ar::query<Child>`, not yet run | `has_many` |
+| `has_one<&Child::fk>(parent)` | `std::optional<Child>` | `has_one` |
+| `build<&Child::fk>(parent)` | a new `Child` with only the foreign key set | `build` / `build_association` |
+
+- **The parent type** comes from `.references<Parent>()` on the column, or is given explicitly for a column without it. A mismatch, an unmapped member or a member that is not a `std::int64_t` does not compile. Relationships work between typed models only.
+- **No cache:** unlike Rails and PHP, the model keeps nothing.
+  - `belongs_to` with a non-NULL foreign key, and `has_one` on a saved parent, run a query on every call, so calling `author()` twice queries twice.
+  - `has_many` only builds a query, which runs when you use it.
+  - `build` sends no SQL.
+  - Returned records are copies.
+- **Unsaved records:**
+  - an unsaved child's foreign key is read from its member;
+  - an unsaved parent has no children: `has_many` returns a query that matches nothing (running it still sends that query), and `has_one` returns `std::nullopt` without a query. This is this library's rule for any unsaved parent; Rails' collections are likewise empty, and PHP ActiveRecord returns null without a query when the key is NULL;
+  - `build` throws for an unsaved parent, because there is no id to set yet.
+- **`has_one`** returns the child with the lowest primary key when several match. Add `.unique()` to the column so the database guarantees at most one.
+- **Partly loaded records:**
+  - a record loaded with `select()` must include the columns a relationship needs, otherwise it throws `ar::ex::activerecord` before any query: the child's foreign key for `belongs_to`, and the parent's primary key for the others;
+  - the parent's id is the one loaded from the database, not its (possibly edited) member.
+- **Queries and names:** relationship queries run on the default connection. The foreign-key and primary-key names are quoted, so they must be plain, unqualified names.
+- **Not yet supported:** eager loading (`includes`), `has_many :through`, polymorphic relationships, and adding children through a relationship (`create`, `<<`). The database's `on_delete` handles dependent deletes.
+
 ### Disabling Record Tracking
 
 By default, `typed_model<T>` manages `created_at`, `updated_at`, and `version` columns if they exist. To disable:

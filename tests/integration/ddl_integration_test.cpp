@@ -135,53 +135,6 @@ table_schema limits_schema(std::vector<column_schema> extra) {
 	return schema;
 }
 
-// Wraps a real adapter and records its queries
-template <class Base> class counting : public Base {
-  public:
-	using Base::Base;
-	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector& values = {}) override {
-		statements.push_back(sql);
-		return Base::query(sql, values);
-	}
-	std::vector<std::string> statements{};
-};
-
-// A second connection of the same kind as create_connection() makes, recording its queries
-std::shared_ptr<connection> make_counting(AdapterType type, const std::vector<std::string>*& statements) {
-	switch (type) {
-#ifdef AR_SQLITE
-	case AdapterType::SQLite: {
-		auto conn{ std::make_shared<counting<sqlite_adapter>>(":memory:") };
-		statements = &conn->statements;
-		return conn;
-	}
-#endif
-#ifdef AR_MYSQL
-	case AdapterType::MySQL: {
-		auto conn{ std::make_shared<counting<mysql_adapter>>("127.0.0.1", "test", "test", "test_db", 3306) };
-		statements = &conn->statements;
-		return conn;
-	}
-#endif
-#ifdef AR_POSTGRES
-	case AdapterType::PostgreSQL: {
-		auto conn{ std::make_shared<counting<postgres_adapter>>("localhost", "test", "test", "test_db", 5432) };
-		statements = &conn->statements;
-		return conn;
-	}
-#endif
-#ifdef AR_MSSQL
-	case AdapterType::MSSQL: {
-		auto conn{ std::make_shared<counting<mssql_adapter>>("localhost", "test_db", "test", "test", 1433) };
-		statements = &conn->statements;
-		return conn;
-	}
-#endif
-	default:
-		throw std::runtime_error("Adapter not enabled in this build");
-	}
-}
-
 bool index_exists(AdapterType type, connection& conn, std::string_view table, std::string_view index) {
 	switch (type) {
 	case AdapterType::SQLite:

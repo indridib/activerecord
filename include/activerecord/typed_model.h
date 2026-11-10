@@ -435,4 +435,12 @@ template <class T, bool TrackRecordMetadata = true> class typed_model : public m
 	attribute_map snapshot_{};
 };
 
+namespace detail {
+
+/** A class derived from typed_model<T>, with either tracking policy. */
+template <class T>
+concept typed_model_type = std::derived_from<T, typed_model<T, true>> || std::derived_from<T, typed_model<T, false>>;
+
+} // namespace detail
+
 } // namespace ar

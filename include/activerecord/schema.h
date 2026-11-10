@@ -84,9 +84,6 @@ std::string numeric_literal_sql(const column_schema& column, std::string_view tr
 /** Bytes MySQL stores for DECIMAL(precision, scale): 4 per 9 digits on each side of the point. */
 std::uint64_t mysql_decimal_bytes(int precision, int scale);
 
-template <class T>
-concept typed_model_type = std::derived_from<T, typed_model<T, true>> || std::derived_from<T, typed_model<T, false>>;
-
 // bool comes first: std::is_unsigned_v<bool> is true
 template <class V>
 concept schema_value = std::same_as<V, bool> || std::same_as<V, std::string> || std::same_as<V, datetime> ||

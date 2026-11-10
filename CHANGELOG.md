@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Relationships between typed models** (`<activerecord/relations.h>`): `belongs_to`, `has_many`, `has_one` and `build`, named by the foreign-key member and following Rails' and PHP ActiveRecord's behavior. `has_many` returns a chainable `query<Child>`. Nothing is cached on the model. See [Relationships](docs/models.md#relationships).
+
 ## 0.10.0 (alpha), 2026-11-07
 
 ### Added
