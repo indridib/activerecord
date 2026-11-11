@@ -382,6 +382,7 @@ draft.save();
 | `has_many<&Child::fk>(parent)` | `ar::query<Child>`, not yet run | `has_many` |
 | `has_one<&Child::fk>(parent)` | `std::optional<Child>` | `has_one` |
 | `build<&Child::fk>(parent)` | a new `Child` with only the foreign key set | `build` / `build_association` |
+| `preload<&Child::fk[, Parent]>(children)` | `std::unordered_map<std::int64_t, Parent>` | `preload` / `include` |
 
 - **The parent type** comes from `.references<Parent>()` on the column, or is given explicitly for a column without it. A mismatch, an unmapped member or a member that is not a `std::int64_t` does not compile. Relationships work between typed models only.
 - **No cache:** unlike Rails and PHP, the model keeps nothing.
@@ -398,7 +399,28 @@ draft.save();
   - a record loaded with `select()` must include the columns a relationship needs, otherwise it throws `ar::ex::activerecord` before any query: the child's foreign key for `belongs_to`, and the parent's primary key for the others;
   - the parent's id is the one loaded from the database, not its (possibly edited) member.
 - **Queries and names:** relationship queries run on the default connection. The foreign-key and primary-key names are quoted, so they must be plain, unqualified names.
-- **Not yet supported:** eager loading (`includes`), `has_many :through`, polymorphic relationships, and adding children through a relationship (`create`, `<<`). The database's `on_delete` handles dependent deletes.
+- **Not yet supported:** eager loading on a query (`includes`), preloading children (`has_many`), `has_many :through`, polymorphic relationships, and adding children through a relationship (`create`, `<<`). The database's `on_delete` handles dependent deletes.
+
+#### Preloading
+
+Calling `author()` for each of 100 books sends 100 queries. `preload` loads the parents of many children at once:
+
+```cpp
+std::vector<Book> books = ar::query<Book>().where("year > ?", 2000).all();
+auto authors = ar::preload<&Book::author_id>(books); // one query per 1000 distinct authors
+for (const Book& book : books) {
+    if (auto found = authors.find(book.author_id); found != authors.end()) {
+        std::cout << book.title << " by " << found->second.name << "\n";
+    }
+}
+```
+
+- **Input:** any range of the child model, read once: a vector, a `std::span`, a view.
+- **The map** is keyed by the parent's primary key and holds copies of the parents.
+- **Missing parents are absent**, so look them up with `find` (or `contains`), not `at`. NULL foreign keys are skipped.
+- **Queries:** each distinct foreign key is sent once, in queries of at most 1000 ids. No foreign keys, or only NULLs, means no query at all, and not even a connection is needed.
+- **Errors:** a persisted child without its foreign-key column throws before any query, as with `belongs_to`. A failing query throws, and nothing is returned.
+- **No cache:** the children are not changed; `book.author()` still runs its own query.
 
 ### Disabling Record Tracking
 

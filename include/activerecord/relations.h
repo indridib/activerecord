@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 // See file LICENSE for details
 //
-// Relationships between typed models: belongs_to, has_many, has_one and build
+// Relationships between typed models: belongs_to, has_many, has_one, build and preload
 //
 
 #pragma once
@@ -15,16 +15,21 @@
 #include <activerecord/config.h>
 #include <activerecord/sql_builder.h>
 #include <activerecord/typed_model.h>
+#include <algorithm>
 #include <array>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <format>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace ar {
 
@@ -130,6 +135,9 @@ inline std::int64_t loaded_id(const model& parent) {
 	return iter->second.as_integer();
 }
 
+/** Ids per preload query: under SQL Server's 2100 parameters and the default limits of the others. */
+constexpr std::size_t preload_chunk{ 1000 };
+
 } // namespace detail
 
 /**
@@ -203,6 +211,48 @@ auto build(const Parent& parent) {
 	detail::owner_t<Fk> child{};
 	child.*Fk = id;
 	return child;
+}
+
+/**
+ * The parents of many children in one query per 1000 distinct FKs (Rails preload): a map from the
+ * parent's primary key to a copy of the parent. NULL FKs are skipped and missing parents are absent.
+ * Children is read once; empty or all-NULL input sends no SQL. Throws like belongs_to, before any SQL.
+ */
+template <auto Fk, class Parent = void, std::ranges::input_range Children>
+	requires detail::relation_fk<Fk> &&
+			 std::same_as<std::remove_cv_t<std::ranges::range_value_t<Children>>, detail::owner_t<Fk>> &&
+			 std::convertible_to<std::ranges::range_reference_t<Children>, const detail::owner_t<Fk>&> &&
+			 detail::belongs_to_parent<Fk, Parent>
+auto preload(Children&& children) {
+	using P = detail::parent_t<Fk, Parent>;
+	std::vector<std::int64_t> ids{};
+	for (auto&& child : children) {
+		if (const std::optional<std::int64_t> fk{ detail::loaded_fk<Fk>(child) }) {
+			ids.push_back(*fk);
+		}
+	}
+	std::ranges::sort(ids);
+	const auto duplicates{ std::ranges::unique(ids) };
+	ids.erase(duplicates.begin(), duplicates.end());
+
+	std::unordered_map<std::int64_t, P> parents{};
+	if (ids.empty()) {
+		return parents;
+	}
+	const std::string pk{ detail::quoted(P::st_primary_key()) };
+	for (std::size_t first = 0; first < ids.size(); first += detail::preload_chunk) {
+		const std::size_t last{ std::min(ids.size(), first + detail::preload_chunk) };
+		attribute_vector chunk{};
+		chunk.reserve(last - first);
+		for (std::size_t i = first; i < last; ++i) {
+			chunk.emplace_back(ids[i]);
+		}
+		for (P& parent : query<P>().where_in(pk, chunk).all()) {
+			const std::int64_t id{ detail::loaded_id(parent) };
+			parents.insert_or_assign(id, std::move(parent));
+		}
+	}
+	return parents;
 }
 
 } // namespace ar

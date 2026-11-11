@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 // See file LICENSE for details
 //
-// belongs_to, has_many, has_one and build against every enabled adapter
+// belongs_to, has_many, has_one, build and preload against every enabled adapter
 //
 
 #include "test_adapters.h"
@@ -13,8 +13,10 @@
 #include <activerecord/relations.h>
 #include <activerecord/schema.h>
 #include <activerecord/typed_model.h>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <limits>
 #include <optional>
 #include <string>
@@ -140,6 +142,20 @@ class RelationsIntegrationTest : public AdapterTest {
 		return saved;
 	}
 
+	static constexpr std::int64_t big{ std::int64_t{ std::numeric_limits<std::int32_t>::max() } + 10 };
+
+	// An author with an explicit id; later generated ids continue above it on MySQL and SQL Server
+	void insert_author(std::int64_t id, const std::string& name) {
+		const attribute_vector row{ attribute{ id }, attribute{ name } };
+		const std::string insert{ "INSERT INTO ri_authors (id, name) VALUES (?, ?)" };
+		if (adapter_type() == AdapterType::MSSQL) {
+			adapter_->query("SET IDENTITY_INSERT ri_authors ON; " + insert + "; SET IDENTITY_INSERT ri_authors OFF",
+							row);
+		} else {
+			adapter_->query(insert, row);
+		}
+	}
+
 	const std::vector<std::string>* statements_{ nullptr };
 };
 
@@ -250,14 +266,7 @@ TEST_P(RelationsIntegrationTest, CustomKeyAndKeywordColumn) {
 }
 
 TEST_P(RelationsIntegrationTest, IdsAboveInt32Max) {
-	constexpr std::int64_t big{ std::int64_t{ std::numeric_limits<std::int32_t>::max() } + 10 };
-	const attribute_vector row{ attribute{ big }, attribute{ "Big" } };
-	const std::string insert{ "INSERT INTO ri_authors (id, name) VALUES (?, ?)" };
-	if (adapter_type() == AdapterType::MSSQL) {
-		adapter_->query("SET IDENTITY_INSERT ri_authors ON; " + insert + "; SET IDENTITY_INSERT ri_authors OFF", row);
-	} else {
-		adapter_->query(insert, row);
-	}
+	insert_author(big, "Big");
 	const RiAuthor big_author{ query<RiAuthor>().find(big) };
 	const RiBook saved{ book("Big book", big) };
 
@@ -278,6 +287,59 @@ TEST_P(RelationsIntegrationTest, PartialLoadsThrowBeforeAnyQuery) {
 	EXPECT_THROW(ar::has_one<&RiProfile::author_id>(partial_author), ex::activerecord);
 	EXPECT_THROW(ar::build<&RiBook::author_id>(partial_author), ex::activerecord);
 	EXPECT_EQ(before, queries());
+}
+
+TEST_P(RelationsIntegrationTest, PreloadAcrossChunks) {
+	std::vector<RiBook> children;
+	for (int i = 0; i < 1000; ++i) {
+		RiBook child;
+		child.author_id = author(std::format("A{}", i)).id;
+		children.push_back(child);
+	}
+	insert_author(big, "Big");
+	for (const std::int64_t id : { big, big + 1, children.front().author_id }) { // big + 1 is missing
+		RiBook child;
+		child.author_id = id;
+		children.push_back(child);
+	}
+
+	const std::size_t before{ queries() };
+	const auto authors{ ar::preload<&RiBook::author_id>(children) };
+	ASSERT_EQ(before + 2, queries());
+	const std::vector<std::string> selects(statements_->begin() + static_cast<std::ptrdiff_t>(before),
+										   statements_->end());
+	for (const std::string& sql : selects) {
+		EXPECT_TRUE(sql.starts_with("SELECT")) << sql;
+	}
+	EXPECT_EQ(1000, std::ranges::count(selects[0], '?'));
+	EXPECT_EQ(2, std::ranges::count(selects[1], '?'));
+	EXPECT_EQ(1001U, authors.size());
+	EXPECT_EQ("Big", authors.at(big).name);
+	EXPECT_EQ("A0", authors.at(children.front().author_id).name);
+	EXPECT_FALSE(authors.contains(big + 1));
+
+	const std::size_t null_before{ queries() };
+	EXPECT_TRUE((ar::preload<&RiBook::editor_id, RiAuthor>(children).empty())); // all editors NULL
+	EXPECT_EQ(null_before, queries());
+}
+
+TEST_P(RelationsIntegrationTest, PreloadCustomKey) {
+	RiShelf top;
+	top.label = "top";
+	ASSERT_TRUE(top.save());
+	RiShelf bottom;
+	bottom.label = "bottom";
+	ASSERT_TRUE(bottom.save());
+	for (const RiShelf* shelf : { &top, &top, &bottom }) {
+		ASSERT_TRUE(ar::build<&RiSlot::shelf>(*shelf).save());
+	}
+
+	const std::size_t before{ queries() };
+	const auto shelves{ ar::preload<&RiSlot::shelf>(query<RiSlot>().all()) };
+	EXPECT_EQ(before + 2, queries()); // the slots, then the shelves
+	ASSERT_EQ(2U, shelves.size());
+	EXPECT_EQ("top", shelves.at(top.code).label);
+	EXPECT_EQ("bottom", shelves.at(bottom.code).label);
 }
 
 INSTANTIATE_TEST_SUITE_P(AllAdapters, RelationsIntegrationTest, ::testing::ValuesIn(enabled_adapters()),

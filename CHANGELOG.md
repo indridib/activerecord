@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Relationships between typed models** (`<activerecord/relations.h>`): `belongs_to`, `has_many`, `has_one` and `build`, named by the foreign-key member and following Rails' and PHP ActiveRecord's behavior. `has_many` returns a chainable `query<Child>`. Nothing is cached on the model. See [Relationships](docs/models.md#relationships).
+- **Relationships between typed models** (`<activerecord/relations.h>`): `belongs_to`, `has_many`, `has_one` and `build`, named by the foreign-key member and following Rails' and PHP ActiveRecord's behavior. `has_many` returns a chainable `query<Child>`. `preload` loads the parents of many children in one query per 1000 ids, as a map keyed by primary key. Nothing is cached on the model. See [Relationships](docs/models.md#relationships).
 
 ## 0.10.0 (alpha), 2026-11-07
 
