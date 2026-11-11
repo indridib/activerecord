@@ -457,16 +457,29 @@ std::size_t mssql_adapter::insert_id() const {
 	return last_insert_id_;
 }
 
+// ODBC transaction control: T-SQL BEGIN TRANSACTION inside a prepared statement unbalances @@TRANCOUNT
+static void set_autocommit(SQLHDBC dbc, bool on) {
+	const SQLPOINTER mode{ on ? (SQLPOINTER)SQL_AUTOCOMMIT_ON : (SQLPOINTER)SQL_AUTOCOMMIT_OFF };
+	const SQLRETURN ret{ SQLSetConnectAttr(dbc, SQL_ATTR_AUTOCOMMIT, mode, SQL_IS_UINTEGER) };
+	check_odbc_error(ret, SQL_HANDLE_DBC, dbc, "Failed to set autocommit");
+}
+
+static void end_transaction(SQLHDBC dbc, SQLSMALLINT completion) {
+	check_odbc_error(SQLEndTran(SQL_HANDLE_DBC, dbc, completion), SQL_HANDLE_DBC, dbc,
+					 completion == SQL_COMMIT ? "Commit failed" : "Rollback failed");
+	set_autocommit(dbc, true);
+}
+
 void mssql_adapter::begin_transaction() {
-	query("BEGIN TRANSACTION");
+	set_autocommit(dbc_, false);
 }
 
 void mssql_adapter::commit() {
-	query("COMMIT TRANSACTION");
+	end_transaction(dbc_, SQL_COMMIT);
 }
 
 void mssql_adapter::rollback() {
-	query("ROLLBACK TRANSACTION");
+	end_transaction(dbc_, SQL_ROLLBACK);
 }
 
 std::string mssql_adapter::escape(std::string_view str) const {

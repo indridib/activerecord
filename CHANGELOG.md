@@ -6,6 +6,10 @@
 
 - **Relationships between typed models** (`<activerecord/relations.h>`): `belongs_to`, `has_many`, `has_one` and `build`, named by the foreign-key member and following Rails' and PHP ActiveRecord's behavior. `has_many` returns a chainable `query<Child>`. `preload` loads the parents of many children in one query per 1000 ids, as a map keyed by primary key. Nothing is cached on the model. See [Relationships](docs/models.md#relationships).
 
+### Fixed
+
+- **Transactions on MySQL and SQL Server:** `ar::transaction` threw on these adapters, because the transaction commands were sent as prepared statements. MySQL now sends them as plain queries, and SQL Server uses ODBC's own transaction control (autocommit off, then `SQLEndTran`). Commit, rollback and the automatic rollback are now tested on all four adapters.
+
 ## 0.10.0 (alpha), 2026-11-07
 
 ### Added

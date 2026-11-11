@@ -21,6 +21,7 @@
 #include <memory>
 #include <mysql/mysql.h>
 #include <string>
+#include <string_view>
 #include <type_traits>
 
 namespace ar {
@@ -387,16 +388,23 @@ std::size_t mysql_adapter::insert_id() const {
 	return static_cast<std::size_t>(mysql_insert_id(db_));
 }
 
+// Transaction control is not supported by the prepared-statement protocol that query() uses
+static void run_text_query(MYSQL* db, std::string_view sql) {
+	if (mysql_real_query(db, sql.data(), static_cast<unsigned long>(sql.size())) != 0) {
+		throw ex::activerecord("MySQL {}: {}", sql, mysql_error(db));
+	}
+}
+
 void mysql_adapter::begin_transaction() {
-	query("START TRANSACTION");
+	run_text_query(db_, "START TRANSACTION");
 }
 
 void mysql_adapter::commit() {
-	query("COMMIT");
+	run_text_query(db_, "COMMIT");
 }
 
 void mysql_adapter::rollback() {
-	query("ROLLBACK");
+	run_text_query(db_, "ROLLBACK");
 }
 
 std::string mysql_adapter::escape(std::string_view str) const {

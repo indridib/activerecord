@@ -15,10 +15,14 @@
 #include <activerecord/datetime.h>
 #include <activerecord/model.h>
 #include <activerecord/sql_builder.h>
+#include <activerecord/transaction.h>
 #include <activerecord/typed_model.h>
 #include <cmath>
+#include <format>
 #include <gtest/gtest.h>
 #include <limits>
+#include <string>
+#include <vector>
 
 using namespace ar;
 using namespace ar::test;
@@ -81,6 +85,44 @@ TEST_P(DatabaseOperationsTest, CreateAndSaveUser) {
 
 	bool saved = user.save();
 	EXPECT_TRUE(saved);
+}
+
+TEST_P(DatabaseOperationsTest, TransactionsCommitAndRollBack) {
+	const auto save_user{ [](const std::string& name) {
+		User user;
+		user.set("name", name);
+		EXPECT_TRUE(user.save());
+	} };
+
+	for (int round = 0; round < 2; ++round) { // a transaction must work again after the previous one
+		{
+			transaction tx;
+			save_user(std::format("Committed {}", round));
+			tx.commit();
+		}
+		{
+			transaction tx;
+			save_user("Rolled back");
+			tx.rollback();
+		}
+		{
+			transaction tx;
+			save_user("Dropped"); // the destructor rolls back
+		}
+	}
+	save_user("After"); // autocommit again
+
+	// A fresh connection sees only committed rows; SQLite's test database is in memory, so it keeps its connection
+	if (adapter_type() != AdapterType::SQLite) {
+		config::instance().set_connections({});
+		adapter_ = create_connection(adapter_type());
+		config::instance().set_connections({ { "default", adapter_ } }, "default");
+	}
+	std::vector<std::string> names;
+	for (const User& user : query<User>().order("id").all()) {
+		names.push_back(user.get("name").as_string());
+	}
+	EXPECT_EQ((std::vector<std::string>{ "Committed 0", "Committed 1", "After" }), names);
 }
 
 TEST_P(DatabaseOperationsTest, UpdateUser) {
