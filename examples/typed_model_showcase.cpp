@@ -140,6 +140,18 @@ int main() {
 			std::cout << account.username << " -> " << (found != owners.end() ? found->second.name : "<none>") << "\n";
 		}
 
+		const std::vector<Owner> all_owners{ ar::query<Owner>().all() };
+		const auto accounts_by_owner{ ar::preload_children<&Account::owner_id>(all_owners) }; // one query
+		for (const Owner& each : all_owners) {
+			std::cout << each.name << ":";
+			if (const auto found{ accounts_by_owner.find(each.id) }; found != accounts_by_owner.end()) {
+				for (const Account& account : found->second) {
+					std::cout << " " << account.username;
+				}
+			}
+			std::cout << "\n";
+		}
+
 		std::cout << "typed_model showcase completed.\n";
 		return 0;
 	} catch (const ar::ex::activerecord& e) {

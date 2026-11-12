@@ -5,13 +5,14 @@
 // SPDX-License-Identifier: MIT
 // See file LICENSE for details
 //
-// belongs_to, has_many, has_one, build and preload against every enabled adapter
+// belongs_to, has_many, has_one, build, preload and preload_children against every enabled adapter
 //
 
 #include "test_adapters.h"
 
 #include <activerecord/relations.h>
 #include <activerecord/schema.h>
+#include <activerecord/transaction.h>
 #include <activerecord/typed_model.h>
 #include <algorithm>
 #include <cstddef>
@@ -20,6 +21,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #ifdef AR_SQLITE
@@ -101,6 +103,17 @@ struct RiSlot : typed_model<RiSlot, false> {
 	}
 };
 
+// A custom child primary key, a keyword FK column and a parent with a custom primary key
+struct RiTag : typed_model<RiTag, false> {
+	static constexpr auto table_name{ "ri_tags" };
+	static constexpr auto primary_key{ "tag_no" };
+	std::int64_t tag_no{};
+	std::int64_t shelf{};
+	static constexpr auto columns() {
+		return ar::columns(col<&RiTag::tag_no>("tag_no"), col<&RiTag::shelf>("order").references<RiShelf>());
+	}
+};
+
 class RelationsIntegrationTest : public AdapterTest {
   protected:
 	table_list table_definitions(AdapterType /*type*/) const override { return {}; }
@@ -118,11 +131,12 @@ class RelationsIntegrationTest : public AdapterTest {
 			dynamic_cast<sqlite_adapter&>(*adapter_).foreign_keys(true);
 		}
 #endif
-		for (const char* name : { "ri_slots", "ri_shelves", "ri_nodes", "ri_profiles", "ri_books", "ri_authors" }) {
+		for (const char* name :
+			 { "ri_tags", "ri_slots", "ri_shelves", "ri_nodes", "ri_profiles", "ri_books", "ri_authors" }) {
 			drop_table(name);
 		}
-		tables_ = { "ri_authors", "ri_books", "ri_profiles", "ri_nodes", "ri_shelves", "ri_slots" };
-		create_tables<RiAuthor, RiBook, RiProfile, RiNode, RiShelf, RiSlot>();
+		tables_ = { "ri_authors", "ri_books", "ri_profiles", "ri_nodes", "ri_shelves", "ri_slots", "ri_tags" };
+		create_tables<RiAuthor, RiBook, RiProfile, RiNode, RiShelf, RiSlot, RiTag>();
 	}
 
 	std::size_t queries() const { return statements_->size(); }
@@ -144,16 +158,31 @@ class RelationsIntegrationTest : public AdapterTest {
 
 	static constexpr std::int64_t big{ std::int64_t{ std::numeric_limits<std::int32_t>::max() } + 10 };
 
-	// An author with an explicit id; later generated ids continue above it on MySQL and SQL Server
-	void insert_author(std::int64_t id, const std::string& name) {
-		const attribute_vector row{ attribute{ id }, attribute{ name } };
-		const std::string insert{ "INSERT INTO ri_authors (id, name) VALUES (?, ?)" };
+	// A row with an explicit primary key, which save() leaves out; columns[0] is the key
+	void insert_with_id(const std::string& table, const std::vector<std::string>& columns,
+						const attribute_vector& row) {
+		std::string names;
+		std::string placeholders;
+		for (const std::string& column : columns) {
+			if (!names.empty()) {
+				names += ", ";
+				placeholders += ", ";
+			}
+			names += adapter_->escape(column);
+			placeholders += "?";
+		}
+		const std::string insert{ std::format("INSERT INTO {} ({}) VALUES ({})", table, names, placeholders) };
 		if (adapter_type() == AdapterType::MSSQL) {
-			adapter_->query("SET IDENTITY_INSERT ri_authors ON; " + insert + "; SET IDENTITY_INSERT ri_authors OFF",
+			adapter_->query(std::format("SET IDENTITY_INSERT {0} ON; {1}; SET IDENTITY_INSERT {0} OFF", table, insert),
 							row);
 		} else {
 			adapter_->query(insert, row);
 		}
+	}
+
+	// Later generated ids continue above an explicit id on MySQL and SQL Server
+	void insert_author(std::int64_t id, const std::string& name) {
+		insert_with_id("ri_authors", { "id", "name" }, attribute_vector{ attribute{ id }, attribute{ name } });
 	}
 
 	const std::vector<std::string>* statements_{ nullptr };
@@ -340,6 +369,74 @@ TEST_P(RelationsIntegrationTest, PreloadCustomKey) {
 	ASSERT_EQ(2U, shelves.size());
 	EXPECT_EQ("top", shelves.at(top.code).label);
 	EXPECT_EQ("bottom", shelves.at(bottom.code).label);
+}
+
+TEST_P(RelationsIntegrationTest, PreloadChildrenAcrossChunks) {
+	std::int64_t first_id{ 0 };
+	{
+		transaction tx;
+		for (int i = 0; i < 1000; ++i) {
+			const std::int64_t id{ author(std::format("A{}", i)).id };
+			first_id = i == 0 ? id : first_id;
+		}
+		tx.commit();
+	}
+	insert_author(big, "Big");
+	insert_author(big + 1, "Bigger"); // no books
+	const RiBook z{ book("Z", first_id) };
+	const RiBook a{ book("A", first_id) };
+	book("Big book", big);
+	const std::vector<RiAuthor> parents{ query<RiAuthor>().all() };
+	ASSERT_EQ(1002U, parents.size());
+
+	const std::size_t before{ queries() };
+	const auto books_by_author{ ar::preload_children<&RiBook::author_id>(parents) };
+	ASSERT_EQ(before + 2, queries());
+	const std::vector<std::string> selects(statements_->begin() + static_cast<std::ptrdiff_t>(before),
+										   statements_->end());
+	for (const std::string& sql : selects) {
+		EXPECT_TRUE(sql.starts_with("SELECT")) << sql;
+	}
+	EXPECT_EQ(1000, std::ranges::count(selects[0], '?'));
+	EXPECT_EQ(2, std::ranges::count(selects[1], '?'));
+	ASSERT_EQ(2U, books_by_author.size());
+	const std::vector<RiBook>& firsts{ books_by_author.at(first_id) };
+	ASSERT_EQ(2U, firsts.size());
+	EXPECT_EQ(z.id, firsts[0].id); // by id, not by title
+	EXPECT_EQ(a.id, firsts[1].id);
+	EXPECT_EQ("Big book", books_by_author.at(big).front().title);
+	EXPECT_FALSE(books_by_author.contains(big + 1));
+}
+
+TEST_P(RelationsIntegrationTest, PreloadChildrenCustomKeys) {
+	std::vector<RiShelf> shelves(3);
+	for (RiShelf& shelf : shelves) {
+		shelf.label = "shelf";
+		ASSERT_TRUE(shelf.save());
+	}
+	// Explicit keys out of order: PostgreSQL returns heap order without ORDER BY
+	for (const auto& [tag_no, shelf] : { std::pair{ 30, shelves[0].code }, std::pair{ 10, shelves[0].code },
+										 std::pair{ 20, shelves[0].code }, std::pair{ 15, shelves[1].code } }) {
+		insert_with_id("ri_tags", { "tag_no", "order" },
+					   attribute_vector{ attribute{ std::int64_t{ tag_no } }, attribute{ shelf } });
+	}
+
+	const std::size_t before{ queries() };
+	const auto tags{ ar::preload_children<&RiTag::shelf>(shelves) };
+	ASSERT_EQ(before + 1, queries());
+	const std::string& sql{ statements_->back() };
+	EXPECT_NE(std::string::npos, sql.find("ORDER BY " + adapter_->escape("tag_no"))) << sql;
+	EXPECT_NE(std::string::npos, sql.find(adapter_->escape("order") + " IN (")) << sql;
+
+	ASSERT_EQ(2U, tags.size());
+	std::vector<std::int64_t> first_tags;
+	for (const RiTag& tag : tags.at(shelves[0].code)) {
+		first_tags.push_back(tag.tag_no);
+	}
+	EXPECT_EQ((std::vector<std::int64_t>{ 10, 20, 30 }), first_tags);
+	ASSERT_EQ(1U, tags.at(shelves[1].code).size());
+	EXPECT_EQ(15, tags.at(shelves[1].code).front().tag_no);
+	EXPECT_FALSE(tags.contains(shelves[2].code));
 }
 
 INSTANTIATE_TEST_SUITE_P(AllAdapters, RelationsIntegrationTest, ::testing::ValuesIn(enabled_adapters()),

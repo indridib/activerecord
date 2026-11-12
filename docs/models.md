@@ -321,6 +321,7 @@ draft.save();
 | `has_one<&Child::fk>(parent)` | `std::optional<Child>` | `has_one` |
 | `build<&Child::fk>(parent)` | a new `Child` with only the foreign key set | `build` / `build_association` |
 | `preload<&Child::fk[, Parent]>(children)` | `std::unordered_map<std::int64_t, Parent>` | `preload` / `include` |
+| `preload_children<&Child::fk>(parents)` | `std::unordered_map<std::int64_t, std::vector<Child>>` | `preload(:books)` / `include` |
 
 - **The parent type** comes from `.references<Parent>()` on the column, or is given explicitly for a column without it. A mismatch, an unmapped member or a member that is not a `std::int64_t` does not compile. Relationships work between typed models only.
 - **No cache:** unlike Rails and PHP, the model keeps nothing.
@@ -337,7 +338,7 @@ draft.save();
   - a record loaded with `select()` must include the columns a relationship needs, otherwise it throws `ar::ex::activerecord` before any query: the child's foreign key for `belongs_to`, and the parent's primary key for the others;
   - the parent's id is the one loaded from the database, not its (possibly edited) member.
 - **Queries and names:** relationship queries run on the default connection. The foreign-key and primary-key names are quoted, so they must be plain, unqualified names.
-- **Not yet supported:** eager loading on a query (`includes`), preloading children (`has_many`), `has_many :through`, polymorphic relationships, and adding children through a relationship (`create`, `<<`). The database's `on_delete` handles dependent deletes.
+- **Not yet supported:** eager loading on a query (`includes`), filtering or ordering preloaded children, `has_many :through`, polymorphic relationships, and adding children through a relationship (`create`, `<<`). The database's `on_delete` handles dependent deletes.
 
 #### Preloading
 
@@ -359,6 +360,26 @@ for (const Book& book : books) {
 - **Queries:** each distinct foreign key is sent once, in queries of at most 1000 ids. No foreign keys, or only NULLs, means no query at all, and not even a connection is needed.
 - **Errors:** a persisted child without its foreign-key column throws before any query, as with `belongs_to`. A failing query throws, and nothing is returned.
 - **No cache:** the children are not changed; `book.author()` still runs its own query.
+
+`preload_children` is the other direction: the children of many parents at once, instead of one `has_many` query per parent.
+
+```cpp
+std::vector<Author> authors = ar::query<Author>().all();
+auto books_by_author = ar::preload_children<&Book::author_id>(authors); // one query per 1000 authors
+for (const Author& author : authors) {
+    if (auto found = books_by_author.find(author.id); found != books_by_author.end()) {
+        std::cout << author.name << " wrote " << found->second.size() << " books\n";
+    }
+}
+```
+
+- **The map** goes from each parent's id to its children, in ascending order of the child's primary key.
+- **Parents without children are absent**, so use `find` here too.
+- **Input:** any range of the parent model, read once.
+  - Unsaved parents are skipped: they have no children.
+  - A persisted parent whose primary key was not loaded throws before any query.
+- **Queries:** same chunking and no-SQL rules as `preload`. No persisted parents means no query and no connection.
+- **All children:** every child is loaded. To filter, order or limit them, use `has_many` per parent instead.
 
 ### Disabling Record Tracking
 

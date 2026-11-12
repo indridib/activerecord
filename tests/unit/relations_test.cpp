@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 // See file LICENSE for details
 //
-// Unit tests for belongs_to, has_many, has_one, build and preload (SQLite in memory)
+// Unit tests for belongs_to, has_many, has_one, build, preload and preload_children (SQLite in memory)
 //
 
 #include <activerecord/adapters/sqlite_adapter.h>
@@ -85,6 +85,18 @@ struct RelNote : typed_model<RelNote, false> {
 	std::int64_t owner{};
 	static constexpr auto columns() {
 		return ar::columns(col<&RelNote::id>("id"), col<&RelNote::owner>("order").references<RelLightAuthor>());
+	}
+};
+
+// A custom child primary key, a keyword FK column, tracking off
+struct RelPage : typed_model<RelPage, false> {
+	static constexpr auto table_name{ "rel_pages" };
+	static constexpr auto primary_key{ "page_no" };
+	std::int64_t page_no{};
+	std::int64_t book{};
+	static constexpr auto columns() {
+		return ar::columns(col<&RelPage::page_no>("page_no"),
+						   col<&RelPage::book>("order").references<RelLightAuthor>());
 	}
 };
 
@@ -171,20 +183,20 @@ static_assert(!can_has_many<&RelBook::editor_id, NotAModel>);
 static_assert(!can_build<&RelBook::editor_id, ClassicAuthor>);
 static_assert(!can_belongs_to<&RelBook::author_id, RelProfile>); // wrong child
 
-// An input-only range of books that refuses a second begin() and counts its traversal
-class single_pass {
+// An input-only range that refuses a second begin() and counts its traversal
+template <class T> class single_pass {
   public:
-	explicit single_pass(std::vector<RelBook> books) : books_(std::move(books)) {}
+	explicit single_pass(std::vector<T> items) : items_(std::move(items)) {}
 
 	class iterator {
 	  public:
-		using value_type = RelBook;
+		using value_type = T;
 		using difference_type = std::ptrdiff_t;
 		iterator() = default;
 		iterator(single_pass* owner, std::size_t pos) : owner_(owner), pos_(pos) {}
-		const RelBook& operator*() const {
+		const T& operator*() const {
 			++owner_->derefs;
-			return owner_->books_[pos_];
+			return owner_->items_[pos_];
 		}
 		iterator& operator++() {
 			++owner_->increments;
@@ -192,7 +204,7 @@ class single_pass {
 			return *this;
 		}
 		void operator++(int) { ++*this; }
-		bool operator==(std::default_sentinel_t /*end*/) const { return pos_ == owner_->books_.size(); }
+		bool operator==(std::default_sentinel_t /*end*/) const { return pos_ == owner_->items_.size(); }
 
 	  private:
 		single_pass* owner_{ nullptr };
@@ -212,11 +224,11 @@ class single_pass {
 	int increments{ 0 };
 
   private:
-	std::vector<RelBook> books_{};
+	std::vector<T> items_{};
 	bool begun_{ false };
 };
 
-static_assert(std::ranges::input_range<single_pass> && !std::ranges::forward_range<single_pass>);
+static_assert(std::ranges::input_range<single_pass<RelBook>> && !std::ranges::forward_range<single_pass<RelBook>>);
 
 constexpr auto copy_book{ [](const RelBook& book) { return book; } };
 constexpr auto any_book{ [](const RelBook& /*book*/) { return true; } };
@@ -236,7 +248,7 @@ static_assert(can_preload<&RelBook::author_id, const books>);
 static_assert(can_preload<&RelBook::author_id, std::span<const RelBook>>);
 static_assert(can_preload<&RelBook::author_id, filtered_books>);
 static_assert(can_preload<&RelBook::author_id, book_copies>);
-static_assert(can_preload<&RelBook::author_id, single_pass>);
+static_assert(can_preload<&RelBook::author_id, single_pass<RelBook>>);
 static_assert(can_preload_as<&RelBook::editor_id, RelAuthor, books>);
 static_assert(can_preload_as<&RelBook::editor_id, const RelAuthor&, books>);
 static_assert(can_preload<&RelNote::owner, std::vector<RelNote>>);
@@ -259,6 +271,39 @@ static_assert(!can_preload_as<&RelBook::author_id, RelProfile, books>);	   // ex
 static_assert(!can_preload_as<&RelBook::editor_id, ClassicAuthor, books>); // classic model parent
 static_assert(!can_preload_as<&RelBook::editor_id, NotAModel, books>);	   // non-model parent
 
+constexpr auto copy_author{ [](const RelAuthor& author) { return author; } };
+constexpr auto any_author{ [](const RelAuthor& /*author*/) { return true; } };
+using authors = std::vector<RelAuthor>;
+using author_copies = decltype(std::declval<const authors&>() | std::views::transform(copy_author));
+using filtered_authors = decltype(std::declval<authors&>() | std::views::filter(any_author));
+
+template <auto F, class R>
+concept can_preload_children = requires(R& r) { ar::preload_children<F>(r); };
+
+// preload_children: positive
+static_assert(can_preload_children<&RelBook::author_id, authors>);
+static_assert(can_preload_children<&RelBook::author_id, const authors>);
+static_assert(can_preload_children<&RelBook::author_id, std::span<const RelAuthor>>);
+static_assert(can_preload_children<&RelBook::author_id, filtered_authors>);
+static_assert(can_preload_children<&RelBook::author_id, author_copies>);
+static_assert(can_preload_children<&RelBook::author_id, single_pass<RelAuthor>>);
+static_assert(can_preload_children<&RelBook::editor_id, authors>); // untagged: the parent is the range's model
+static_assert(can_preload_children<&RelNote::owner, std::vector<RelLightAuthor>>);
+static_assert(can_preload_children<&RelPage::book, std::vector<RelLightAuthor>>);
+static_assert(std::is_same_v<decltype(ar::preload_children<&RelBook::author_id>(std::declval<authors&>())),
+							 std::unordered_map<std::int64_t, std::vector<RelBook>>>);
+
+// preload_children: negative, in constraint order
+static_assert(!can_preload_children<&RelBook::author_id, int>);						   // not an input range
+static_assert(!can_preload_children<&free_id, authors>);							   // not a member pointer
+static_assert(!can_preload_children<&NotAModel::id, authors>);						   // owner is not a typed model
+static_assert(!can_preload_children<&RelTwice::unmapped_id, authors>);				   // not in columns()
+static_assert(!can_preload_children<&RelTwice::author_id, authors>);				   // mapped twice
+static_assert(!can_preload_children<&RelTwice::small_id, authors>);					   // int, not std::int64_t
+static_assert(!can_preload_children<&RelBook::author_id, std::vector<RelProfile>>);	   // parent differs from the tag
+static_assert(!can_preload_children<&RelBook::editor_id, std::vector<ClassicAuthor>>); // classic model parent
+static_assert(!can_preload_children<&RelBook::editor_id, std::vector<NotAModel>>);	   // non-model parent
+
 // Counts every query
 class counting_sqlite : public sqlite_adapter {
   public:
@@ -266,6 +311,7 @@ class counting_sqlite : public sqlite_adapter {
 	std::unique_ptr<statement> query(const std::string& sql, const attribute_vector& values = {}) override {
 		++calls;
 		binds.push_back(values.size());
+		last_sql = sql;
 		if (calls == fail_at) {
 			throw ex::activerecord("injected failure");
 		}
@@ -274,6 +320,7 @@ class counting_sqlite : public sqlite_adapter {
 	int calls{ 0 };
 	int fail_at{ 0 };
 	std::vector<std::size_t> binds{};
+	std::string last_sql{};
 };
 
 class RelationsTest : public ::testing::Test {
@@ -282,7 +329,7 @@ class RelationsTest : public ::testing::Test {
 		conn_ = std::make_shared<counting_sqlite>();
 		conn_->foreign_keys(true);
 		config::instance().set_connections({ { "default", conn_ } }, "default");
-		create_tables<RelAuthor, RelBook, RelProfile, RelLightAuthor, RelNote>();
+		create_tables<RelAuthor, RelBook, RelProfile, RelLightAuthor, RelNote, RelPage>();
 	}
 
 	void TearDown() override { config::instance().set_connections({}, ""); }
@@ -667,6 +714,161 @@ TEST_F(RelationsTest, PreloadUntrackedModelsWithCustomKey) {
 	const auto owners{ ar::preload<&RelNote::owner>(query<RelNote>().all()) };
 	ASSERT_EQ(1U, owners.size());
 	EXPECT_EQ("Light", owners.at(light.code).name);
+}
+
+// ==============================================================================
+// preload_children
+// ==============================================================================
+
+TEST_F(RelationsTest, PreloadChildrenWithoutPersistedParentsNeedsNoConnection) {
+	const authors unsaved{ RelAuthor{}, RelAuthor{} };
+	const int before{ calls() };
+	config::instance().set_connections({}, "");
+
+	EXPECT_TRUE(ar::preload_children<&RelBook::author_id>(authors{}).empty());
+	EXPECT_TRUE(ar::preload_children<&RelBook::author_id>(unsaved).empty());
+	EXPECT_EQ(before, calls());
+}
+
+TEST_F(RelationsTest, PreloadChildrenRejectsAPartlyLoadedParentBeforeAnySql) {
+	const RelAuthor ann{ saved_author("Ann") };
+	const RelAuthor partial{ *query<RelAuthor>().select("name").first() };
+	const int before{ calls() };
+	EXPECT_THROW(ar::preload_children<&RelBook::author_id>(authors{ partial }), ex::activerecord);
+	EXPECT_THROW(ar::preload_children<&RelBook::author_id>(authors{ ann, partial }), ex::activerecord);
+	EXPECT_EQ(before, calls());
+}
+
+TEST_F(RelationsTest, PreloadChildrenGroupsByParentInPrimaryKeyOrder) {
+	const RelAuthor ann{ saved_author("Ann") };
+	const RelAuthor bob{ saved_author("Bob") };
+	const RelAuthor cid{ saved_author("Cid") };
+	const RelBook z{ saved_book("Z", ann.id) }; // titles in reverse of id order
+	const RelBook dune{ saved_book("Dune", bob.id) };
+	const RelBook y{ saved_book("Y", ann.id) };
+	const RelBook x{ saved_book("X", ann.id) };
+
+	const int before{ calls() };
+	const auto books_by_author{ ar::preload_children<&RelBook::author_id>(authors{ ann, bob, cid, ann, RelAuthor{} }) };
+	EXPECT_EQ(before + 1, calls());
+	EXPECT_EQ(3U, conn_->binds.back()); // ann, bob, cid; the duplicate and the unsaved parent are not bound
+	ASSERT_EQ(2U, books_by_author.size());
+	const std::vector<RelBook>& anns{ books_by_author.at(ann.id) };
+	ASSERT_EQ(3U, anns.size());
+	EXPECT_EQ(z.id, anns[0].id);
+	EXPECT_EQ(y.id, anns[1].id);
+	EXPECT_EQ(x.id, anns[2].id);
+	EXPECT_EQ("Dune", books_by_author.at(bob.id).front().title);
+	EXPECT_FALSE(books_by_author.contains(cid.id));
+	EXPECT_FALSE(anns.front().is_new_record());
+}
+
+TEST_F(RelationsTest, PreloadChildrenThroughAnUntaggedFk) {
+	const RelAuthor ann{ saved_author("Ann") };
+	const RelAuthor bob{ saved_author("Bob") };
+	RelBook edited{ saved_book("Edited", ann.id) };
+	edited.editor_id = bob.id;
+	ASSERT_TRUE(edited.save());
+	saved_book("Unedited", ann.id); // NULL editor
+
+	const auto edited_by{ ar::preload_children<&RelBook::editor_id>(authors{ ann, bob }) };
+	ASSERT_EQ(1U, edited_by.size());
+	ASSERT_EQ(1U, edited_by.at(bob.id).size());
+	EXPECT_EQ("Edited", edited_by.at(bob.id).front().title);
+}
+
+class RelationsParentChunkTest : public RelationsTest {
+  protected:
+	// 1002 authors: 1000 in the first chunk, 2 in the second; one book for the first and one for the last
+	void SetUp() override {
+		RelationsTest::SetUp();
+		transaction tx;
+		for (int i = 0; i < 1002; ++i) {
+			parents_.push_back(saved_author(std::format("A{}", i)));
+		}
+		saved_book("First", parents_.front().id);
+		saved_book("Last", parents_.back().id);
+		tx.commit();
+	}
+
+	std::vector<std::size_t> last_binds(std::size_t n) const {
+		return { conn_->binds.end() - static_cast<std::ptrdiff_t>(n), conn_->binds.end() };
+	}
+
+	authors parents_{};
+};
+
+TEST_F(RelationsParentChunkTest, PreloadChildrenSplitsAt1000Parents) {
+	const int before{ calls() };
+	const auto books_by_author{ ar::preload_children<&RelBook::author_id>(parents_) };
+	EXPECT_EQ(before + 2, calls());
+	EXPECT_EQ((std::vector<std::size_t>{ 1000, 2 }), last_binds(2));
+	ASSERT_EQ(2U, books_by_author.size());
+	EXPECT_EQ("First", books_by_author.at(parents_.front().id).front().title);
+	EXPECT_EQ("Last", books_by_author.at(parents_.back().id).front().title);
+}
+
+TEST_F(RelationsParentChunkTest, PreloadChildrenPropagatesAnErrorInTheSecondChunk) {
+	const int before{ calls() };
+	conn_->fail_at = before + 2;
+	EXPECT_THROW(ar::preload_children<&RelBook::author_id>(parents_), ex::activerecord);
+	EXPECT_EQ(before + 2, calls());
+	EXPECT_EQ((std::vector<std::size_t>{ 1000, 2 }), last_binds(2));
+}
+
+TEST_F(RelationsTest, PreloadChildrenReadsASinglePassRangeOnce) {
+	const RelAuthor ann{ saved_author("Ann") };
+	const RelAuthor bob{ saved_author("Bob") };
+	saved_book("A", ann.id);
+	single_pass input{ authors{ ann, bob, ann } };
+
+	const auto books_by_author{ ar::preload_children<&RelBook::author_id>(input) };
+	EXPECT_EQ(1U, books_by_author.size());
+	EXPECT_EQ(3, input.derefs);
+	EXPECT_EQ(3, input.increments);
+	EXPECT_THROW(input.begin(), std::logic_error);
+}
+
+TEST_F(RelationsTest, PreloadChildrenAcceptsViews) {
+	const RelAuthor ann{ saved_author("Ann") };
+	saved_book("A", ann.id);
+	const authors parents{ ann };
+	EXPECT_EQ(1U, ar::preload_children<&RelBook::author_id>(parents | std::views::transform(copy_author)).size());
+	EXPECT_EQ(1U, ar::preload_children<&RelBook::author_id>(std::span{ parents }).size());
+	EXPECT_EQ(1U, ar::preload_children<&RelBook::author_id>(parents | std::views::filter(any_author)).size());
+}
+
+TEST_F(RelationsTest, PreloadChildrenUntrackedModelsWithCustomKeys) {
+	RelLightAuthor first;
+	first.name = "First";
+	ASSERT_TRUE(first.save());
+	RelLightAuthor second;
+	second.name = "Second";
+	ASSERT_TRUE(second.save());
+	ASSERT_TRUE(ar::build<&RelNote::owner>(first).save());
+
+	// save() leaves a new record's primary key out, so explicit, out-of-order keys need raw SQL
+	const std::string insert{ std::format("INSERT INTO rel_pages (page_no, {}) VALUES (?, ?)",
+										  conn_->escape("order")) };
+	for (const auto& [page_no, owner] : { std::pair{ 30, first.code }, std::pair{ 10, first.code },
+										  std::pair{ 20, first.code }, std::pair{ 15, second.code } }) {
+		conn_->query(insert, attribute_vector{ attribute{ std::int64_t{ page_no } }, attribute{ owner } });
+	}
+
+	const std::vector<RelLightAuthor> parents{ first, second };
+	const auto notes{ ar::preload_children<&RelNote::owner>(parents) };
+	ASSERT_EQ(1U, notes.size());
+	EXPECT_EQ(1U, notes.at(first.code).size());
+
+	const auto pages{ ar::preload_children<&RelPage::book>(parents) };
+	EXPECT_TRUE(conn_->last_sql.ends_with("ORDER BY " + conn_->escape("page_no"))) << conn_->last_sql;
+	std::vector<std::int64_t> first_pages;
+	for (const RelPage& page : pages.at(first.code)) {
+		first_pages.push_back(page.page_no);
+	}
+	EXPECT_EQ((std::vector<std::int64_t>{ 10, 20, 30 }), first_pages);
+	ASSERT_EQ(1U, pages.at(second.code).size());
+	EXPECT_EQ(15, pages.at(second.code).front().page_no);
 }
 
 } // namespace

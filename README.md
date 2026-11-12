@@ -25,7 +25,7 @@ The library offers two model styles: a classic dynamic model with string-based a
 - **Dirty tracking** — only changed attributes are included in UPDATE statements
 - **Typed model validations** — declarative rules with per-attribute error collection
 - **Table creation** — `create_table<T>()` builds the table from a typed model, with column types, defaults, indexes and foreign keys
-- **Relationships** — `belongs_to`, `has_many`, `has_one` and `build` between typed models, following their foreign keys; `preload` loads the parents of many records with one query per 1000 distinct foreign keys
+- **Relationships** — `belongs_to`, `has_many`, `has_one` and `build` between typed models, following their foreign keys; `preload` and `preload_children` load the related records of many records with one query per 1000 ids
 - **Transactions** — an RAII `ar::transaction` that rolls back unless committed, on every adapter
 - **Cross-platform** — Windows (MSVC, static linking), Linux (GCC, Clang)
 - **Comprehensive test suite** — unit and integration tests via GoogleTest

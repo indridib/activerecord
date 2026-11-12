@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: MIT
 // See file LICENSE for details
 //
-// Relationships between typed models: belongs_to, has_many, has_one, build and preload
+// Relationships between typed models: belongs_to, has_many, has_one, build, preload and preload_children
 //
 
 #pragma once
@@ -138,6 +138,35 @@ inline std::int64_t loaded_id(const model& parent) {
 /** Ids per preload query: under SQL Server's 2100 parameters and the default limits of the others. */
 constexpr std::size_t preload_chunk{ 1000 };
 
+inline void sort_unique(std::vector<std::int64_t>& ids) {
+	std::ranges::sort(ids);
+	const auto duplicates{ std::ranges::unique(ids) };
+	ids.erase(duplicates.begin(), duplicates.end());
+}
+
+/** The bind values of the chunk of ids that starts at first. */
+inline attribute_vector chunk_at(const std::vector<std::int64_t>& ids, std::size_t first) {
+	const std::size_t last{ std::min(ids.size(), first + preload_chunk) };
+	attribute_vector chunk{};
+	chunk.reserve(last - first);
+	for (std::size_t i = first; i < last; ++i) {
+		chunk.emplace_back(ids[i]);
+	}
+	return chunk;
+}
+
+inline std::int64_t fk_value(std::int64_t fk) noexcept {
+	return fk;
+}
+
+/** A child loaded through an FK IN list never has a NULL FK; throws if it does. */
+inline std::int64_t fk_value(const std::optional<std::int64_t>& fk) {
+	if (!fk.has_value()) {
+		throw ex::activerecord("preload_children: a child with a NULL foreign key was returned");
+	}
+	return *fk;
+}
+
 } // namespace detail
 
 /**
@@ -231,9 +260,7 @@ auto preload(Children&& children) {
 			ids.push_back(*fk);
 		}
 	}
-	std::ranges::sort(ids);
-	const auto duplicates{ std::ranges::unique(ids) };
-	ids.erase(duplicates.begin(), duplicates.end());
+	detail::sort_unique(ids);
 
 	std::unordered_map<std::int64_t, P> parents{};
 	if (ids.empty()) {
@@ -241,18 +268,50 @@ auto preload(Children&& children) {
 	}
 	const std::string pk{ detail::quoted(P::st_primary_key()) };
 	for (std::size_t first = 0; first < ids.size(); first += detail::preload_chunk) {
-		const std::size_t last{ std::min(ids.size(), first + detail::preload_chunk) };
-		attribute_vector chunk{};
-		chunk.reserve(last - first);
-		for (std::size_t i = first; i < last; ++i) {
-			chunk.emplace_back(ids[i]);
-		}
-		for (P& parent : query<P>().where_in(pk, chunk).all()) {
+		for (P& parent : query<P>().where_in(pk, detail::chunk_at(ids, first)).all()) {
 			const std::int64_t id{ detail::loaded_id(parent) };
 			parents.insert_or_assign(id, std::move(parent));
 		}
 	}
 	return parents;
+}
+
+/**
+ * The children of many parents in one query per 1000 distinct parents (Rails preload of has_many): a map
+ * from the parent's id to its children, in ascending child primary key order. Unsaved parents are
+ * skipped and parents without children are absent. Parents is read once; no persisted parent means no
+ * SQL. Throws like has_many, for every parent before any SQL.
+ */
+template <auto Fk, std::ranges::input_range Parents>
+	requires detail::relation_fk<Fk> &&
+			 detail::inverse_parent<Fk, std::remove_cv_t<std::ranges::range_value_t<Parents>>> &&
+			 std::convertible_to<std::ranges::range_reference_t<Parents>,
+								 const std::remove_cv_t<std::ranges::range_value_t<Parents>>&>
+auto preload_children(Parents&& parents) {
+	using Parent = std::remove_cv_t<std::ranges::range_value_t<Parents>>;
+	using Child = detail::owner_t<Fk>;
+	std::vector<std::int64_t> ids{};
+	for (auto&& item : parents) {
+		const Parent& parent{ item };
+		if (!parent.is_new_record()) {
+			ids.push_back(detail::loaded_id(parent));
+		}
+	}
+	detail::sort_unique(ids);
+
+	std::unordered_map<std::int64_t, std::vector<Child>> children{};
+	if (ids.empty()) {
+		return children;
+	}
+	const std::string fk{ detail::quoted(detail::fk_name<Fk>()) };
+	const std::string pk{ detail::quoted(Child::st_primary_key()) };
+	for (std::size_t first = 0; first < ids.size(); first += detail::preload_chunk) {
+		for (Child& child : query<Child>().where_in(fk, detail::chunk_at(ids, first)).order(pk).all()) {
+			const std::int64_t parent_id{ detail::fk_value(child.*Fk) };
+			children[parent_id].push_back(std::move(child));
+		}
+	}
+	return children;
 }
 
 } // namespace ar
