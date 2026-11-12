@@ -322,10 +322,14 @@ All adapters support prepared statements with automatic parameter binding, prote
 | Transactions | ✅ | ✅ | ✅ | ✅ |
 | Parameter Binding | ✅ | ✅ | ✅ | ✅ |
 | LIMIT/OFFSET | ✅ | ✅ | ✅ | ✅ |
+| Table creation ([`create_table`](tables.md)) | ✅ | ✅ | ✅ | ✅ |
+| Foreign keys enforced | after `foreign_keys(true)` | while `foreign_key_checks` is on (the default) | ✅ | ✅ |
 | Server Required | ❌ | ✅ | ✅ | ✅ |
 | Multi-client | Limited | ✅ | ✅ | ✅ |
-| JSON Support | ✅ | ✅ | ✅✅ | ✅ |
-| Full-Text Search | ✅ | ✅ | ✅✅ | ✅ |
+
+The library has no JSON column or query support and no full-text search yet, whatever the server offers. (Converting models to JSON is a separate feature; see [Serialization](serialization.md).)
+
+`create_table` checks enforcement at run time and refuses to create a table with foreign keys on a connection that does not enforce them (see [Creating Tables](tables.md#how-create_table-works)).
 
 ## 🆘 Troubleshooting
 

@@ -8,7 +8,8 @@ For installation, building, and a quick overview, see the [main README](../READM
 
 ## Getting Started
 
-- **[Models](models.md)** — defining models with `model` and `typed_model<T>`, CRUD operations, dirty tracking, enum support
+- **[Models](models.md)** — defining models with `model` and `typed_model<T>`, CRUD operations, relationships and preloading, dirty tracking, enum support, transactions
+- **[Creating Tables](tables.md)** — `create_table<T>()` from a typed model: column types per database, modifiers, foreign keys, hand-built schemas
 - **[Query API](query_api.md)** — building queries, WHERE helpers, retrieval methods, lazy iteration, `std::ranges` integration
 - **[Configuration](configuration.md)** — setting up connections, connection URLs, multiple databases
 

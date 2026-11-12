@@ -151,13 +151,13 @@ You can execute raw SQL through a connection without going through a model:
 ```cpp
 auto conn = ar::config::instance().get_connection();
 
-// DDL
+// DDL (typed models: ar::create_table<T>(), see tables.md)
 conn->query("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)");
 
 // Insert with bind values
 conn->query("INSERT INTO users (name, age) VALUES (?, ?)", { "Alice", 30 });
 
-// Transactions
+// Transactions (for models, prefer ar::transaction, which rolls back automatically; see models.md)
 conn->begin_transaction();
 conn->query("UPDATE users SET age = ? WHERE name = ?", { 31, "Alice" });
 conn->commit();

@@ -25,7 +25,8 @@ The library offers two model styles: a classic dynamic model with string-based a
 - **Dirty tracking** — only changed attributes are included in UPDATE statements
 - **Typed model validations** — declarative rules with per-attribute error collection
 - **Table creation** — `create_table<T>()` builds the table from a typed model, with column types, defaults, indexes and foreign keys
-- **Relationships** — `belongs_to`, `has_many`, `has_one` and `build` between typed models, following their foreign keys
+- **Relationships** — `belongs_to`, `has_many`, `has_one` and `build` between typed models, following their foreign keys; `preload` loads the parents of many records with one query per 1000 distinct foreign keys
+- **Transactions** — an RAII `ar::transaction` that rolls back unless committed, on every adapter
 - **Cross-platform** — Windows (MSVC, static linking), Linux (GCC, Clang)
 - **Comprehensive test suite** — unit and integration tests via GoogleTest
 
@@ -93,8 +94,12 @@ A quick taste of both model styles. For full details, see the [documentation](do
 ### Classic Model
 
 ```cpp
+#include <activerecord/adapters/sqlite_adapter.h>
+#include <activerecord/config.h>
 #include <activerecord/model.h>
+#include <activerecord/schema.h>
 #include <activerecord/sql_builder.h>
+#include <iostream>
 
 class User : public ar::model {
   public:
@@ -102,6 +107,16 @@ class User : public ar::model {
     static constexpr std::string_view st_primary_key() { return "id"; }
     User() : model(st_table_name(), st_primary_key()) {}
 };
+
+ar::config::instance().set_connections({ { "default", std::make_shared<ar::sqlite_adapter>("app.db") } }, "default");
+
+// The classic model does not describe its columns, so its table is described by hand (see docs/tables.md)
+ar::create_table({ .name = "users",
+                   .primary_key = "id",
+                   .columns = { { .name = "id" },
+                                { .name = "name", .type = ar::column_type::string, .length = 100 },
+                                { .name = "email", .type = ar::column_type::string, .length = 255 } } },
+                 { .if_not_exists = true });
 
 User alice;
 alice.set("name", "Alice");
@@ -115,8 +130,11 @@ std::cout << user.get("name").as_string() << '\n';
 ### typed_model\<T\>
 
 ```cpp
-#include <activerecord/typed_model.h>
+#include <activerecord/adapters/sqlite_adapter.h>
+#include <activerecord/config.h>
+#include <activerecord/schema.h>
 #include <activerecord/sql_builder.h>
+#include <activerecord/typed_model.h>
 
 struct User : ar::typed_model<User> {
     static constexpr auto table_name{"users"};
@@ -135,7 +153,15 @@ struct User : ar::typed_model<User> {
     }
 };
 
-auto user = ar::query<User>().find(1);
+ar::config::instance().set_connections({ { "default", std::make_shared<ar::sqlite_adapter>("app.db") } }, "default");
+ar::create_table<User>({ .if_not_exists = true });   // the table comes from columns()
+
+User bob;
+bob.name = "Bob";
+bob.email = "bob@example.com";
+bob.save();                                          // bob.id is set by the insert
+
+auto user = ar::query<User>().find(bob.id);
 user.email = "new@example.com";
 user.save();
 ```
@@ -202,13 +228,17 @@ Following Active Record conventions:
 
 ## Roadmap
 
-- **Reflection:** offer a `reflected_model<T>` alongside `typed_model<T>` that auto-discovers struct members, eliminating the manual `columns()` mapping. Pre-C++26: [reflect-cpp](https://github.com/getml/reflect-cpp) behind a build flag. Post-C++26: native reflection. `typed_model<T>` remains the dependency-free default.
-
-- **Schema changes:** migrations and `ALTER TABLE` on top of the table creation in 0.10.0.
+- **Lifecycle callbacks:** `before_save`, `after_create`, `before_destroy` and the rest, on typed models, with no cost for models that do not use them.
 
 - **Validation:** uniqueness checks, validation contexts (`on_create`/`on_update`), and richer custom validators.
 
+- **Migrations:** versioned schema changes and `ALTER TABLE` on top of the table creation in 0.10.0.
+
+- **Package managers:** install with vcpkg: an overlay port first, then the project's own registry, then the official vcpkg registry. Conan support may follow later.
+
 - **Indexed storage:** migrate internal storage from `std::map<string, attribute>` to `std::vector<attribute>` with a shared column index, reducing per-instance memory and enabling bitset-based dirty tracking.
+
+- **After 1.0, if worthwhile — reflection:** a `reflected_model<T>` that discovers struct members by itself, so most of the `columns()` mapping goes away. This would wait for C++26 reflection on all supported compilers, and happen only if users need it. `typed_model<T>` with `columns()` stays the supported model.
 
 ## Contributing
 

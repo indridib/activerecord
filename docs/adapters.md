@@ -180,7 +180,7 @@ Most differences are handled internally by the library. For reference:
 | Empty INSERT clause | `DEFAULT VALUES` | `() VALUES()` | `DEFAULT VALUES` | `DEFAULT VALUES` |
 | Datetime storage | INTEGER (Unix timestamp) | BIGINT (Unix timestamp) | BIGINT (Unix timestamp) | BIGINT (Unix timestamp) |
 | Native date/time columns | None (a DATETIME column stores the integer) | Read only | Read only | Read only |
-| Auto-increment | AUTOINCREMENT | AUTO_INCREMENT | SERIAL | IDENTITY |
+| Auto-increment key | `INTEGER PRIMARY KEY AUTOINCREMENT` | `BIGINT AUTO_INCREMENT` | `BIGSERIAL` | `BIGINT IDENTITY(1,1)` |
 | ORDER BY and LIMIT in UPDATE/DELETE | Throws on LIMIT; ORDER BY ignored | Yes | Throws on LIMIT; ORDER BY ignored | Throws on LIMIT; ORDER BY ignored |
 | OFFSET in UPDATE/DELETE | Throws | Throws | Throws | Throws |
 
@@ -197,7 +197,7 @@ All adapters support executing raw SQL through the connection:
 ```cpp
 auto conn = ar::config::instance().get_connection();
 
-// Execute DDL
+// Execute DDL (typed models can use ar::create_table<T>() instead; see tables.md)
 conn->query("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT)");
 
 // Execute with bind values
@@ -213,6 +213,8 @@ while (stmt->fetch()) {
 ```
 
 ### Transactions
+
+For models, use `ar::transaction`, which rolls back automatically unless committed (see [Models](models.md#transactions)). The connection has the same three calls without the automatic rollback:
 
 ```cpp
 auto conn = ar::config::instance().get_connection();

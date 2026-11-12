@@ -273,86 +273,24 @@ user.save();
 
 ### Creating Tables
 
-A typed model can create its own table. The modifiers on `col<>()` are optional and only describe the table; they never change how values are read or written. Everything below is in `<activerecord/schema.h>`.
+A typed model can create its own table from `columns()`. For the `User` model above:
 
 ```cpp
-struct Author : ar::typed_model<Author> {
-    static constexpr auto table_name{ "authors" };
-    static constexpr auto primary_key{ "id" };
-
-    std::int64_t id{};
-    std::string name{};
-
-    static constexpr auto columns() {
-        return ar::columns(ar::col<&Author::id>("id"), ar::col<&Author::name>("name").limit(100));
-    }
-};
-
-struct Book : ar::typed_model<Book> {
-    static constexpr auto table_name{ "books" };
-    static constexpr auto primary_key{ "id" };
-
-    std::int64_t id{};
-    std::string title{};
-    std::optional<std::string> summary{};
-    double price{};
-    std::int64_t author_id{};
-
-    static constexpr auto columns() {
-        return ar::columns(
-            ar::col<&Book::id>("id"),
-            ar::col<&Book::title>("title").limit(200).index(),
-            ar::col<&Book::summary>("summary").text(),
-            ar::col<&Book::price>("price").decimal(10, 2).default_value(0),
-            ar::col<&Book::author_id>("author_id").references<Author>().on_delete(ar::fk_action::cascade));
-    }
-};
-
-ar::create_tables<Author, Book>();                    // in this order
-ar::create_table<Book>({ .if_not_exists = true });    // false if it already existed
-ar::drop_tables<Author, Book>();                      // in reverse: Book, then Author
-ar::drop_table<Book>({ .if_exists = true });
-std::vector<std::string> sql = ar::create_table_sql<Book>();  // the statements, nothing is run
-ar::table_schema schema = ar::table_schema_for<Book>();       // the table as plain data
+ar::create_table<User>({ .if_not_exists = true });   // <activerecord/schema.h>
 ```
 
-Every function takes an optional connection name as its last argument; empty means the default connection. `create_table(schema)` and `drop_table("name")` take a hand-built `ar::table_schema` or a table name instead of a model.
-
-`create_table` works in this order:
-
-1. It validates the schema and builds every statement. If anything is invalid, it throws `ar::ex::activerecord` and nothing is sent to the database.
-2. With `if_not_exists`, it returns `false` if the table exists. The existing table is not compared or repaired. If another program creates the table after this check, the `CREATE TABLE` fails and the server's error propagates.
-3. For a table with foreign keys, it throws `ar::ex::config` if the connection does not enforce them. On SQLite, turn enforcement on first with `foreign_keys(true)` or `?foreign_keys=on` (see [Adapters](adapters.md)).
-4. It runs the statements one by one: `CREATE TABLE`, then one `CREATE INDEX` per `index()` column.
-
-If a statement fails, its error propagates. There is no automatic rollback or cleanup, so a table created by an earlier statement may remain; remove it with `drop_table`. Inside your own transaction, the database's rules for DDL apply (MySQL, for example, commits DDL immediately). `create_tables` checks each table separately and stops at the first failure without undoing the tables already created. There is no dependency sorting and no support for tables that reference each other in a cycle; a table may reference itself.
-
-Without modifiers, the member type decides the column: integers and signed enums → `bigint`, `float`/`double` → `real`, `bool` → `boolean`, `std::string` → `string` (255), `ar::datetime` → `datetime` (a Unix timestamp). `std::optional<T>` makes the column nullable; all other columns are NOT NULL. The primary key must be a `std::int64_t` and becomes the auto-increment key. Unsigned members cannot be used in a schema.
-
-| Modifier | For | Effect |
-|---|---|---|
-| `.limit(n)` | strings | `VARCHAR(n)` instead of 255 (not enforced on SQLite) |
-| `.text()` | strings | unbounded text |
-| `.decimal(p, s)` | `float`, `double` | `DECIMAL(p, s)`: exact on MySQL, PostgreSQL and SQL Server, not on SQLite; the C++ value stays floating-point |
-| `.integer()` | integers (not the primary key) | 32-bit `INT` |
-| `.not_null()` | optional members | NOT NULL anyway; saving `nullopt` then fails |
-| `.default_value(v)` | numbers, `bool`, enums | `DEFAULT v` in the table; a typed save still writes every member |
-| `.unique()`, `.index()` | any column | unique constraint, index |
-| `.references<U>()` | `std::int64_t`, optional or not | foreign key to `U`'s primary key |
-| `.on_delete(a)`, `.on_update(a)` | referencing columns | `ar::fk_action::no_action`, `cascade` or `set_null` (nullable columns only) |
-
-A modifier that does not fit the member type does not compile. Invalid values (`limit(0)`, a repeated modifier, a default that does not fit) make `table_schema_for<T>()` throw `ar::ex::activerecord`. Table and column names must be plain lowercase identifiers: 1 to 63 characters of `a-z`, `0-9` and `_`, not starting with a digit (the ORM uses names unquoted, so a quoted mixed-case table would be a different table on PostgreSQL). Avoid SQL keywords such as `order` or `user` as names. The modifiers only shape the table; they do not add validation rules to the model (see [Validations](validations.md)).
+Column types, modifiers (`limit`, `unique`, `references<U>()`, ...), the SQL each database gets, and hand-built schemas for the classic model are in [Creating Tables](tables.md).
 
 ### Relationships
 
-`<activerecord/relations.h>` follows a foreign key between typed models. A relationship is named by its foreign-key member, which must be mapped by exactly one column in `columns()` and hold a `std::int64_t` (optional or not). You write one short accessor per relationship:
+`<activerecord/relations.h>` follows a foreign key between typed models. The examples use the `Author` and `Book` models of [Creating Tables](tables.md#quick-example), extended with accessors. A relationship is named by its foreign-key member, which must be mapped by exactly one column in `columns()` and hold a `std::int64_t` (optional or not). You write one short accessor per relationship:
 
 ```cpp
 struct Book;
 struct Profile;
 
 struct Author : ar::typed_model<Author> {
-    // table_name, primary_key, id, name, columns() as above
+    // table_name, primary_key, id, name and columns() as in Creating Tables (tables.md#quick-example)
     ar::query<Book> books() const;          // defined after Book: the body needs Book complete
     std::optional<Profile> profile() const; // likewise, after Profile
 };
@@ -491,7 +429,7 @@ user.id = 999;
 user.save();  // throws ex::readonly
 ```
 
-This prevents accidental primary key corruption. New (unsaved) records can have their primary key set freely.
+This prevents accidental primary key corruption. On a new (unsaved) record the check does not apply, but the primary key is not written either: the insert leaves it out, and the record takes the key the database generates.
 
 ---
 
@@ -508,3 +446,28 @@ user.destroy();  // throws ex::readonly
 ```
 
 Check the flag with `user.is_readonly()`.
+
+---
+
+## Transactions
+
+`ar::transaction` (`<activerecord/transaction.h>`) groups saves so that either all of them are kept or none are. It begins a transaction on the default connection (or the connection you pass), and rolls back when it goes out of scope unless you call `commit()`:
+
+```cpp
+{
+    ar::transaction tx;
+    from.balance -= 100;
+    to.balance += 100;
+    if (from.save() && to.save()) {
+        tx.commit();
+    }
+} // without commit(), both updates are rolled back here
+```
+
+`save()` returns `false` without throwing when validation fails, so commit only when every save succeeded. The rollback happens when the transaction leaves its scope without a successful `commit()`, whether because a save returned `false` or because one threw.
+
+- **Ending it early:** `rollback()` ends the transaction at once. Calling `commit()` or `rollback()` again does nothing.
+- **Nesting:** there are no nested transactions or savepoints; do not start a second `ar::transaction` while one is open on the same connection.
+- **Copying:** a transaction cannot be copied or moved.
+- **Table creation:** inside a transaction, the database's rules for DDL apply (see [Creating Tables](tables.md#how-create_table-works)).
+- **The connection API:** `begin_transaction()`, `commit()` and `rollback()` on a connection do the same without the automatic rollback (see [Adapters](adapters.md#transactions)).
